@@ -243,16 +243,6 @@ bool FakeIrisXEExeclist::createHwContext()
     }
 
 
-    
-    
-    
-    
-    fCsbGem->pin();
-
-    fCsbGGTT = fOwner->ggttMap(fCsbGem);
-    if (fCsbGGTT) {
-        fCsbGGTT &= ~0xFFFULL;
-    }
     return true;
 }
 
@@ -1480,7 +1470,6 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
 
     return hw;
 }
-
 
 
 
