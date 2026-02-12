@@ -494,6 +494,11 @@ protected:
         bool forcewakeRenderHold(uint32_t timeoutMs = 2000);   // request & wait for FW ack
         void forcewakeRenderRelease();                         // drop FW
         void ensureEngineInterrupts();                         // minimal IER for engine
+    
+    // V43: GuC submission diagnostics
+    bool diagnoseGuCSubmissionFailure();
+    bool testGuCCommandExecution();
+    bool programMOCS();
    
     FakeIrisXEExeclist* fExeclist = nullptr;
 

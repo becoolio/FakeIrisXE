@@ -1228,24 +1228,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     activatePowerAndController();
     
     
-    /*
     // ================================================
-       // FIRMWARE LOADING - Add this AFTER PCI/MMIO init
-       // ================================================
-       IOLog("(FakeIrisXE) Loading firmware...\n");
-       
-         IOLog("(FakeIrisXE) ✅ Firmware loading, initializing GuC...\n");
-           
-           // Initialize GuC system if firmware loaded
-           if (!initGuCSystem()) {
-               IOLog("(FakeIrisXE) ⚠️ GuC init failed, falling back to legacy execlist\n");
-               fGuCEnabled = false;
-           } else {
-               fGuCEnabled = true;
-               IOLog("(FakeIrisXE) ✅ GuC submission enabled\n");
-           }
-     */
-
+    // V43: GGTT INITIALIZATION (MUST BE FIRST)
+    // ================================================
+    IOLog("(FakeIrisXE) [V43] Initializing GGTT aperture...\n");
     
     // ---- GGTT Aperture Mapping ----
 
@@ -1339,9 +1325,27 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     fFenceGEM = FakeIrisXEGEM::withSize(4096, 0);
     fFenceGEM->pin();
 
-   
-    
-    
+    // ================================================
+    // V43: FIRMWARE LOADING (After GGTT init)
+    // ================================================
+    IOLog("(FakeIrisXE) [V43] Loading firmware...\n");
+
+    // V43: Program MOCS before GuC init
+    IOLog("(FakeIrisXE) [V43] Programming MOCS...\n");
+    if (!programMOCS()) {
+        IOLog("(FakeIrisXE) [V43] ⚠️ MOCS programming failed, continuing anyway\n");
+    }
+
+    IOLog("(FakeIrisXE) [V43] Initializing GuC system...\n");
+
+    // Initialize GuC system (GGTT is now ready!)
+    if (!initGuCSystem()) {
+        IOLog("(FakeIrisXE) [V43] ⚠️ GuC init failed, falling back to legacy execlist\n");
+        fGuCEnabled = false;
+    } else {
+        fGuCEnabled = true;
+        IOLog("(FakeIrisXE) [V43] ✅ GuC submission enabled\n");
+    }
 
     //enabling interrupts:
     // Create / obtain a workloop (safe)
@@ -4459,30 +4463,89 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
     // 4. Enable GuC submission
     if (!fGuC->enableGuCSubmission()) {
         IOLog("(FakeIrisXE) Failed to enable GuC submission\n");
+        // V42: Run diagnostics to understand why
+        diagnoseGuCSubmissionFailure();
         // Fall back to legacy mode
         return false;
     }
+    
+    // V42: Test command execution after successful submission enable
+    testGuCCommandExecution();
     
     IOLog("(FakeIrisXE) GuC system initialized successfully\n");
     return true;
 }
 
+// ============================================================================
+// V42: GuC Submission Diagnostics
+// ============================================================================
+bool FakeIrisXEFramebuffer::diagnoseGuCSubmissionFailure()
+{
+    IOLog("(FakeIrisXE) [V43] diagnoseGuCSubmissionFailure(): Analyzing submission failure\n");
+    
+    // GEN11_GUC_STATUS is defined in i915_reg.h as 0x1C0B4
+    uint32_t status = safeMMIORead(GEN11_GUC_STATUS);
+    
+    IOLog("(FakeIrisXE) [V43] GuC Status: 0x%08X\n", status);
+    IOLog("  Ready: %s\n", (status & 0x1) ? "YES" : "NO");
+    IOLog("  FW Loaded: %s\n", (status & 0x2) ? "YES" : "NO");
+    IOLog("  Comm Established: %s\n", (status & 0x4) ? "YES" : "NO");
+    
+    return true;
+}
 
+// ============================================================================
+// V42: Command Execution Test
+// ============================================================================
+bool FakeIrisXEFramebuffer::testGuCCommandExecution()
+{
+    IOLog("(FakeIrisXE) [V43] testGuCCommandExecution(): Testing GuC command execution\n");
+    
+    if (!fGuC) {
+        IOLog("(FakeIrisXE) [V43] GuC not available for test\n");
+        return false;
+    }
+    
+    IOLog("(FakeIrisXE) [V43] Command execution test would run here\n");
+    return true;
+}
 
+// ============================================================================
+// V42: MOCS Programming
+// ============================================================================
+bool FakeIrisXEFramebuffer::programMOCS()
+{
+    IOLog("(FakeIrisXE) [V43] programMOCS(): Programming MOCS for Tiger Lake\n");
+    
+    const uint32_t MOCS_BASE = 0xC800;
+    
+    for (int i = 0; i < 62; i++) {
+        uint32_t mocsValue;
+        if (i == 0) {
+            mocsValue = 0x00000000;  // Uncached
+        } else if (i <= 10) {
+            mocsValue = 0x0000003F;  // LLC cached
+        } else if (i <= 30) {
+            mocsValue = 0x0000007F;  // eLLC cached
+        } else {
+            mocsValue = 0x000000FF;  // Aggressive caching
+        }
+        
+        uint32_t mocsReg = MOCS_BASE + (i * 4);
+        safeMMIOWrite(mocsReg, mocsValue);
+    }
+    
+    IOLog("(FakeIrisXE) [V43] programMOCS(): Completed 62 MOCS entries\n");
+    return true;
+}
 
+#include <libkern/libkern.h>
 
-
-
-
-
-
-#include <libkern/libkern.h> // For kern_return_t, kmod_info_t
-
-// Kext entry/exit points
-extern "C" kern_return_t FakeIrisXEFramebuffer_start(kmod_info_t *ki, void *data) {
+// Entry points must match CFBundleExecutable name (FakeIrisXE)
+extern "C" kern_return_t FakeIrisXE_start(kmod_info_t *ki, void *data) {
     return KERN_SUCCESS;
 }
 
-extern "C" kern_return_t FakeIrisXEFramebuffer_stop(kmod_info_t *ki, void *data) {
+extern "C" kern_return_t FakeIrisXE_stop(kmod_info_t *ki, void *data) {
     return KERN_SUCCESS;
 }
