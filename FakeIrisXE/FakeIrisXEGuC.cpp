@@ -258,29 +258,58 @@ bool FakeIrisXEGuC::loadHuCFirmware(const uint8_t* fwData, size_t fwSize)
 
 bool FakeIrisXEGuC::enableGuCSubmission()
 {
-    IOLog("(FakeIrisXE) [GuC] Enabling GuC submission mode\n");
+    IOLog("(FakeIrisXE) [V45] [GuC] Enabling GuC submission mode (Intel PRM sequence)\n");
     
     if (!fGuCFwGem) {
-        IOLog("(FakeIrisXE) [GuC] No firmware loaded\n");
+        IOLog("(FakeIrisXE) [V45] [GuC] ❌ No firmware loaded\n");
         return false;
     }
     
-   
-    // 2. Enable GuC with submission
+    // V45: Intel PRM-compliant startup sequence
+    // Step 1: Check current state before starting
+    uint32_t guc_reset_before = fOwner->safeMMIORead(GEN11_GUC_RESET);
+    uint32_t guc_status_before = fOwner->safeMMIORead(GEN11_GUC_STATUS);
+    IOLog("(FakeIrisXE) [V45] [GuC] Initial state - RESET: 0x%08X, STATUS: 0x%08X\n", 
+          guc_reset_before, guc_status_before);
+    
+    // Step 2: Verify firmware address is programmed
+    uint32_t fw_addr_lo = fOwner->safeMMIORead(GEN11_GUC_FW_ADDR_LO);
+    uint32_t fw_addr_hi = fOwner->safeMMIORead(GEN11_GUC_FW_ADDR_HI);
+    uint32_t fw_size = fOwner->safeMMIORead(GEN11_GUC_FW_SIZE);
+    IOLog("(FakeIrisXE) [V45] [GuC] Firmware addr: 0x%08X%08X, size: %u pages\n",
+          fw_addr_hi, fw_addr_lo, fw_size);
+    
+    // Step 3: Program GUC_CTL to start GuC (auto-releases reset per PRM)
     uint32_t guc_ctl = 0;
-    guc_ctl |= (1 << 0);   // Enable GuC
+    guc_ctl |= (1 << 0);   // Enable GuC (triggers auto-reset-release)
     guc_ctl |= (1 << 6);   // Enable submission
-    guc_ctl |= (1 << 7);   // Load GuC
+    guc_ctl |= (1 << 7);   // Load GuC firmware
     
     if (fHuCFwGem) {
         guc_ctl |= (1 << 8);   // Load HuC
     }
     
+    IOLog("(FakeIrisXE) [V45] [GuC] Writing GUC_CTL = 0x%08X...\n", guc_ctl);
     fOwner->safeMMIOWrite(GEN11_GUC_CTL, guc_ctl);
     
-    // 3. Wait for GuC ready
-    if (!waitGuCReady(10000)) { // 10 second timeout
-        IOLog("(FakeIrisXE) [GuC] Failed to start GuC\n");
+    // V45: Short delay after writing CTL (let hardware react)
+    IOSleep(1);
+    
+    // Step 4: Check immediate status
+    uint32_t status_after_ctl = fOwner->safeMMIORead(GEN11_GUC_STATUS);
+    IOLog("(FakeIrisXE) [V45] [GuC] Status after CTL write: 0x%08X\n", status_after_ctl);
+    
+    // Step 5: Wait for GuC ready (per Intel PRM polling sequence)
+    IOLog("(FakeIrisXE) [V45] [GuC] Waiting for GuC initialization...\n");
+    if (!waitGuCReady(15000)) { // 15 second timeout (increased for safety)
+        IOLog("(FakeIrisXE) [V45] [GuC] ❌ Failed to start GuC (timeout)\n");
+        
+        // V45: Diagnostic dump on failure
+        uint32_t final_status = fOwner->safeMMIORead(GEN11_GUC_STATUS);
+        uint32_t final_reset = fOwner->safeMMIORead(GEN11_GUC_RESET);
+        uint32_t guc_cap = fOwner->safeMMIORead(GEN11_GUC_CAPS1);
+        IOLog("(FakeIrisXE) [V45] [GuC] Final state - STATUS: 0x%08X, RESET: 0x%08X, CAPS: 0x%08X\n",
+              final_status, final_reset, guc_cap);
         return false;
     }
     
@@ -293,8 +322,9 @@ bool FakeIrisXEGuC::enableGuCSubmission()
         IOLog("(FakeIrisXE) [HuC] Status: 0x%08x\n", huc_status);
     }
     
-    IOLog("(FakeIrisXE) [GuC] GuC submission enabled successfully\n");
-  dumpGuCStatus();
+    IOLog("(FakeIrisXE) [V45] [GuC] ✅ GuC submission enabled successfully!\n");
+    IOLog("(FakeIrisXE) [V45] [GuC] Hardware acceleration is now ACTIVE\n");
+    dumpGuCStatus();
     
     return true;
 }
