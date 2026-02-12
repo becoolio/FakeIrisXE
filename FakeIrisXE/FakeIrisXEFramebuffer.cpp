@@ -1229,9 +1229,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     // ================================================
-    // V43: GGTT INITIALIZATION (MUST BE FIRST)
+    // V45: GGTT INITIALIZATION (MUST BE FIRST)
     // ================================================
-    IOLog("(FakeIrisXE) [V43] Initializing GGTT aperture...\n");
+    IOLog("(FakeIrisXE) [V45] Initializing GGTT aperture...\n");
     
     // ---- GGTT Aperture Mapping ----
 
@@ -1326,25 +1326,25 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     fFenceGEM->pin();
 
     // ================================================
-    // V43: FIRMWARE LOADING (After GGTT init)
+    // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
-    IOLog("(FakeIrisXE) [V43] Loading firmware...\n");
+    IOLog("(FakeIrisXE) [V45] Loading firmware (Intel PRM compliant)...\n");
 
-    // V43: Program MOCS before GuC init
-    IOLog("(FakeIrisXE) [V43] Programming MOCS...\n");
+    // V45: Program MOCS before GuC init
+    IOLog("(FakeIrisXE) [V45] Programming MOCS...\n");
     if (!programMOCS()) {
-        IOLog("(FakeIrisXE) [V43] ⚠️ MOCS programming failed, continuing anyway\n");
+        IOLog("(FakeIrisXE) [V45] ⚠️ MOCS programming failed, continuing anyway\n");
     }
 
-    IOLog("(FakeIrisXE) [V43] Initializing GuC system...\n");
+    IOLog("(FakeIrisXE) [V45] Initializing GuC system (PRM sequence)...\n");
 
-    // Initialize GuC system (GGTT is now ready!)
+    // Initialize GuC system with Intel PRM-compliant sequence
     if (!initGuCSystem()) {
-        IOLog("(FakeIrisXE) [V43] ⚠️ GuC init failed, falling back to legacy execlist\n");
+        IOLog("(FakeIrisXE) [V45] ⚠️ GuC init failed, falling back to legacy execlist\n");
         fGuCEnabled = false;
     } else {
         fGuCEnabled = true;
-        IOLog("(FakeIrisXE) [V43] ✅ GuC submission enabled\n");
+        IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
     }
 
     //enabling interrupts:
@@ -4515,7 +4515,7 @@ bool FakeIrisXEFramebuffer::testGuCCommandExecution()
 // ============================================================================
 bool FakeIrisXEFramebuffer::programMOCS()
 {
-    IOLog("(FakeIrisXE) [V43] programMOCS(): Programming MOCS for Tiger Lake\n");
+    IOLog("(FakeIrisXE) [V45] programMOCS(): Programming MOCS for Tiger Lake\n");
     
     const uint32_t MOCS_BASE = 0xC800;
     
@@ -4535,7 +4535,7 @@ bool FakeIrisXEFramebuffer::programMOCS()
         safeMMIOWrite(mocsReg, mocsValue);
     }
     
-    IOLog("(FakeIrisXE) [V43] programMOCS(): Completed 62 MOCS entries\n");
+    IOLog("(FakeIrisXE) [V45] programMOCS(): Completed 62 MOCS entries\n");
     return true;
 }
 

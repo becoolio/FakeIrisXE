@@ -334,18 +334,40 @@ bool FakeIrisXEGuC::waitGuCReady(uint32_t timeoutMs)
     uint64_t start = mach_absolute_time();
     uint64_t timeout = timeoutMs * 1000000ULL;
     
-    IOLog("(FakeIrisXE) [GuC] Waiting for GuC ready (timeout: %u ms)...\n", timeoutMs);
+    IOLog("(FakeIrisXE) [V45] [GuC] Polling GuC status (timeout: %u ms)...\n", timeoutMs);
+    
+    uint32_t lastStatus = 0;
+    int sameStatusCount = 0;
     
     while (mach_absolute_time() - start < timeout) {
         uint32_t status = fOwner->safeMMIORead(GEN11_GUC_STATUS);
         
-        // Check ready bits:
+        // V45: Track if status is changing
+        if (status != lastStatus) {
+            IOLog("(FakeIrisXE) [V45] [GuC] Status change: 0x%08X -> 0x%08X (bits: R=%s FW=%s COM=%s)\n",
+                  lastStatus, status,
+                  (status & 0x1) ? "Y" : "N",
+                  (status & 0x2) ? "Y" : "N",
+                  (status & 0x4) ? "Y" : "N");
+            lastStatus = status;
+            sameStatusCount = 0;
+        } else {
+            sameStatusCount++;
+        }
+        
+        // Check ready bits per Intel PRM:
         // Bit 0: GuC ready
         // Bit 1: Firmware loaded
         // Bit 2: GuC communication established
         if ((status & 0x7) == 0x7) {
-            IOLog("(FakeIrisXE) [GuC] Ready! Status: 0x%08x\n", status);
+            IOLog("(FakeIrisXE) [V45] [GuC] ✅ Ready! Status: 0x%08x\n", status);
             return true;
+        }
+        
+        // Check for errors (bits 31:16)
+        if (status & 0xFFFF0000) {
+            IOLog("(FakeIrisXE) [V45] [GuC] ⚠️ Error detected: 0x%08X\n", status);
+            return false;
         }
         
         // Check for errors
