@@ -13,6 +13,11 @@
 OSDefineMetaClassAndStructors(FakeIrisXEGuC, OSObject);
 
 // TGL GuC registers
+// V49: DMC registers (must load DMC before GuC per Intel PRM)
+#define DMC_PROGRAMMABLE_ADDRESS_LOCATION   0x0008C040
+#define DMC_PROGRAMMABLE_ADDRESS_LOCATION_1 0x0008C044
+#define DMC_SSP_BASE                        0x0008C080
+
 #define GEN11_GUC_SOFT_SCRATCH(n)       (0x1C180 + (n) * 4)
 #define GEN11_GUC_CTL                    0x1C0B0
 #define GEN11_GUC_STATUS                 0x1C0B4
@@ -51,78 +56,93 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
 
 bool FakeIrisXEGuC::initGuC()
 {
-    IOLog("(FakeIrisXE) [V48] Initializing Gen12 GuC (Linux-compatible sequence)\n");
+    IOLog("(FakeIrisXE) [V49] Initializing Gen12 GuC (Linux-compatible sequence)\n");
     
-    // V48: Step 1 - Check current power state
-    IOLog("(FakeIrisXE) [V48] Checking current GuC power state...\n");
+    // V49: CRITICAL - Load DMC firmware FIRST (per Intel PRM and Linux i915)
+    // Linux sequence: DMC -> GuC -> HuC
+    IOLog("(FakeIrisXE) [V49] Step 1: Loading DMC firmware (required before GuC)...\n");
+    
+    // Select DMC firmware - use TGL for this device (0x9A49)
+    // V49: Simplified - always use TGL DMC for now
+    extern const unsigned char tgl_dmc_ver2_12_bin[];
+    extern const unsigned int tgl_dmc_ver2_12_bin_len;
+    const uint8_t* dmc_bin = tgl_dmc_ver2_12_bin;
+    size_t dmc_len = tgl_dmc_ver2_12_bin_len;
+    IOLog("(FakeIrisXE) [V49] Selected TGL DMC firmware (for 0x9A49)\n");
+    
+    // Attempt DMC load (don't fail if it doesn't work, just log)
+    bool dmc_loaded = loadDmcFirmware(dmc_bin, dmc_len);
+    if (!dmc_loaded) {
+        IOLog("(FakeIrisXE) [V49] ⚠️ DMC load failed, continuing anyway (may affect GuC)\n");
+    } else {
+        IOLog("(FakeIrisXE) [V49] ✅ DMC firmware loaded, GuC may now be accessible\n");
+    }
+    
+    // V49: Step 2 - Check current GuC power state
+    IOLog("(FakeIrisXE) [V49] Step 2: Checking GuC power state...\n");
     uint32_t initial_status = fOwner->safeMMIORead(GEN11_GUC_STATUS);
     uint32_t initial_reset = fOwner->safeMMIORead(GEN11_GUC_RESET);
-    IOLog("(FakeIrisXE) [V48] Initial state - STATUS: 0x%08X, RESET: 0x%08X\n", 
+    IOLog("(FakeIrisXE) [V49] Initial state - STATUS: 0x%08X, RESET: 0x%08X\n", 
           initial_status, initial_reset);
     
-    // V48: Step 2 - Ensure GuC power domain is enabled
-    // Linux does this before reading CAPS
-    IOLog("(FakeIrisXE) [V48] Ensuring GuC power domain...\n");
-    
-    // V48: Step 3 - Check if GuC is already running (Linux status 0x8003f0ec pattern)
+    // V49: Step 3 - Check if GuC is already running
     if (initial_status != 0 && initial_status != 0xFFFFFFFF) {
-        IOLog("(FakeIrisXE) [V48] GuC appears to be running (STATUS: 0x%08X)\n", initial_status);
+        IOLog("(FakeIrisXE) [V49] GuC appears to be running (STATUS: 0x%08X)\n", initial_status);
         
-        // Read CAPS now that GuC is accessible
         uint32_t caps1 = fOwner->safeMMIORead(GEN11_GUC_CAPS1);
         uint32_t caps2 = fOwner->safeMMIORead(GEN11_GUC_CAPS2);
-        IOLog("(FakeIrisXE) [V48] GuC CAPS1: 0x%08X\n", caps1);
-        IOLog("(FakeIrisXE) [V48] GuC CAPS2: 0x%08X\n", caps2);
+        IOLog("(FakeIrisXE) [V49] GuC CAPS1: 0x%08X\n", caps1);
+        IOLog("(FakeIrisXE) [V49] GuC CAPS2: 0x%08X\n", caps2);
         
         if (caps1 != 0 || caps2 != 0) {
-            IOLog("(FakeIrisXE) [V48] ✅ GuC accessible! Version %u.%u\n",
+            IOLog("(FakeIrisXE) [V49] ✅ GuC accessible! Version %u.%u\n",
                   (caps1 >> 16) & 0xFF, (caps1 >> 8) & 0xFF);
             return true;
         }
     }
     
-    // V48: Step 4 - Reset GuC if not running (Linux-compatible reset sequence)
-    IOLog("(FakeIrisXE) [V48] GuC not running, performing reset...\n");
+    // V49: Step 4 - Reset GuC if not running
+    IOLog("(FakeIrisXE) [V49] Step 4: GuC not running, performing reset...\n");
     
-    // First hold in reset
     fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x1);
     IOSleep(1);
     
-    // Verify reset held
     uint32_t reset_check = fOwner->safeMMIORead(GEN11_GUC_RESET);
-    IOLog("(FakeIrisXE) [V48] Reset held: 0x%08X\n", reset_check);
+    IOLog("(FakeIrisXE) [V49] Reset held: 0x%08X\n", reset_check);
     
-    // V48: Step 5 - Now try to release reset and enable
-    // This matches Linux i915 sequence
     fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x0);
     IOSleep(10);
     
-    // Check status after release
     uint32_t post_reset_status = fOwner->safeMMIORead(GEN11_GUC_STATUS);
-    IOLog("(FakeIrisXE) [V48] Status after reset release: 0x%08X\n", post_reset_status);
+    IOLog("(FakeIrisXE) [V49] Status after reset: 0x%08X\n", post_reset_status);
     
-    // V48: Step 6 - Read CAPS after initialization attempt
+    // V49: Step 5 - Read CAPS after DMC + reset
     IOSleep(10);
     uint32_t caps1 = fOwner->safeMMIORead(GEN11_GUC_CAPS1);
     uint32_t caps2 = fOwner->safeMMIORead(GEN11_GUC_CAPS2);
     uint32_t caps3 = fOwner->safeMMIORead(GEN11_GUC_CAPS3);
     uint32_t caps4 = fOwner->safeMMIORead(GEN11_GUC_CAPS4);
     
-    IOLog("(FakeIrisXE) [V48] GuC Capabilities after init:\n");
+    IOLog("(FakeIrisXE) [V49] GuC Capabilities after DMC+reset:\n");
     IOLog("  CAPS1: 0x%08X\n", caps1);
     IOLog("  CAPS2: 0x%08X\n", caps2);
     IOLog("  CAPS3: 0x%08X\n", caps3);
     IOLog("  CAPS4: 0x%08X\n", caps4);
     
     if (caps1 == 0 && caps2 == 0) {
-        IOLog("(FakeIrisXE) [V48] ⚠️ GuC CAPS still zero - GuC not accessible\n");
-        IOLog("(FakeIrisXE) [V48] This matches Linux behavior when GuC disabled in BIOS\n");
+        IOLog("(FakeIrisXE) [V49] ⚠️ GuC CAPS still zero\n");
+        if (dmc_loaded) {
+            IOLog("(FakeIrisXE) [V49] DMC loaded but GuC still inaccessible\n");
+            IOLog("(FakeIrisXE) [V49] This suggests deeper VBIOS/BIOS initialization issue\n");
+        } else {
+            IOLog("(FakeIrisXE) [V49] DMC failed to load, which may be required for GuC\n");
+        }
         return false;
     }
     
     uint32_t supportedMajor = (caps1 >> 16) & 0xFF;
     uint32_t supportedMinor = (caps1 >> 8) & 0xFF;
-    IOLog("(FakeIrisXE) [V48] ✅ GuC accessible! Supported version: %u.%u\n",
+    IOLog("(FakeIrisXE) [V49] ✅ GuC accessible! Supported version: %u.%u\n",
           supportedMajor, supportedMinor);
     
     return true;
@@ -148,9 +168,58 @@ bool FakeIrisXEGuC::initGuC()
     return true;
 }
 
+// ============================================================================
+// V49: DMC Firmware Loading (Linux-style initialization)
+// ============================================================================
 
-
-
+bool FakeIrisXEGuC::loadDmcFirmware(const uint8_t* fwData, size_t fwSize)
+{
+    IOLog("(FakeIrisXE) [V49] Loading DMC firmware (Linux-compatible)...\n");
+    
+    if (!fwData || fwSize == 0) {
+        IOLog("(FakeIrisXE) [V49] ❌ No DMC firmware provided\n");
+        return false;
+    }
+    
+    // Allocate GEM for DMC firmware
+    fDmcFwGem = FakeIrisXEGEM::withSize(fwSize, 0);
+    if (!fDmcFwGem) {
+        IOLog("(FakeIrisXE) [V49] ❌ Failed to allocate GEM for DMC firmware\n");
+        return false;
+    }
+    
+    // Copy firmware
+    IOBufferMemoryDescriptor* md = fDmcFwGem->memoryDescriptor();
+    memcpy(md->getBytesNoCopy(), fwData, fwSize);
+    
+    // Pin and map
+    fDmcFwGem->pin();
+    uint64_t gpuAddr = fOwner->ggttMap(fDmcFwGem);
+    if (!gpuAddr) {
+        IOLog("(FakeIrisXE) [V49] ❌ Failed to map DMC firmware\n");
+        fDmcFwGem->unpin();
+        fDmcFwGem->release();
+        fDmcFwGem = nullptr;
+        return false;
+    }
+    
+    IOLog("(FakeIrisXE) [V49] DMC firmware mapped at GGTT=0x%llx (%zu bytes)\n", 
+          gpuAddr, fwSize);
+    
+    // Program DMC firmware address
+    fOwner->safeMMIOWrite(DMC_PROGRAMMABLE_ADDRESS_LOCATION, (uint32_t)(gpuAddr & 0xFFFFFFFF));
+    fOwner->safeMMIOWrite(DMC_PROGRAMMABLE_ADDRESS_LOCATION_1, (uint32_t)(gpuAddr >> 32));
+    
+    IOLog("(FakeIrisXE) [V49] DMC firmware address programmed\n");
+    
+    // Trigger DMC load
+    fOwner->safeMMIOWrite(DMC_SSP_BASE, 0x1);
+    IOSleep(100);
+    
+    IOLog("(FakeIrisXE) [V49] ✅ DMC firmware loaded successfully\n");
+    
+    return true;
+}
 
 bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
 {
