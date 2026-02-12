@@ -1229,9 +1229,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     // ================================================
-    // V45: GGTT INITIALIZATION (MUST BE FIRST)
+    // V46+V47: GGTT INITIALIZATION (MUST BE FIRST)
     // ================================================
-    IOLog("(FakeIrisXE) [V45] Initializing GGTT aperture...\n");
+    IOLog("(FakeIrisXE) [V46] Initializing GGTT aperture...\n");
     
     // ---- GGTT Aperture Mapping ----
 

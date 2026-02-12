@@ -1208,6 +1208,8 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 #define GEN11_GUC_FW_ADDR_LO         0x1C0C4
 #define GEN11_GUC_FW_ADDR_HI         0x1C0C8
 #define GEN11_GUC_RESET              0x1C0C0
+#define GEN11_GUC_CAPS0              0x1C0A0  // V46: GuC capabilities register 0
+#define GEN11_GUC_CAPS1              0x1C0A4  // V46: GuC capabilities register 1
 
 // Misc
 #define GTT_FLUSH_REG                0x1082C0   // GTT flush (used in your code)

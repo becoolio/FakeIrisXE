@@ -52,6 +52,9 @@ public:
     bool isGuCReady();
     void dumpGuCStatus();
     
+    // V47: Command submission test
+    bool testCommandSubmission();
+    
 private:
    // bool setupGuCInterrupts();
 
