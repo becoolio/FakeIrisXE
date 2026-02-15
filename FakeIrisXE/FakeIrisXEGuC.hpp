@@ -32,6 +32,9 @@ private:
     FakeIrisXEGEM* fGuCLogGem;
     uint32_t fGuCLogSize;
     
+    // V50: Mode tracking
+    bool fGuCMode;  // true = GuC submission, false = Execlist fallback
+    
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
     
@@ -56,8 +59,44 @@ public:
     bool testCommandSubmission();
     
 private:
+    // V52.1: ForceWake helpers (matching Apple's SafeForceWake)
+    bool acquireForceWake();
+    void releaseForceWake();
+    
+    // V52.1: RSA/Signature data extraction from firmware
+    bool extractRSASignature(const uint8_t* fwData, size_t fwSize, uint8_t* signatureOut);
+    
+    // V56: Program GUC_SHIM_CONTROL (required before DMA per Linux i915)
+    void programShimControl();
+    
+    // V52.1/V56: Apple-style GuC initialization (called before DMA)
+    bool initGuCForAppleDMA(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
    // bool setupGuCInterrupts();
 
     bool waitGuCReady(uint32_t timeoutMs = 5000);
     bool uploadFirmware(FakeIrisXEGEM* fwGem, uint32_t fwType);
+    
+    // V51: Linux-style DMA firmware upload (per Intel i915 driver)
+    bool uploadFirmwareViaDMA(uint64_t sourceGpuAddr, uint32_t destOffset, 
+                              size_t fwSize, uint32_t dmaFlags);
+    
+    // V52: Apple-style DMA firmware upload (from mac-gfx-research)
+    bool uploadFirmwareViaDMA_Apple(uint64_t sourceGpuAddr, uint32_t destOffset, 
+                                    size_t fwSize);
+    
+    // V52: Unified upload with fallback (Linux first, then Apple)
+    bool uploadFirmwareWithFallback(uint64_t sourceGpuAddr, uint32_t destOffset, 
+                                    size_t fwSize);
+    
+    // V53: Enhanced HuC loading with DMA
+    bool loadHuCFirmwareWithDMA(const uint8_t* fwData, size_t fwSize);
+    
+    // V53: Doorbell initialization (for GuC submission)
+    bool initDoorbells();
+    
+    // V53: Command Transport Buffer setup (CTB for H2G/G2H communication)
+    bool initCommandTransportBuffers();
+    
+    // V53: Full GuC subsystem initialization
+    bool initGuCSubsystem();
 };

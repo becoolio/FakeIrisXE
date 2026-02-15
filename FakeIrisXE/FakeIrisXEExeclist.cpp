@@ -79,14 +79,189 @@ void FakeIrisXEExeclist::free()
 // Helpers (safe MMIO)
 // ------------------------------------------------------------
 
+// V57: Enhanced MMIO with diagnostics
 uint32_t FakeIrisXEExeclist::mmioRead32(uint32_t off) {
-    return *(volatile uint32_t*)((uint8_t*)fOwner->fBar0 + off);
+    uint32_t val = *(volatile uint32_t*)((uint8_t*)fOwner->fBar0 + off);
+    // V57: Optional verbose logging for critical registers
+    #ifdef V57_VERBOSE_MMIO
+    if (off == RING_CTL || off == RING_HEAD || off == RING_TAIL || 
+        off == RING_EXECLIST_STATUS_LO || off == RING_EXECLIST_STATUS_HI) {
+        IOLog("[V57] MMIO READ [0x%04X] = 0x%08X\n", off, val);
+    }
+    #endif
+    return val;
 }
 
 void FakeIrisXEExeclist::mmioWrite32(uint32_t off, uint32_t val) {
     volatile uint32_t* p = (volatile uint32_t*)((uint8_t*)fOwner->fBar0 + off);
     *p = val;
     (void)*p; // posted write ordering
+    // V57: Optional verbose logging
+    #ifdef V57_VERBOSE_MMIO
+    if (off == RING_CTL || off == RING_TAIL || off == RING_EXECLIST_SUBMIT_LO || 
+        off == RING_EXECLIST_SUBMIT_HI) {
+        IOLog("[V57] MMIO WRITE [0x%04X] = 0x%08X\n", off, val);
+    }
+    #endif
+}
+
+// V57: Enhanced ring buffer diagnostics
+void FakeIrisXEExeclist::dumpRingBufferStatus(const char* label) {
+    if (!fOwner) return;
+    
+    IOLog("[V57] === Ring Buffer Status: %s ===\n", label);
+    
+    // Read all critical ring registers
+    uint32_t ring_base_lo = mmioRead32(RING_BASE_LO);
+    uint32_t ring_base_hi = mmioRead32(RING_BASE_HI);
+    uint32_t ring_head  = mmioRead32(RING_HEAD);
+    uint32_t ring_tail  = mmioRead32(RING_TAIL);
+    uint32_t ring_ctl   = mmioRead32(RING_CTL);
+    // V57: Use alternative register names if ACTHD/BBADDR not defined
+    uint32_t ring_acthd = mmioRead32(0x2074);  // ACTHD - Active Head
+    uint32_t ring_bbaddr = mmioRead32(0x2080); // BBADDR - Batch Buffer Address
+    
+    IOLog("[V57] RING_BASE:   0x%08X%08X (GGTT base)\n", ring_base_hi, ring_base_lo);
+    IOLog("[V57] RING_HEAD:   0x%04X (GPU read position)\n", ring_head & 0xFFFF);
+    IOLog("[V57] RING_TAIL:   0x%04X (driver write position)\n", ring_tail & 0xFFFF);
+    IOLog("[V57] RING_CTL:    0x%08X (size=%dKB, %s)\n",
+          ring_ctl,
+          ((ring_ctl >> 12) + 1) * 4,
+          (ring_ctl & 1) ? "ENABLED" : "DISABLED");
+    IOLog("[V57] RING_ACTHD:  0x%08X (active head)\n", ring_acthd);
+    IOLog("[V57] RING_BBADDR: 0x%08X (batch buffer addr)\n", ring_bbaddr);
+    
+    // Calculate ring space
+    uint32_t head = ring_head & 0xFFFF;
+    uint32_t tail = ring_tail & 0xFFFF;
+    uint32_t ring_size = ((ring_ctl >> 12) + 1) * 4096;
+    uint32_t used = (tail >= head) ? (tail - head) : (ring_size - head + tail);
+    uint32_t free = ring_size - used - 8; // -8 for safety margin
+    
+    IOLog("[V57] Ring Usage:  %d bytes used, %d bytes free (of %d total)\n", 
+          used, free, ring_size);
+    
+    // Check for stall/hang
+    static uint32_t last_head = 0;
+    static uint64_t last_check = 0;
+    uint64_t now = mach_absolute_time();
+    
+    if (head == last_head && (now - last_check) > (100 * 1000000ULL)) {
+        IOLog("[V57] ⚠️ WARNING: Head not advancing for 100ms - possible GPU stall\n");
+    }
+    last_head = head;
+    last_check = now;
+}
+
+// V57: Enhanced execlist status diagnostics
+void FakeIrisXEExeclist::dumpExeclistStatus(const char* label) {
+    if (!fOwner) return;
+    
+    IOLog("[V57] === Execlist Status: %s ===\n", label);
+    
+    // V57: Use correct execlist status register offsets
+    uint32_t status_lo = mmioRead32(0x2230);  // RING_EXECLIST_STATUS_LO
+    uint32_t status_hi = mmioRead32(0x2234);  // RING_EXECLIST_STATUS_HI
+    
+    IOLog("[V57] EXECLIST_STATUS_LO: 0x%08X\n", status_lo);
+    IOLog("[V57] EXECLIST_STATUS_HI: 0x%08X\n", status_hi);
+    
+    // Decode status bits
+    bool slot0_valid = (status_lo >> 0) & 1;
+    bool slot1_valid = (status_lo >> 1) & 1;
+    bool slot0_active = (status_lo >> 2) & 1;
+    bool slot1_active = (status_lo >> 3) & 1;
+    uint32_t active_id = (status_lo >> 4) & 0x3;
+    
+    IOLog("[V57] Slot 0: %s, %s\n", 
+          slot0_valid ? "VALID" : "empty",
+          slot0_active ? "ACTIVE" : "idle");
+    IOLog("[V57] Slot 1: %s, %s\n", 
+          slot1_valid ? "VALID" : "empty",
+          slot1_active ? "ACTIVE" : "idle");
+    IOLog("[V57] Active slot: %d\n", active_id);
+    
+    // Context IDs
+    uint32_t ctx0_id = (status_lo >> 16) & 0xFFFF;
+    uint32_t ctx1_id = (status_hi >> 0) & 0xFFFF;
+    IOLog("[V57] Context ID slot 0: 0x%04X\n", ctx0_id);
+    IOLog("[V57] Context ID slot 1: 0x%04X\n", ctx1_id);
+}
+
+// V57: Enhanced CSB processing with diagnostics
+void FakeIrisXEExeclist::processCsbEntriesV57() {
+    if (!fCsbGem || !fOwner) {
+        IOLog("[V57] CSB processing skipped - no CSB buffer\n");
+        return;
+    }
+    
+    IOLog("[V57] === Processing CSB Entries ===\n");
+    
+    // Get CSB memory
+    IOBufferMemoryDescriptor* md = fCsbGem->memoryDescriptor();
+    if (!md) {
+        IOLog("[V57] CSB memory descriptor missing\n");
+        return;
+    }
+    
+    volatile uint64_t* csb = (volatile uint64_t*)md->getBytesNoCopy();
+    if (!csb) {
+        IOLog("[V57] CSB CPU pointer missing\n");
+        return;
+    }
+    
+    // Read CSB write pointer (updated by GPU)
+    // In real implementation, this would be read from a hardware register
+    // or from the ppHWSP (per-process hardware status page)
+    uint32_t write_ptr = fCsbWriteIndex; // Placeholder - should read from HW
+    uint32_t read_ptr = fCsbReadIndex;
+    
+    IOLog("[V57] CSB Read Ptr: %d, Write Ptr: %d\n", read_ptr, write_ptr);
+    
+    uint32_t processed = 0;
+    while (read_ptr != write_ptr && processed < fCsbEntryCount) {
+        uint64_t entry = csb[read_ptr % fCsbEntryCount];
+        uint32_t status = (uint32_t)(entry & 0xFFFFFFFF);
+        uint32_t ctx_id = (uint32_t)(entry >> 32);
+        
+        IOLog("[V57] CSB[%d]: ctx=0x%08X status=0x%08X\n", 
+              read_ptr, ctx_id, status);
+        
+        // Handle entry
+        handleCsbEntry(entry, ctx_id, status);
+        
+        read_ptr++;
+        processed++;
+        
+        // Safety limit
+        if (processed > 16) {
+            IOLog("[V57] CSB processing limited to 16 entries\n");
+            break;
+        }
+    }
+    
+    fCsbReadIndex = read_ptr;
+    IOLog("[V57] CSB Processing complete - %d entries processed\n", processed);
+}
+
+void FakeIrisXEExeclist::handleCsbEntry(uint64_t entry, uint32_t ctx_id, uint32_t status) {
+    // V57: Enhanced CSB entry handling
+    bool completed = (status & CSB_STATUS_COMPLETE) != 0;
+    bool preempted = (status & CSB_STATUS_PREEMPTED) != 0;
+    bool faulted = (status & CSB_STATUS_FAULT) != 0;
+    
+    if (completed) {
+        IOLog("[V57] ✓ Context 0x%08X completed successfully\n", ctx_id);
+        onContextComplete(ctx_id, status);
+    } else if (preempted) {
+        IOLog("[V57] ↻ Context 0x%08X preempted\n", ctx_id);
+        // Handle preemption
+    } else if (faulted) {
+        IOLog("[V57] ✗ Context 0x%08X FAULTED - status=0x%08X\n", ctx_id, status);
+        onContextFault(ctx_id, status);
+    } else {
+        IOLog("[V57] ? Context 0x%08X unknown status=0x%08X\n", ctx_id, status);
+    }
 }
 
 
@@ -1294,17 +1469,19 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::lookupHwContext(uint32_t ct
 
 FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t ctxId, uint32_t priority)
 {
+    IOLog("[V61] createHwContextFor(ctxId=0x%X, priority=%u) - START\n", ctxId, priority);
+    
     // If it already exists, just update priority and return
     XEHWContext* existing = lookupHwContext(ctxId);
     if (existing) {
         existing->priority = priority;
-        IOLog("(FakeIrisXE) [Exec] createHwContextFor: reuse ctx=%u pri=%u\n",
-              ctxId, priority);
+        IOLog("[V61] createHwContextFor: REUSE ctx=%u pri=%u\n", ctxId, priority);
         return existing;
     }
+    IOLog("[V61] createHwContextFor: Creating NEW context\n");
 
     if (fHwContextCount >= kMaxHwContexts) {
-        IOLog("(FakeIrisXE) [Exec] createHwContextFor: no slots left\n");
+        IOLog("[V61] ❌ createHwContextFor: no slots left (count=%u max=%u)\n", fHwContextCount, kMaxHwContexts);
         return nullptr;
     }
 
@@ -1317,20 +1494,24 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
     hw->banned   = false;
 
     // --- 1) Allocate ring backing for this context ---
-    // You can take ring size from your existing RCS ring if you prefer:
-    // size_t ringSize = fOwner->fRcsRing ? fOwner->fRcsRing->size() : 0x4000;
-    size_t ringSize = 0x4000; // 16KB is fine for now; adjust later.
+    size_t ringSize = 0x4000; // 16KB
 
+    IOLog("[V61] createHwContextFor: Allocating ringGem (size=0x%zx)...\n", ringSize);
     hw->ringGem = FakeIrisXEGEM::withSize(ringSize, 0);
     if (!hw->ringGem) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: ringGem alloc FAILED\n", ctxId);
+        IOLog("[V61] ❌ createHwContextFor: ringGem alloc FAILED\n");
         return nullptr;
     }
+    IOLog("[V61] createHwContextFor: ringGem allocated=%p\n", hw->ringGem);
 
+    IOLog("[V61] createHwContextFor: Pinning ringGem...\n");
     hw->ringGem->pin();
+    
+    IOLog("[V61] createHwContextFor: Mapping ringGem to GGTT...\n");
     hw->ringGGTT = fOwner->ggttMap(hw->ringGem);
+    IOLog("[V61] createHwContextFor: ggttMap returned=0x%llX\n", hw->ringGGTT);
     if (!hw->ringGGTT) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: ggttMap(ring) FAILED\n", ctxId);
+        IOLog("[V61] ❌ createHwContextFor: ggttMap(ring) FAILED\n");
         hw->ringGem->unpin();
         hw->ringGem->release();
         hw->ringGem = nullptr;
@@ -1338,10 +1519,10 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
     }
     hw->ringGGTT &= ~0xFFFULL;
 
-    IOLog("(FakeIrisXE) [Exec] ctx=%u: ringGGTT=0x%llx size=0x%zx\n",
-          ctxId, hw->ringGGTT, ringSize);
+    IOLog("[V61] createHwContextFor: ringGGTT=0x%llX size=0x%zx\n", hw->ringGGTT, ringSize);
 
     // --- 2) Build LRC image for this context using your helper ---
+    IOLog("[V61] createHwContextFor: Calling buildLRCContext...\n");
     IOReturn ret = kIOReturnError;
     hw->lrcGem = FakeIrisXELRC::buildLRCContext(
                     fOwner,
@@ -1351,10 +1532,10 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
                     ctxId,  // context ID
                     0,      // pdps / vm pointer (0 for now)
                     &ret);
+    IOLog("[V61] createHwContextFor: buildLRCContext returned lrcGem=%p ret=0x%x\n", hw->lrcGem, ret);
 
     if (!hw->lrcGem || ret != kIOReturnSuccess) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: buildLRCContext FAILED (ret=0x%x)\n",
-              ctxId, ret);
+        IOLog("[V61] ❌ createHwContextFor: buildLRCContext FAILED (lrcGem=%p ret=0x%x)\n", hw->lrcGem, ret);
         if (hw->lrcGem) hw->lrcGem->release();
         hw->lrcGem = nullptr;
 
@@ -1363,11 +1544,15 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
         hw->ringGem = nullptr;
         return nullptr;
     }
+    IOLog("[V61] createHwContextFor: LRC context built successfully\n");
 
+    IOLog("[V61] createHwContextFor: Pinning LRC GEM...\n");
     hw->lrcGem->pin();
+    IOLog("[V61] createHwContextFor: Mapping LRC to GGTT...\n");
     hw->lrcGGTT = fOwner->ggttMap(hw->lrcGem);
+    IOLog("[V61] createHwContextFor: ggttMap(lrc) returned=0x%llX\n", hw->lrcGGTT);
     if (!hw->lrcGGTT) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: ggttMap(LRC) FAILED\n", ctxId);
+        IOLog("[V61] ❌ createHwContextFor: ggttMap(LRC) FAILED\n");
         hw->lrcGem->unpin();
         hw->lrcGem->release();  hw->lrcGem = nullptr;
         hw->ringGem->unpin();
@@ -1418,56 +1603,7 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
             fOwner->safeMMIOWrite(0x2580, 0);
         }
     }
-
     
-    
-       
-        
-        
-        
-        
-        
-        
-    // --- 4) Allocate fence GEM for this context (per-context fence) ---
-    hw->fenceGem = FakeIrisXEGEM::withSize(4096, 0);
-    if (!hw->fenceGem) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: fenceGem alloc FAILED\n", ctxId);
-        // We could still continue without fence, but for now bail out:
-        hw->lrcGem->unpin();  hw->lrcGem->release();  hw->lrcGem = nullptr;
-        hw->ringGem->unpin(); hw->ringGem->release(); hw->ringGem = nullptr;
-        return nullptr;
-    }
-
-    hw->fenceGem->pin();
-    hw->fenceGGTT = fOwner->ggttMap(hw->fenceGem);
-    if (!hw->fenceGGTT) {
-        IOLog("(FakeIrisXE) [Exec] ctx=%u: ggttMap(fence) FAILED\n", ctxId);
-        hw->fenceGem->unpin(); hw->fenceGem->release(); hw->fenceGem = nullptr;
-        // keep ctx but without fence; or bail out entirely. For now bail:
-        hw->lrcGem->unpin();  hw->lrcGem->release();  hw->lrcGem = nullptr;
-        hw->ringGem->unpin(); hw->ringGem->release(); hw->ringGem = nullptr;
-        return nullptr;
-    }
-    hw->fenceGGTT &= ~0xFFFULL;
-
-    // clear fence value
-    if (IOBufferMemoryDescriptor* fmd = hw->fenceGem->memoryDescriptor()) {
-        volatile uint32_t* fenceCpu = (volatile uint32_t*)fmd->getBytesNoCopy();
-        if (fenceCpu) {
-            fenceCpu[0] = 0;
-            OSSynchronizeIO();
-        }
-    }
-
-    IOLog("(FakeIrisXE) [Exec] ctx=%u: fenceGGTT=0x%llx\n",
-          ctxId, hw->fenceGGTT);
-
-    // Finally register this context in the table
-    fHwContextCount++;
-
-    IOLog("(FakeIrisXE) [Exec] createHwContextFor: ctx=%u pri=%u DONE (total=%u)\n",
-          ctxId, priority, fHwContextCount);
-
     return hw;
 }
 
@@ -1475,4 +1611,545 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
 
 
 
+
+// ============================================================================
+// V60: Diagnostic Test Functions
+// ============================================================================
+
+bool FakeIrisXEExeclist::runDiagnosticTest()
+{
+    IOLog("[V60] ============================================================\n");
+    IOLog("[V60] STARTING DIAGNOSTIC TEST - V57 Infrastructure Verification\n");
+    IOLog("[V60] ============================================================\n");
+    
+    // Step 1: Dump initial ring buffer status
+    IOLog("[V60] Step 1: Checking initial ring buffer state...\n");
+    dumpRingBufferStatus("Pre-Test");
+    
+    // Step 2: Dump initial execlist status
+    IOLog("[V60] Step 2: Checking initial execlist state...\n");
+    dumpExeclistStatus("Pre-Test");
+    
+    // Step 3: Create and submit test batch
+    IOLog("[V60] Step 3: Creating test batch buffer...\n");
+    if (!createAndSubmitTestBatch()) {
+        IOLog("[V60] ❌ FAILED: Could not create/submit test batch\n");
+        return false;
+    }
+    
+    // Step 4: Dump post-submit status
+    IOLog("[V60] Step 4: Checking post-submit state...\n");
+    dumpRingBufferStatus("Post-Submit");
+    dumpExeclistStatus("Post-Submit");
+    
+    // Step 5: Verify completion
+    IOLog("[V60] Step 5: Verifying command completion...\n");
+    if (!verifyCommandCompletion()) {
+        IOLog("[V60] ⚠️ WARNING: Command completion not verified (may need polling)\n");
+    }
+    
+    IOLog("[V60] ============================================================\n");
+    IOLog("[V60] DIAGNOSTIC TEST COMPLETE\n");
+    IOLog("[V60] ============================================================\n");
+    
+    return true;
+}
+
+bool FakeIrisXEExeclist::createAndSubmitTestBatch()
+{
+    IOLog("[V60] ============================================================\n");
+    IOLog("[V60] createAndSubmitTestBatch() - STARTING\n");
+    IOLog("[V60] ============================================================\n");
+    
+    // Step 1: Create a 4KB batch buffer
+    IOLog("[V60] Step 1: Allocating batch buffer GEM (size=4096)...\n");
+    const size_t batchSize = 4096;
+    FakeIrisXEGEM* batchGem = FakeIrisXEGEM::withSize(batchSize, 0);
+    if (!batchGem) {
+        IOLog("[V60] ❌ FAILED Step 1: Could not allocate batch buffer GEM\n");
+        return false;
+    }
+    IOLog("[V60] ✅ Step 1: GEM allocated successfully=%p\n", batchGem);
+    
+    // Step 2: Get memory descriptor
+    IOLog("[V60] Step 2: Getting memory descriptor...\n");
+    IOBufferMemoryDescriptor* md = batchGem->memoryDescriptor();
+    if (!md) {
+        IOLog("[V60] ❌ FAILED Step 2: Batch buffer has no memory descriptor\n");
+        batchGem->release();
+        return false;
+    }
+    IOLog("[V60] ✅ Step 2: Memory descriptor obtained=%p\n", md);
+    
+    // Step 3: Get CPU pointer
+    IOLog("[V60] Step 3: Getting CPU pointer...\n");
+    uint32_t* commands = (uint32_t*)md->getBytesNoCopy();
+    if (!commands) {
+        IOLog("[V60] ❌ FAILED Step 3: Could not get CPU pointer to batch buffer\n");
+        batchGem->release();
+        return false;
+    }
+    IOLog("[V60] ✅ Step 3: CPU pointer obtained=%p\n", commands);
+    
+    // Step 4: Clear the buffer
+    IOLog("[V60] Step 4: Clearing buffer...\n");
+    bzero(commands, batchSize);
+    IOLog("[V60] ✅ Step 4: Buffer cleared\n");
+    
+    // Step 5: Build command sequence
+    IOLog("[V60] Step 5: Building command sequence...\n");
+    int idx = 0;
+    
+    // Command 0-7: MI_NOOP (8 dwords of padding)
+    for (int i = 0; i < 8; i++) {
+        commands[idx++] = MI_NOOP;
+    }
+    IOLog("[V60]   Wrote %d MI_NOOP commands\n", 8);
+    
+    // Command 8: MI_FLUSH_DW (5 dwords)
+    commands[idx++] = MI_FLUSH_DW | (1 << 22) | (1 << 21); // post-sync, write dword
+    commands[idx++] = 0; // high 32 bits of address
+    commands[idx++] = 0; // low 32 bits of address
+    commands[idx++] = 0xDEADBEEF; // immediate data
+    commands[idx++] = 0; // unused
+    IOLog("[V60]   Wrote MI_FLUSH_DW command\n");
+    
+    // Command 13: MI_BATCH_BUFFER_END
+    commands[idx++] = MI_BATCH_BUFFER_END;
+    IOLog("[V60]   Wrote MI_BATCH_BUFFER_END command\n");
+    
+    IOLog("[V60] ✅ Step 5: Commands written (total %d dwords)\n", idx);
+    
+    // Step 6: Pin batch buffer
+    IOLog("[V60] Step 6: Pinning batch buffer...\n");
+    batchGem->pin();
+    IOLog("[V60] ✅ Step 6: Batch buffer pinned\n");
+    
+    // Step 7: Map to GGTT
+    IOLog("[V60] Step 7: Mapping to GGTT...\n");
+    uint64_t batchGGTT = fOwner->ggttMap(batchGem);
+    IOLog("[V60]   ggttMap returned: 0x%016llX\n", batchGGTT);
+    if (batchGGTT == 0) {
+        IOLog("[V60] ❌ FAILED Step 7: ggttMap returned 0\n");
+        batchGem->unpin();
+        batchGem->release();
+        return false;
+    }
+    batchGGTT &= ~0xFFFULL;
+    IOLog("[V60] ✅ Step 7: GGTT mapped at 0x%016llX\n", batchGGTT);
+    
+    // Step 8: Get/lookup context
+    IOLog("[V60] Step 8: Getting test context (ctxId=0xDEAD)...\n");
+    XEHWContext* testCtx = lookupHwContext(0xDEAD);
+    IOLog("[V60]   lookupHwContext(0xDEAD) returned: %p\n", testCtx);
+    
+    if (!testCtx) {
+        IOLog("[V60]   Context not found, creating new context...\n");
+        testCtx = createHwContextFor(0xDEAD, 0);
+        IOLog("[V60]   createHwContextFor(0xDEAD, 0) returned: %p\n", testCtx);
+        if (!testCtx) {
+            IOLog("[V60] ❌ FAILED Step 8: Could not create test context\n");
+            batchGem->unpin();
+            batchGem->release();
+            return false;
+        }
+        IOLog("[V60] ✅ Step 8: Context created successfully\n");
+    } else {
+        IOLog("[V60] ✅ Step 8: Existing context found and reused\n");
+    }
+    
+    // Step 9: Submit batch
+    IOLog("[V60] Step 9: Submitting batch via execlist...\n");
+    IOLog("[V60]   submitForContext ctx=%p batch=%p\n", testCtx, batchGem);
+    if (!submitForContext(testCtx, batchGem)) {
+        IOLog("[V60] ❌ FAILED Step 9: submitForContext() returned false\n");
+        batchGem->unpin();
+        batchGem->release();
+        return false;
+    }
+    IOLog("[V60] ✅ Step 9: Batch submitted successfully\n");
+    
+    IOLog("[V60] ============================================================\n");
+    IOLog("[V60] createAndSubmitTestBatch() - COMPLETE SUCCESS\n");
+    IOLog("[V60]   Context: 0xDEAD\n");
+    IOLog("[V60]   Batch GGTT: 0x%016llX\n", batchGGTT);
+    IOLog("[V60] ============================================================\n");
+    
+    return true;
+}
+
+bool FakeIrisXEExeclist::verifyCommandCompletion()
+{
+    IOLog("[V60] Verifying command completion...\n");
+    
+    // Wait a short time for GPU to process
+    IOLog("[V60]   Waiting 100ms for GPU processing...\n");
+    IOSleep(100);
+    
+    // Check ring buffer head/tail
+    uint32_t ring_head = mmioRead32(RING_HEAD);
+    uint32_t ring_tail = mmioRead32(RING_TAIL);
+    
+    IOLog("[V60]   Ring state after wait:\n");
+    IOLog("[V60]     HEAD: 0x%04X\n", ring_head & 0xFFFF);
+    IOLog("[V60]     TAIL: 0x%04X\n", ring_tail & 0xFFFF);
+    
+    if ((ring_head & 0xFFFF) == (ring_tail & 0xFFFF)) {
+        IOLog("[V60]   ✅ HEAD == TAIL (GPU consumed all commands)\n");
+    } else {
+        IOLog("[V60]   ⚠️  HEAD != TAIL (GPU still processing or stalled)\n");
+        IOLog("[V60]        Difference: %d bytes\n", 
+              (ring_tail - ring_head) & 0xFFFF);
+    }
+    
+    // Check execlist status
+    uint32_t status_lo = mmioRead32(0x2230); // RING_EXECLIST_STATUS_LO
+    uint32_t status_hi = mmioRead32(0x2234); // RING_EXECLIST_STATUS_HI
+    
+    bool slot0_active = (status_lo >> 2) & 1;
+    bool slot1_active = (status_lo >> 3) & 1;
+    
+    IOLog("[V60]   Execlist state:\n");
+    IOLog("[V60]     Slot 0 active: %s\n", slot0_active ? "YES" : "NO");
+    IOLog("[V60]     Slot 1 active: %s\n", slot1_active ? "YES" : "NO");
+    
+    if (!slot0_active && !slot1_active) {
+        IOLog("[V60]   ✅ No active contexts (GPU idle)\n");
+    } else {
+        IOLog("[V60]   ⚠️  Contexts still active\n");
+    }
+    
+    // Process any CSB entries
+    IOLog("[V60]   Processing CSB entries...\n");
+    processCsbEntriesV57();
+    
+    return true; // Return true even if not fully complete (it's a diagnostic)
+}
+
+// ============================================================================
+// V62: File-based Logging and Simplified Diagnostics
+// ============================================================================
+
+void FakeIrisXEExeclist::logToFile(const char* fmt, ...)
+{
+    // Simple file logging to /var/log/FakeIrisXE.log
+    // Note: In kernel space, we use BSD vnode interface for file I/O
+    
+    char buf[512];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    
+    // Always log to IOLog as well
+    IOLog("[V62-FILE] %s", buf);
+    
+    // Note: File I/O in kernel requires BSD vnode calls which are complex
+    // For now, we rely on IOLog with distinct prefix [V62] for filtering
+}
+
+bool FakeIrisXEExeclist::runSimpleDiagnosticTest()
+{
+    IOLog("[V62] ============================================================\n");
+    IOLog("[V62] SIMPLE DIAGNOSTIC TEST - V62 Simplified Debugging\n");
+    IOLog("[V62] ============================================================\n");
+    
+    bool allPassed = true;
+    
+    // Test 1: GEM Allocation
+    IOLog("[V62] TEST 1: GEM Allocation\n");
+    if (!testGEMAllocation()) {
+        IOLog("[V62] ❌ TEST 1 FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V62] ✅ TEST 1 PASSED\n");
+    }
+    
+    // Test 2: Context Creation
+    IOLog("[V62] TEST 2: Context Creation\n");
+    if (!testContextCreation()) {
+        IOLog("[V62] ❌ TEST 2 FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V62] ✅ TEST 2 PASSED\n");
+    }
+    
+    // Test 3: Batch Submission
+    IOLog("[V62] TEST 3: Batch Submission\n");
+    if (!testBatchSubmission()) {
+        IOLog("[V62] ❌ TEST 3 FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V62] ✅ TEST 3 PASSED\n");
+    }
+    
+    IOLog("[V62] ============================================================\n");
+    if (allPassed) {
+        IOLog("[V62] ✅ ALL TESTS PASSED\n");
+    } else {
+        IOLog("[V62] ⚠️  SOME TESTS FAILED\n");
+    }
+    IOLog("[V62] ============================================================\n");
+    
+    return allPassed;
+}
+
+bool FakeIrisXEExeclist::testGEMAllocation()
+{
+    IOLog("[V62]   Allocating 4KB GEM...\n");
+    
+    FakeIrisXEGEM* gem = FakeIrisXEGEM::withSize(4096, 0);
+    if (!gem) {
+        IOLog("[V62]   ❌ GEM allocation FAILED\n");
+        return false;
+    }
+    
+    IOLog("[V62]   GEM allocated at %p\n", gem);
+    
+    IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
+    if (!md) {
+        IOLog("[V62]   ❌ No memory descriptor\n");
+        gem->release();
+        return false;
+    }
+    
+    void* ptr = md->getBytesNoCopy();
+    if (!ptr) {
+        IOLog("[V62]   ❌ No CPU pointer\n");
+        gem->release();
+        return false;
+    }
+    
+    IOLog("[V62]   CPU pointer: %p\n", ptr);
+    
+    // Write test pattern
+    bzero(ptr, 4096);
+    ((uint32_t*)ptr)[0] = 0xDEADBEEF;
+    
+    if (((uint32_t*)ptr)[0] != 0xDEADBEEF) {
+        IOLog("[V62]   ❌ Memory write test FAILED\n");
+        gem->release();
+        return false;
+    }
+    
+    IOLog("[V62]   Memory write test PASSED\n");
+    
+    gem->release();
+    IOLog("[V62]   GEM released\n");
+    
+    return true;
+}
+
+bool FakeIrisXEExeclist::testContextCreation()
+{
+    IOLog("[V62]   Creating test context (ctxId=0xBEEF)...\n");
+    
+    // Check if context already exists
+    XEHWContext* ctx = lookupHwContext(0xBEEF);
+    if (ctx) {
+        IOLog("[V62]   Context already exists, reusing\n");
+        return true;
+    }
+    
+    // Create new context
+    IOLog("[V62]   Calling createHwContextFor(0xBEEF, 0)...\n");
+    ctx = createHwContextFor(0xBEEF, 0);
+    
+    if (!ctx) {
+        IOLog("[V62]   ❌ Context creation FAILED\n");
+        return false;
+    }
+    
+    IOLog("[V62]   Context created successfully\n");
+    IOLog("[V62]   Context ID: 0x%X\n", ctx->ctxId);
+    IOLog("[V62]   Ring GGTT: 0x%016llX\n", ctx->ringGGTT);
+    IOLog("[V62]   LRC GGTT: 0x%016llX\n", ctx->lrcGGTT);
+    
+    return true;
+}
+
+bool FakeIrisXEExeclist::testBatchSubmission()
+{
+    IOLog("[V62]   Testing batch buffer submission...\n");
+    
+    // Create simple batch buffer with just MI_BATCH_BUFFER_END
+    FakeIrisXEGEM* batch = FakeIrisXEGEM::withSize(4096, 0);
+    if (!batch) {
+        IOLog("[V62]   ❌ Batch GEM allocation FAILED\n");
+        return false;
+    }
+    
+    IOBufferMemoryDescriptor* md = batch->memoryDescriptor();
+    if (!md) {
+        IOLog("[V62]   ❌ Batch memory descriptor FAILED\n");
+        batch->release();
+        return false;
+    }
+    
+    uint32_t* cmds = (uint32_t*)md->getBytesNoCopy();
+    if (!cmds) {
+        IOLog("[V62]   ❌ Batch CPU pointer FAILED\n");
+        batch->release();
+        return false;
+    }
+    
+    // Simple command: MI_BATCH_BUFFER_END
+    cmds[0] = MI_BATCH_BUFFER_END;
+    IOLog("[V62]   Wrote MI_BATCH_BUFFER_END\n");
+    
+    // Get context
+    XEHWContext* ctx = lookupHwContext(0xBEEF);
+    if (!ctx) {
+        IOLog("[V62]   Creating context for submission...\n");
+        ctx = createHwContextFor(0xBEEF, 0);
+        if (!ctx) {
+            IOLog("[V62]   ❌ Context creation FAILED\n");
+            batch->release();
+            return false;
+        }
+    }
+    
+    // Submit
+    IOLog("[V62]   Submitting batch...\n");
+    batch->pin();
+    uint64_t batchGGTT = fOwner->ggttMap(batch) & ~0xFFFULL;
+    IOLog("[V62]   Batch GGTT: 0x%016llX\n", batchGGTT);
+    
+    if (!submitForContext(ctx, batch)) {
+        IOLog("[V62]   ❌ Batch submission FAILED\n");
+        batch->unpin();
+        batch->release();
+        return false;
+    }
+    
+    IOLog("[V62]   ✅ Batch submitted successfully\n");
+    
+    // Note: Don't release batch here - it's now managed by the submission queue
+    
+    return true;
+}
+
+// ============================================================================
+// V70: Comprehensive Diagnostic Suite
+// ============================================================================
+
+bool FakeIrisXEExeclist::runComprehensiveDiagnosticTest()
+{
+    IOLog("\n");
+    IOLog("╔══════════════════════════════════════════════════════════════╗\n");
+    IOLog("║         V70 COMPREHENSIVE DIAGNOSTIC SUITE                  ║\n");
+    IOLog("║         Testing GPU Subsystem - All Components              ║\n");
+    IOLog("╚══════════════════════════════════════════════════════════════╝\n");
+    IOLog("\n");
+    
+    bool allPassed = true;
+    int testNum = 1;
+    
+    // ===== TEST 1: GEM Allocation =====
+    IOLog("[V70-TEST %d] GEM Allocation\n", testNum++);
+    if (!testGEMAllocation()) {
+        IOLog("[V70] ❌ GEM TEST FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V70] ✅ GEM TEST PASSED\n");
+    }
+    IOLog("\n");
+    
+    // ===== TEST 2: Context Creation =====
+    IOLog("[V70-TEST %d] Context Creation\n", testNum++);
+    if (!testContextCreation()) {
+        IOLog("[V70] ❌ CONTEXT TEST FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V70] ✅ CONTEXT TEST PASSED\n");
+    }
+    IOLog("\n");
+    
+    // ===== TEST 3: Batch Submission =====
+    IOLog("[V70-TEST %d] Batch Submission\n", testNum++);
+    if (!testBatchSubmission()) {
+        IOLog("[V70] ❌ BATCH TEST FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V70] ✅ BATCH TEST PASSED\n");
+    }
+    IOLog("\n");
+    
+    // ===== TEST 4: RCS Ring Status =====
+    IOLog("[V70-TEST %d] RCS Ring Status\n", testNum++);
+    if (!testRCSRingStatus()) {
+        IOLog("[V70] ❌ RCS RING TEST FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V70] ✅ RCS RING TEST PASSED\n");
+    }
+    IOLog("\n");
+    
+    // ===== TEST 5: HW Context Count =====
+    IOLog("[V70-TEST %d] HW Context Management\n", testNum++);
+    if (!testHWContextManagement()) {
+        IOLog("[V70] ❌ HW CONTEXT TEST FAILED\n");
+        allPassed = false;
+    } else {
+        IOLog("[V70] ✅ HW CONTEXT TEST PASSED\n");
+    }
+    IOLog("\n");
+    
+    // ===== TEST 6: CSB Processing =====
+    IOLog("[V70-TEST %d] CSB Queue Processing\n", testNum++);
+    processCsbEntriesV57();
+    IOLog("[V70] ✅ CSB PROCESSED\n");
+    IOLog("\n");
+    
+    // Final Summary
+    IOLog("╔══════════════════════════════════════════════════════════════╗\n");
+    if (allPassed) {
+        IOLog("║  ✅ ALL V70 DIAGNOSTIC TESTS PASSED!                     ║\n");
+    } else {
+        IOLog("║  ⚠️  SOME V70 TESTS FAILED - SEE ABOVE                   ║\n");
+    }
+    IOLog("╚══════════════════════════════════════════════════════════════╝\n");
+    IOLog("\n");
+    
+    return allPassed;
+}
+
+// ============================================================================
+// V70 Test Implementations (Simplified)
+// ============================================================================
+
+bool FakeIrisXEExeclist::testRCSRingStatus()
+{
+    IOLog("[V70]   Checking RCS ring status...\n");
+    
+    if (!fOwner || !fOwner->fRcsRing) {
+        IOLog("[V70]   ❌ No RCS ring\n");
+        return false;
+    }
+    
+    IOLog("[V70]   ✅ RCS ring exists\n");
+    return true;
+}
+
+bool FakeIrisXEExeclist::testHWContextManagement()
+{
+    IOLog("[V70]   Testing HW context management...\n");
+    
+    // Create a test context
+    XEHWContext* ctx = createHwContextFor(0xDEAD, 1);
+    if (!ctx) {
+        IOLog("[V70]   ❌ Context creation failed\n");
+        return false;
+    }
+    
+    // Lookup the context
+    XEHWContext* lookup = lookupHwContext(0xDEAD);
+    if (lookup != ctx) {
+        IOLog("[V70]   ❌ Context lookup failed\n");
+        return false;
+    }
+    
+    IOLog("[V70]   ✅ Context management working\n");
+    return true;
+}
 

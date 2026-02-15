@@ -436,9 +436,171 @@ protected:
 
     // Simple bump allocator state
     uint64_t fNextGGTTOffset = 0;
+    
+    // V90: Helper functions for GEM/GGTT management
+    FakeIrisXEGEM* createGEMObject(size_t size);
+    uint64_t mapGEMToGGTT(FakeIrisXEGEM* gem);
+    void unmapGEMFromGGTT(uint64_t gpuAddr);
+    
+    // ============================================
+    // V90: IOAccelerator Hooks for WindowServer
+    // ============================================
+    
+    // Surface management for IOSurface integration
+    IOReturn createSurface(uint32_t width, uint32_t height, uint32_t format, 
+                           uint64_t* surfaceIdOut, uint64_t* gpuAddrOut);
+    IOReturn destroySurface(uint64_t surfaceId);
+    IOReturn getSurfaceInfo(uint64_t surfaceId, uint32_t* width, uint32_t* height, 
+                           uint32_t* format, uint64_t* gpuAddr);
+    
+    // 2D Blit/Copy operations for compositing
+    IOReturn blitSurface(uint64_t srcSurfaceId, uint64_t dstSurfaceId,
+                         uint32_t srcX, uint32_t srcY, uint32_t dstX, uint32_t dstY,
+                         uint32_t width, uint32_t height);
+    IOReturn copyToFramebuffer(uint64_t surfaceId, uint32_t x, uint32_t y);
+    IOReturn fillRect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
+    
+    // Command buffer submission for WindowServer
+    IOReturn submit2DCommandBuffer(void* commands, size_t size);
+    IOReturn submitBlitCommand(uint32_t opcode, void* data, size_t size);
+    
+    // Surface cache (simple implementation)
+    static constexpr uint32_t kMaxSurfaces = 16;
+    struct SurfaceInfo {
+        uint64_t id = 0;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint32_t format = 0;
+        uint64_t gpuAddress = 0;
+        FakeIrisXEGEM* gemObj = nullptr;
+        bool inUse = false;
+    };
+    SurfaceInfo fSurfaces[kMaxSurfaces];
+    uint64_t fNextSurfaceId = 1;
+    
+    // V90 diagnostic counters
+    uint32_t fV90BlitCount = 0;
+    uint32_t fV90SurfaceCount = 0;
+    
+    // ============================================
+    // V91: 2D Blit Command Builders (Intel PRM Vol 10)
+    // ============================================
+    
+    // XY_SRC_COPY_BLT - Copy rectangular region
+    IOReturn submitBlitXY_SRC_COPY(SurfaceInfo* srcSurf, SurfaceInfo* dstSurf,
+                                   uint32_t srcX, uint32_t srcY,
+                                   uint32_t dstX, uint32_t dstY,
+                                   uint32_t width, uint32_t height);
+    
+    // XY_COLOR_BLT - Fill rectangle with solid color
+    IOReturn submitBlitXY_COLOR_BLT(SurfaceInfo* dstSurf,
+                                    uint32_t x, uint32_t y,
+                                    uint32_t width, uint32_t height,
+                                    uint32_t color);
+    
+    // V91 diagnostic counters
+    uint32_t fV91BlitSubmitCount = 0;
+    uint32_t fV91BlitCompleteCount = 0;
+    
+    // ============================================
+    // V92: Debug Infrastructure & Advanced Features
+    // ============================================
+    
+    // Debug diagnostics - Priority 2 requirements
+    void runV92Diagnostics();  // Comprehensive boot diagnostics
+    void checkKextLoading();   // Verify kext loaded correctly
+    void checkWindowServerConnection();  // Check WS integration
+    void checkGPUStatus();     // Verify GPU responding
+    void dumpSystemState();    // Full state dump for debugging
+    
+    // V92 diagnostic properties (exposed to user space)
+    OSDictionary* getDiagnosticsReport();
+    
+    // V92: XY_COLOR_BLT full implementation
+    struct XY_COLOR_BLT_CMD;
+    IOReturn submitBlitXY_COLOR_BLT_Full(SurfaceInfo* dstSurf,
+                                         uint32_t x, uint32_t y,
+                                         uint32_t width, uint32_t height,
+                                         uint32_t color);
+    
+    // V92: XY_SETUP_CLIP_BLT for clipping support
+    struct XY_SETUP_CLIP_BLT_CMD;
+    IOReturn submitBlitXY_SETUP_CLIP(SurfaceInfo* surf,
+                                     uint32_t left, uint32_t top,
+                                     uint32_t right, uint32_t bottom);
+    bool fClipEnabled = false;
+    uint32_t fClipLeft = 0, fClipTop = 0, fClipRight = 0, fClipBottom = 0;
+    
+    // V92: Batch chaining for multiple blits
+    static constexpr uint32_t kMaxBatchBlits = 8;
+    struct BatchBlitEntry {
+        uint64_t srcSurfaceId = 0;
+        uint64_t dstSurfaceId = 0;
+        uint32_t srcX = 0, srcY = 0;
+        uint32_t dstX = 0, dstY = 0;
+        uint32_t width = 0, height = 0;
+        bool isFill = false;
+        uint32_t fillColor = 0;
+    };
+    
+    IOReturn submitBatchBlits(BatchBlitEntry* entries, uint32_t count);
+    IOReturn buildBatchCommandBuffer(BatchBlitEntry* entries, uint32_t count,
+                                     FakeIrisXEGEM** batchGemOut, uint32_t* seqNumOut);
+    
+    // V92 counters
+    uint32_t fV92ClipCount = 0;
+    uint32_t fV92BatchCount = 0;
+    uint32_t fV92ColorBlitCount = 0;
+    uint64_t fV92LastDiagnosticTime = 0;
+    
+    // Debug state tracking
+    bool fV92DiagnosticsRun = false;
+    uint32_t fV92LastError = 0;
+    char fV92LastErrorString[256];
+    
+    // ============================================
+    // V93: Display Verification & Integration Testing
+    // ============================================
+    
+    // Display pipe verification (Intel PRM Vol 12)
+    void verifyDisplayPipeState();           // Verify pipe/transcoder/DDI status
+    bool isPipeAEnabled();                   // Check PIPECONF_A
+    bool isTranscoderAEnabled();             // Check TRANS_CONF_A
+    bool isDDIAEnabled();                    // Check DDI_BUF_CTL_A
+    void logDisplayRegisters();              // Log all display registers
+    
+    // WindowServer integration tracking
+    void trackWindowServerBlit(uint32_t width, uint32_t height, bool isFill);
+    uint32_t getWindowServerBlitCount() { return fV93WindowServerBlitCount; }
+    bool isWindowServerActive() { return fV93WindowServerBlitCount > 0; }
+    
+    // GPU activity monitoring
+    void trackGPUCommandSubmitted();
+    void trackGPUCommandCompleted(uint32_t seqNum);
+    void updateGPUPerformanceStats(uint64_t submitTime, uint64_t completeTime);
+    
+    // V93: Real-time diagnostic report
+    OSDictionary* getV93StatusReport();
+    void printV93Summary();
+    
+    // V93 counters
+    uint32_t fV93WindowServerBlitCount = 0;
+    uint32_t fV93CommandsSubmitted = 0;
+    uint32_t fV93CommandsCompleted = 0;
+    uint32_t fV93DisplayVerificationFailures = 0;
+    
+    // V93 timing
+    uint64_t fV93FirstBlitTime = 0;
+    uint64_t fV93LastBlitTime = 0;
+    uint64_t fV93TotalBlitTime = 0;
+    
+    // V93 state
+    bool fV93DisplayVerified = false;
+    bool fV93WindowServerConnected = false;
+    uint64_t fV93BootTime = 0;
 
     
- 
+  
     uint64_t ggttMap(FakeIrisXEGEM* gem);
     void ggttUnmap(uint64_t gpuAddr, uint32_t pages);
 

@@ -138,10 +138,47 @@ public:
         uint32_t mmioRead32(uint32_t off);
         void     mmioWrite32(uint32_t off, uint32_t val);
 
+        // V57: Enhanced diagnostics
+        void dumpRingBufferStatus(const char* label);
+        void dumpExeclistStatus(const char* label);
+        void processCsbEntriesV57();
+        void handleCsbEntry(uint64_t entry, uint32_t ctx_id, uint32_t status);
+        
+        // V57: CSB status tracking
+        uint32_t fCsbWriteIndex;
+        
+        // V57: CSB status bits
+        static const uint32_t CSB_STATUS_COMPLETE  = (1 << 0);
+        static const uint32_t CSB_STATUS_PREEMPTED = (1 << 1);
+        static const uint32_t CSB_STATUS_FAULT     = (1 << 2);
+
+        // V60: Diagnostic test function
+        bool runDiagnosticTest();
+        bool createAndSubmitTestBatch();
+        bool verifyCommandCompletion();
+        
+        // V62: File-based logging for debugging
+        static void logToFile(const char* fmt, ...);
+        
+        // V62: Simplified diagnostic tests
+        bool runSimpleDiagnosticTest();
+        bool testGEMAllocation();
+        bool testContextCreation();
+        bool testBatchSubmission();
+        
+        // V70: Comprehensive Diagnostic Suite
+        bool runComprehensiveDiagnosticTest();
+        bool testRCSRingStatus();
+        bool testHWContextManagement();
+        
+        // Note: MI command opcodes are defined in i915_reg.h
+        // MI_NOOP, MI_FLUSH_DW, MI_BATCH_BUFFER_END, etc.
+
         // (Your previous programRcsForContext / submitBatchWithExeclist-test
         //  can stay but will be gradually replaced by submitForContext())
     
 
+    
     
     
     
@@ -160,8 +197,6 @@ private:
 
     static void write_le32(uint8_t* p, uint32_t v) { *(uint32_t*)p = v; }
     static void write_le64(uint8_t* p, uint64_t v) { *(uint64_t*)p = v; }
-
-
 
 
 
