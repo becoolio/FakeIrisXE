@@ -602,6 +602,7 @@ protected:
     
   
     uint64_t ggttMap(FakeIrisXEGEM* gem);
+    uint64_t ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t minOffset);  // V140: Map at or above minimum offset
     void ggttUnmap(uint64_t gpuAddr, uint32_t pages);
 
     // ===========================

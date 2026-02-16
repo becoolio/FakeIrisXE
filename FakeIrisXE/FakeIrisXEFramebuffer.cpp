@@ -4317,6 +4317,73 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
     return ret;
 }
 
+// V140: Map a GEM into GGTT at or above a minimum offset (for GuC firmware placement)
+// This ensures firmware is mapped above WOPCM size to avoid GGTT pin bias issues
+uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t minOffset) {
+    if (!gem || !fGGTT) return 0;
+
+    IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
+    if (!md) {
+        IOLog("(FakeIrisXE) ggttMapAtOrAbove: gem->memoryDescriptor() is NULL (gem=%p)\n", gem);
+        return 0;
+    }
+
+    if (!fGGTT) {
+        IOLog("(FakeIrisXE) ggttMapAtOrAbove: BAR1/GGTT not mapped yet (fGGTT=%p)\n", fGGTT);
+        return 0;
+    }
+
+    uint32_t pages = gem->pageCount();
+    
+    // V140: Align minOffset to page boundary and ensure fNextGGTTOffset is at least minOffset
+    minOffset = (minOffset + 4095) & ~4095ULL;
+    if (fNextGGTTOffset < minOffset) {
+        fNextGGTTOffset = minOffset;
+    }
+    
+    uint64_t gpuAddr = fNextGGTTOffset;
+    uint64_t offGPU = gpuAddr;
+
+    IOLog("(FakeIrisXE) ggttMapAtOrAbove: minOffset=0x%llx starting at GPU VA 0x%llx\n", 
+          (unsigned long long)minOffset, (unsigned long long)gpuAddr);
+
+    uint64_t offset = 0;
+    for (uint32_t i = 0; i < pages; ++i) {
+        uint64_t segSz = 0;
+        mach_vm_address_t phys = gem->getPhysicalSegment(offset, &segSz);
+        if (!phys) {
+            IOLog("FakeIrisXEFramebuffer: ggttMapAtOrAbove - null phys seg at page %u\n", i);
+            return 0;
+        }
+
+        uint64_t gtt_index = (offGPU >> 12);
+        if ((gtt_index + 1) * 8 > fGGTTSize) {
+            IOLog("FakeIrisXEFramebuffer: ggttMapAtOrAbove - out of GGTT space\n");
+            return 0;
+        }
+
+        uint64_t pte_val = ((uint64_t)phys >> 12) & 0x0000FFFFFFFFF000ULL;
+        pte_val |= (1ULL << 57);
+        pte_val |= (0ULL << 59);
+        pte_val |= (0ULL << 58);
+        pte_val |= (0ULL << 2);
+
+        volatile uint64_t* pte_ptr = (volatile uint64_t*)fGGTT + gtt_index;
+        *pte_ptr = pte_val;
+
+        offGPU += 4096;
+        offset += segSz ? segSz : 4096;
+    }
+
+    __sync_synchronize();
+    safeMMIOWrite(0x1082C0, 1);
+
+    uint64_t ret = gpuAddr;
+    fNextGGTTOffset += ((uint64_t)pages << 12);
+    IOLog("FakeIrisXEFramebuffer: ggttMapAtOrAbove -> GPU VA 0x%llx pages=%u\n", (unsigned long long)ret, pages);
+    return ret;
+}
+
 
 
 

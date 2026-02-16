@@ -879,9 +879,22 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     void* cpuPtr = md->getBytesNoCopy();
     memcpy(cpuPtr, fwData + payloadOffset, payloadSize);
     
-    // Pin and map GEM to GGTT
+    // V140: Read WOPCM size first to ensure firmware is mapped above it
+    uint32_t wopcmSizeReg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcmSize = ((wopcmSizeReg & 0x7FFFFFFF) >> 12) & 0xFFFFFu;
+    uint64_t wopcmSizeBytes = (uint64_t)wopcmSize * 4096;
+    IOLog("(FakeIrisXE) [V140] WOPCM size from HW: 0x%X (%llu bytes)\n", wopcmSize, (unsigned long long)wopcmSizeBytes);
+    
+    // Pin and map GEM to GGTT at or above WOPCM size
     fGuCFwGem->pin();
-    uint64_t gpuAddr = fOwner->ggttMap(fGuCFwGem);
+    uint64_t gpuAddr;
+    if (wopcmSizeBytes > 0) {
+        // Use ggttMapAtOrAbove to ensure firmware is above WOPCM size
+        gpuAddr = fOwner->ggttMapAtOrAbove(fGuCFwGem, wopcmSizeBytes);
+    } else {
+        // Fallback to regular ggttMap if WOPCM size is 0
+        gpuAddr = fOwner->ggttMap(fGuCFwGem);
+    }
     if (!gpuAddr) {
         IOLog("(FakeIrisXE) [GuC] Failed to map firmware\n");
         fGuCFwGem->unpin();
@@ -890,7 +903,7 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
         return false;
     }
     
-    IOLog("(FakeIrisXE) [GuC] Firmware mapped at GGTT=0x%llx\n", gpuAddr);
+    IOLog("(FakeIrisXE) [GuC] Firmware mapped at GGTT=0x%llx (using ggttMapAtOrAbove)\n", gpuAddr);
     
     // Program firmware address registers
     fOwner->safeMMIOWrite(GEN11_GUC_FW_ADDR_LO, (uint32_t)(gpuAddr & 0xFFFFFFFF));
@@ -2379,12 +2392,12 @@ bool FakeIrisXEGuC::dmaCopyGttToWopcm(uint64_t sourceGpuAddr, uint32_t destOffse
 }
 
 // ============================================================================
-// V137: Wait for GuC Boot (Linux i915 method)
+// V140: Wait for GuC Boot (Linux i915 method with RSA failure detection)
 // Polls GUC_STATUS with correct bitfield decoding
 // ============================================================================
 bool FakeIrisXEGuC::waitForGucBoot(uint32_t timeoutMs)
 {
-    IOLog("(FakeIrisXE) [V137] Waiting for GuC boot (timeout: %u ms)...\n", timeoutMs);
+    IOLog("(FakeIrisXE) [V140] Waiting for GuC boot (timeout: %u ms)...\n", timeoutMs);
 
     uint64_t start = mach_absolute_time();
     uint64_t timeoutNs = timeoutMs * 1000000ULL;
@@ -2396,23 +2409,29 @@ bool FakeIrisXEGuC::waitForGucBoot(uint32_t timeoutMs)
         uint32_t ukernel_status = FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, status);
         uint32_t mia_core_status = FIELD_GET_V137(GUC_MIA_CORE_STATUS_MASK_V137, status);
 
-        IOLog("(FakeIrisXE) [V137] STATUS=0x%08X bootrom=%u ukernel=%u mia=%u\n",
+        IOLog("(FakeIrisXE) [V140] STATUS=0x%08X bootrom=%u ukernel=%u mia=%u\n",
               status, bootrom_status, ukernel_status, mia_core_status);
 
+        // V140: Check for RSA verification failure
+        if (bootrom_status == 0x06) {
+            IOLog("(FakeIrisXE) [V140] ❌ RSA VERIFICATION FAILED! (bootrom_status=0x06)\n");
+            return false;
+        }
+
         if (bootrom_status == 0x7F && ukernel_status == 0xFF) {
-            IOLog("(FakeIrisXE) [V137] ✅ GuC booted successfully!\n");
+            IOLog("(FakeIrisXE) [V140] ✅ GuC booted successfully!\n");
             return true;
         }
 
-        if (bootrom_status != 0 && bootrom_status != 0x7F) {
-            IOLog("(FakeIrisXE) [V137] ❌ GuC boot failed! bootrom_status=0x%02X\n", bootrom_status);
+        if (bootrom_status != 0 && bootrom_status != 0x7F && bootrom_status != 0x06) {
+            IOLog("(FakeIrisXE) [V140] ❌ GuC boot failed! bootrom_status=0x%02X\n", bootrom_status);
             return false;
         }
 
         IOSleep(10);
     }
 
-    IOLog("(FakeIrisXE) [V137] ❌ Timeout waiting for GuC boot\n");
+    IOLog("(FakeIrisXE) [V140] ❌ Timeout waiting for GuC boot\n");
     return false;
 }
 
@@ -2724,31 +2743,39 @@ bool FakeIrisXEGuC::dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuC
 }
 
 // ============================================================================
-// V139: Complete GuC Load with STRICT i915 method
+// V140: Complete GuC Load with STRICT i915 method
 // ============================================================================
 bool FakeIrisXEGuC::loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
 {
-    IOLog("(FakeIrisXE) [V139] === V139 STRICT i915 METHOD ===\n");
+    IOLog("(FakeIrisXE) [V140] === V140 STRICT i915 METHOD ===\n");
     
     GuCFwLayout layout{};
     if (!parseGuCFirmwareV139(fwData, fwSize, layout)) {
-        IOLog("(FakeIrisXE) [V139] ❌ Parse failed!\n");
+        IOLog("(FakeIrisXE) [V140] ❌ Parse failed!\n");
         return false;
     }
     
     // Step 6: Check GGTT pin bias (firmware must be above WOPCM size)
+    // V140: FIXED - mask lock bit (bit 31) before extracting size
     uint32_t wopcmSizeReg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
-    uint32_t wopcmSize = (wopcmSizeReg >> 12) & 0xFFFFFu; // Extract size in 4KB pages
+    uint32_t wopcmSize = ((wopcmSizeReg & 0x7FFFFFFF) >> 12) & 0xFFFFFu; // Mask lock bit first, then extract size
     uint64_t wopcmSizeBytes = (uint64_t)wopcmSize * 4096;
     
-    IOLog("(FakeIrisXE) [V139] WOPCM size from HW: 0x%X (%u bytes)\n", wopcmSize, (unsigned)wopcmSizeBytes);
-    IOLog("(FakeIrisXE) [V139] Firmware GGTT addr: 0x%llx\n", gpuAddr);
+    // If WOPCM not configured yet, assume default 1MB
+    if (wopcmSizeBytes == 0) {
+        wopcmSizeBytes = 0x100000; // 1MB default
+        IOLog("(FakeIrisXE) [V140] WOPCM not configured, using default 1MB\n");
+    }
+    
+    IOLog("(FakeIrisXE) [V140] WOPCM reg=0x%08X masked=0x%08X size=%u (%llu bytes)\n", 
+          wopcmSizeReg, (wopcmSizeReg & 0x7FFFFFFF), wopcmSize, (unsigned long long)wopcmSizeBytes);
+    IOLog("(FakeIrisXE) [V140] Firmware GGTT addr: 0x%llx\n", gpuAddr);
     
     if (gpuAddr < wopcmSizeBytes) {
-        IOLog("(FakeIrisXE) [V139] ⚠️ GGTT pin bias violation! fw_addr < wopcm_size\n");
-        IOLog("(FakeIrisXE) [V139] Firmware will be pinned at wrong location!\n");
+        IOLog("(FakeIrisXE) [V140] ⚠️ GGTT pin bias violation! fw_addr < wopcm_size\n");
+        IOLog("(FakeIrisXE) [V140] Firmware will be pinned at wrong location!\n");
     } else {
-        IOLog("(FakeIrisXE) [V139] ✅ GGTT pin bias OK (fw >= wopcm)\n");
+        IOLog("(FakeIrisXE) [V140] ✅ GGTT pin bias OK (fw >= wopcm)\n");
     }
     
     if (!acquireForceWake()) {

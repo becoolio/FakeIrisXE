@@ -20,11 +20,15 @@
 		<data>
 		HdlJg3bGfBlJRiERkqXFj+2jpRY=
 		</data>
+		<key>Resources/tgl_guc_70.1.1.bin</key>
+		<data>
+		8BNJqb/H6Ho+3/XP33ibLHcnduY=
+		</data>
 		<key>Resources/tgl_guc_70.bin</key>
 		<data>
 		R4apY7z2Xa64RHZeLjminI0CXl0=
 		</data>
-		<key>Resources/tgl_huc.bin</key>
+		<key>Resources/tgl_huc_7.9.3.bin</key>
 		<data>
 		10njUEuB4mgvC96x4GJsIrEpVmk=
 		</data>
@@ -75,6 +79,17 @@
 			PAE+8K2WunOu6OW9BKjifMmxxukYOxqDzhJEhfMlr8o=
 			</data>
 		</dict>
+		<key>Resources/tgl_guc_70.1.1.bin</key>
+		<dict>
+			<key>hash</key>
+			<data>
+			8BNJqb/H6Ho+3/XP33ibLHcnduY=
+			</data>
+			<key>hash2</key>
+			<data>
+			WrDkF/ul7HWIOE4hVWswNVMA1FCjXgbruUghwBJhHXc=
+			</data>
+		</dict>
 		<key>Resources/tgl_guc_70.bin</key>
 		<dict>
 			<key>hash</key>
@@ -86,7 +101,7 @@
 			Lx9XobI9GG8lkjGNHgehNllokyhBzLPnF3xRa6AG4vY=
 			</data>
 		</dict>
-		<key>Resources/tgl_huc.bin</key>
+		<key>Resources/tgl_huc_7.9.3.bin</key>
 		<dict>
 			<key>hash</key>
 			<data>
