@@ -153,7 +153,115 @@
 #define GUC_RSA_SIGNATURE        0xC200
 #endif
 
-// Legacy/alternate DMA registers (keep for reference)
+// ============================================================================
+// V137: CRITICAL FIXES - Correct Gen12/Tiger Lake register map
+// Based on Intel PRM and Linux i915 driver analysis
+// ============================================================================
+
+// ===== CORRECT GuC/DMA register map (Gen12/Tiger Lake - direct offsets, no base) =====
+// GuC status/control
+#ifndef GUC_STATUS_V137
+#define GUC_STATUS_V137              0xC000
+#endif
+#ifndef GUC_SHIM_CONTROL_V137
+#define GUC_SHIM_CONTROL_V137        0xC064
+#endif
+#ifndef GUC_CTL_V137
+#define GUC_CTL_V137                 0xC010
+#endif
+
+// WOPCM registers (CORRECT offsets)
+#ifndef GUC_WOPCM_SIZE_V137
+#define GUC_WOPCM_SIZE_V137         0xC050    // size + lock bit
+#endif
+#ifndef DMA_GUC_WOPCM_OFFSET_V137
+#define DMA_GUC_WOPCM_OFFSET_V137    0xC340    // base/offset + valid bit
+#endif
+
+// DMA copy engine (CORRECT offsets - 0xC300 range)
+#ifndef DMA_ADDR_0_LOW_V137
+#define DMA_ADDR_0_LOW_V137         0xC300    // source address low
+#endif
+#ifndef DMA_ADDR_0_HIGH_V137
+#define DMA_ADDR_0_HIGH_V137        0xC304    // source address high + address space
+#endif
+#ifndef DMA_ADDR_1_LOW_V137
+#define DMA_ADDR_1_LOW_V137         0xC308    // destination address low
+#endif
+#ifndef DMA_ADDR_1_HIGH_V137
+#define DMA_ADDR_1_HIGH_V137        0xC30C    // destination address high + address space
+#endif
+#ifndef DMA_COPY_SIZE_V137
+#define DMA_COPY_SIZE_V137          0xC310    // transfer size
+#endif
+#ifndef DMA_CTRL_V137
+#define DMA_CTRL_V137              0xC314    // control + trigger
+#endif
+
+// Address space encoding (in HIGH registers)
+#ifndef DMA_ADDRESS_SPACE_WOPCM_V137
+#define DMA_ADDRESS_SPACE_WOPCM_V137 (7u << 16)  // 0x70000
+#endif
+#ifndef DMA_ADDRESS_SPACE_GTT_V137
+#define DMA_ADDRESS_SPACE_GTT_V137   (8u << 16)  // 0x80000
+#endif
+
+// WOPCM encoding bits
+#ifndef GUC_WOPCM_SIZE_LOCKED_V137
+#define GUC_WOPCM_SIZE_LOCKED_V137    (1u << 0)
+#endif
+#ifndef GUC_WOPCM_SIZE_MASK_V137
+#define GUC_WOPCM_SIZE_MASK_V137      (0xFFFFFu << 12)  // size is [31:12]
+#endif
+#ifndef GUC_WOPCM_OFFSET_VALID_V137
+#define GUC_WOPCM_OFFSET_VALID_V137   (1u << 0)
+#endif
+#ifndef DMA_GUC_WOPCM_OFFSET_MASK_V137
+#define DMA_GUC_WOPCM_OFFSET_MASK_V137 (0x3FFFFu << 14)  // base is [31:14]
+#endif
+
+// DMA control bits
+#ifndef START_DMA_V137
+#define START_DMA_V137               (1u << 0)
+#endif
+#ifndef UOS_MOVE_V137
+#define UOS_MOVE_V137                (1u << 4)
+#endif
+
+// UOS RSA scratch registers (0xC200+)
+#ifndef UOS_RSA_SCRATCH_BASE_V137
+#define UOS_RSA_SCRATCH_BASE_V137    0xC200
+#endif
+#ifndef UOS_RSA_SCRATCH_COUNT_V137
+#define UOS_RSA_SCRATCH_COUNT_V137   64  // 256 bytes
+#endif
+
+// GUC_STATUS bitfields
+#ifndef GUC_BOOTROM_STATUS_MASK_V137
+#define GUC_BOOTROM_STATUS_MASK_V137  (0x7Fu << 1)
+#endif
+#ifndef GUC_BOOTROM_STATUS_SHIFT_V137
+#define GUC_BOOTROM_STATUS_SHIFT_V137 1
+#endif
+#ifndef GUC_UKERNEL_STATUS_MASK_V137
+#define GUC_UKERNEL_STATUS_MASK_V137  (0xFFu << 8)
+#endif
+#ifndef GUC_UKERNEL_STATUS_SHIFT_V137
+#define GUC_UKERNEL_STATUS_SHIFT_V137 8
+#endif
+#ifndef GUC_MIA_CORE_STATUS_MASK_V137
+#define GUC_MIA_CORE_STATUS_MASK_V137 (0x7u << 16)
+#endif
+#ifndef GUC_MIA_CORE_STATUS_SHIFT_V137
+#define GUC_MIA_CORE_STATUS_SHIFT_V137 16
+#endif
+
+// Helper macros
+#ifndef FIELD_GET_V137
+#define FIELD_GET_V137(mask, v) (((v) & (mask)) >> __builtin_ctz(mask))
+#endif
+
+// Legacy/alternate DMA registers (keep for reference - but NOT the correct ones!)
 #ifndef GUC_DMA_STATUS
 #define GUC_DMA_STATUS             0x1C588
 #endif
@@ -161,7 +269,7 @@
 #define DMA_CTRL                  0x1C584
 #endif
 
-// DMA registers
+// Old incorrect DMA registers (were being used - WRONG!)
 #ifndef DMA_ADDR_0_LOW
 #define DMA_ADDR_0_LOW            0x1C570
 #endif
@@ -795,33 +903,44 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     uint32_t wopcmOffsets[] = {0x2000, 0x0, 0x4000, 0x6000};
     bool anyOffsetWorked = false;
     
-    for (int offsetIdx = 0; offsetIdx < 4; offsetIdx++) {
-        uint32_t destOffset = wopcmOffsets[offsetIdx];
-        IOLog("(FakeIrisXE) [V134] ===== Trying WOPCM offset 0x%X =====\n", destOffset);
+    // V137: Try the correct Tiger Lake method first
+    IOLog("(FakeIrisXE) [V137] Trying V137 Tiger Lake GuC load method...\n");
+    bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
+    
+    if (v137Success) {
+        IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
+    } else {
+        IOLog("(FakeIrisXE) [V137] ⚠️ V137 method failed, trying legacy methods...\n");
         
-        size_t dmaTransferSize = payloadSize + 256;
-        
-        // Apple pre-DMA init (ForceWake, RSA, WOPCM)
-        IOLog("(FakeIrisXE) [V134] Step 1: Apple pre-DMA init...\n");
-        initGuCForAppleDMA(fwData, fwSize, gpuAddr);
-        
-        // Try Apple DMA first, then Linux fallback
-        IOLog("(FakeIrisXE) [V134] Step 2: Attempting DMA upload...\n");
-        if (uploadFirmwareWithFallback(gpuAddr, destOffset, dmaTransferSize)) {
-            IOLog("(FakeIrisXE) [V134] ✅ DMA upload succeeded with offset 0x%X!\n", destOffset);
-            anyOffsetWorked = true;
-            break;
+        // Legacy fallback: try multiple WOPCM offsets
+        for (int offsetIdx = 0; offsetIdx < 4; offsetIdx++) {
+            uint32_t destOffset = wopcmOffsets[offsetIdx];
+            IOLog("(FakeIrisXE) [V134] ===== Trying WOPCM offset 0x%X =====\n", destOffset);
+            
+            size_t dmaTransferSize = payloadSize + 256;
+            
+            // Apple pre-DMA init (ForceWake, RSA, WOPCM)
+            IOLog("(FakeIrisXE) [V134] Step 1: Apple pre-DMA init...\n");
+            initGuCForAppleDMA(fwData, fwSize, gpuAddr);
+            
+            // Try Apple DMA first, then Linux fallback
+            IOLog("(FakeIrisXE) [V134] Step 2: Attempting DMA upload...\n");
+            if (uploadFirmwareWithFallback(gpuAddr, destOffset, dmaTransferSize)) {
+                IOLog("(FakeIrisXE) [V134] ✅ DMA upload succeeded with offset 0x%X!\n", destOffset);
+                anyOffsetWorked = true;
+                break;
+            }
+            
+            IOLog("(FakeIrisXE) [V134] ❌ DMA upload failed with offset 0x%X!\n", destOffset);
+            
+            // Release and re-acquire ForceWake between attempts
+            releaseForceWake();
+            IOSleep(50);
         }
         
-        IOLog("(FakeIrisXE) [V134] ❌ DMA upload failed with offset 0x%X!\n", destOffset);
-        
-        // Release and re-acquire ForceWake between attempts
-        releaseForceWake();
-        IOSleep(50);
-    }
-    
-    if (!anyOffsetWorked) {
-        IOLog("(FakeIrisXE) [V134] ❌ All WOPCM offsets failed!\n");
+        if (!anyOffsetWorked) {
+            IOLog("(FakeIrisXE) [V134] ❌ All WOPCM offsets failed!\n");
+        }
     }
     
     // Release ForceWake
@@ -2063,4 +2182,266 @@ void FakeIrisXEGuC::initGTPreWorkaround()
     IOLog("(FakeIrisXE) [V136] GT PRE-INIT COMPLETE\n");
     IOLog("(FakeIrisXE) [V136] Using CORRECT Tiger Lake GuC registers (0xC000+)\n");
     IOLog("(FakeIrisXE) [V136] ============================================\n");
+}
+
+// ============================================================================
+// V137: Correct Firmware Layout Derivation (Linux i915 method)
+// Based on intel_guc_fw.c - calculates correct offset using CSS fields
+// ============================================================================
+bool FakeIrisXEGuC::deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
+                                         size_t* outPayloadOffset, size_t* outPayloadSize)
+{
+    const struct CSSFirmwareHeader {
+        uint32_t module_type;
+        uint32_t header_len;
+        uint32_t header_version;
+        uint32_t module_id;
+        uint32_t module_vendor;
+        uint32_t date;
+        uint32_t size;
+        uint32_t key_size;
+        uint32_t modulus_size;
+        uint32_t exponent_size;
+    } __attribute__((packed));
+
+    const CSSFirmwareHeader* css = (const CSSFirmwareHeader*)fwData;
+
+    IOLog("(FakeIrisXE) [V137] CSS: header_len=%u key_size=%u modulus_size=%u exponent_size=%u\n",
+          css->header_len, css->key_size, css->modulus_size, css->exponent_size);
+
+    size_t key_size_bytes = css->key_size * 4;
+    size_t modulus_size_bytes = css->modulus_size * 4;
+    size_t exponent_size_bytes = css->exponent_size * 4;
+
+    size_t rsa_offset = css->header_len + key_size_bytes + modulus_size_bytes + exponent_size_bytes;
+    size_t ucode_offset = rsa_offset + modulus_size_bytes;
+
+    IOLog("(FakeIrisXE) [V137] RSA starts at: 0x%zx\n", rsa_offset);
+    IOLog("(FakeIrisXE) [V137] uCode starts at: 0x%zx\n", ucode_offset);
+
+    *outPayloadOffset = ucode_offset;
+    *outPayloadSize = fwSize - ucode_offset;
+
+    IOLog("(FakeIrisXE) [V137] Payload: offset=0x%zx size=0x%zx\n", *outPayloadOffset, *outPayloadSize);
+    return true;
+}
+
+// ============================================================================
+// V137: Program WOPCM for Tiger Lake (Linux i915 method)
+// Configures GUC_WOPCM_SIZE and DMA_GUC_WOPCM_OFFSET before DMA transfer
+// ============================================================================
+bool FakeIrisXEGuC::programWopcmForTgl(uint32_t wopcmSize, uint32_t wopcmOffset)
+{
+    IOLog("(FakeIrisXE) [V137] Programming WOPCM: size=0x%X offset=0x%X\n", wopcmSize, wopcmOffset);
+
+    uint32_t guc_wopcm_base = 0;
+    fOwner->safeMMIOWrite(GUC_WOPCM_SIZE_V137, 0);
+    IOSleep(1);
+
+    uint32_t size_val = (wopcmSize & 0xFFFFFu) << 12;
+    size_val |= GUC_WOPCM_SIZE_LOCKED_V137;
+    fOwner->safeMMIOWrite(GUC_WOPCM_SIZE_V137, size_val);
+    IOLog("(FakeIrisXE) [V137] Wrote GUC_WOPCM_SIZE (0xC050): 0x%08X\n", size_val);
+
+    IOSleep(1);
+
+    uint32_t offset_val = (wopcmOffset & 0x3FFFFu) << 14;
+    offset_val |= GUC_WOPCM_OFFSET_VALID_V137;
+    fOwner->safeMMIOWrite(DMA_GUC_WOPCM_OFFSET_V137, offset_val);
+    IOLog("(FakeIrisXE) [V137] Wrote DMA_GUC_WOPCM_OFFSET (0xC340): 0x%08X\n", offset_val);
+
+    IOSleep(1);
+
+    uint32_t verify_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t verify_offset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    IOLog("(FakeIrisXE) [V137] Verify: SIZE=0x%08X OFFSET=0x%08X\n", verify_size, verify_offset);
+
+    return (verify_size != 0 && verify_offset != 0);
+}
+
+// ============================================================================
+// V137: Write RSA Signature to UOS_RSA_SCRATCH (Linux i915 method)
+// Writes full 256 bytes (64 dwords) to registers at 0xC200+
+// ============================================================================
+bool FakeIrisXEGuC::writeRsaScratch(const uint8_t* fwData, size_t fwSize)
+{
+    IOLog("(FakeIrisXE) [V137] Writing RSA signature to UOS_RSA_SCRATCH (0xC200+)\n");
+
+    const struct CSSFirmwareHeader {
+        uint32_t module_type;
+        uint32_t header_len;
+        uint32_t header_version;
+        uint32_t module_id;
+        uint32_t module_vendor;
+        uint32_t date;
+        uint32_t size;
+        uint32_t key_size;
+        uint32_t modulus_size;
+        uint32_t exponent_size;
+    } __attribute__((packed));
+
+    const CSSFirmwareHeader* css = (const CSSFirmwareHeader*)fwData;
+
+    size_t key_size_bytes = css->key_size * 4;
+    size_t modulus_size_bytes = css->modulus_size * 4;
+    size_t exponent_size_bytes = css->exponent_size * 4;
+
+    size_t rsa_offset = css->header_len + key_size_bytes + modulus_size_bytes + exponent_size_bytes;
+
+    IOLog("(FakeIrisXE) [V137] RSA signature at offset: 0x%zx\n", rsa_offset);
+
+    const uint8_t* rsa_data = fwData + rsa_offset;
+
+    for (int i = 0; i < UOS_RSA_SCRATCH_COUNT_V137; i++) {
+        uint32_t val = 0;
+        if (rsa_offset + (i * 4) + 4 <= fwSize) {
+            val = *(uint32_t*)(rsa_data + (i * 4));
+        }
+        fOwner->safeMMIOWrite(UOS_RSA_SCRATCH_BASE_V137 + (i * 4), val);
+    }
+
+    IOLog("(FakeIrisXE) [V137] ✅ Wrote %d dwords (256 bytes) to UOS_RSA_SCRATCH\n",
+          UOS_RSA_SCRATCH_COUNT_V137);
+
+    return true;
+}
+
+// ============================================================================
+// V137: DMA Copy from GTT to WOPCM (Linux i915 method)
+// Uses CORRECT Tiger Lake DMA registers at 0xC300-0xC314
+// ============================================================================
+bool FakeIrisXEGuC::dmaCopyGttToWopcm(uint64_t sourceGpuAddr, uint32_t destOffset, size_t fwSize)
+{
+    IOLog("(FakeIrisXE) [V137] DMA Copy: GGTT=0x%016llX -> WOPCM offset=0x%X size=0x%zX\n",
+          sourceGpuAddr, destOffset, fwSize);
+
+    uint32_t srcLow = (uint32_t)(sourceGpuAddr & 0xFFFFFFFF);
+    uint32_t srcHigh = (uint32_t)((sourceGpuAddr >> 32) & 0xFFFF);
+    srcHigh |= DMA_ADDRESS_SPACE_GTT_V137;
+
+    fOwner->safeMMIOWrite(DMA_ADDR_0_LOW_V137, srcLow);
+    fOwner->safeMMIOWrite(DMA_ADDR_0_HIGH_V137, srcHigh);
+
+    uint32_t dstLow = destOffset;
+    uint32_t dstHigh = DMA_ADDRESS_SPACE_WOPCM_V137;
+
+    fOwner->safeMMIOWrite(DMA_ADDR_1_LOW_V137, dstLow);
+    fOwner->safeMMIOWrite(DMA_ADDR_1_HIGH_V137, dstHigh);
+
+    fOwner->safeMMIOWrite(DMA_COPY_SIZE_V137, (uint32_t)fwSize);
+
+    IOLog("(FakeIrisXE) [V137] DMA registers programmed:\n");
+    IOLog("  SRC_LO=0x%08X SRC_HI=0x%08X\n", srcLow, srcHigh);
+    IOLog("  DST_LO=0x%08X DST_HI=0x%08X\n", dstLow, dstHigh);
+    IOLog("  SIZE=0x%08X\n", (uint32_t)fwSize);
+
+    uint32_t ctrl = START_DMA_V137 | UOS_MOVE_V137;
+    fOwner->safeMMIOWrite(DMA_CTRL_V137, ctrl);
+    IOLog("(FakeIrisXE) [V137] DMA started: CTRL=0x%08X\n", ctrl);
+
+    uint64_t start = mach_absolute_time();
+    uint64_t timeoutNs = 100 * 1000000ULL;
+    bool completed = false;
+
+    while (mach_absolute_time() - start < timeoutNs) {
+        uint32_t status = fOwner->safeMMIORead(DMA_CTRL_V137);
+        if (!(status & START_DMA_V137)) {
+            completed = true;
+            IOLog("(FakeIrisXE) [V137] ✅ DMA completed!\n");
+            break;
+        }
+        IOSleep(1);
+    }
+
+    if (!completed) {
+        uint32_t finalStatus = fOwner->safeMMIORead(DMA_CTRL_V137);
+        IOLog("(FakeIrisXE) [V137] ❌ DMA timeout! DMA_CTRL=0x%08X\n", finalStatus);
+        return false;
+    }
+
+    fOwner->safeMMIOWrite(DMA_CTRL_V137, 0);
+    return true;
+}
+
+// ============================================================================
+// V137: Wait for GuC Boot (Linux i915 method)
+// Polls GUC_STATUS with correct bitfield decoding
+// ============================================================================
+bool FakeIrisXEGuC::waitForGucBoot(uint32_t timeoutMs)
+{
+    IOLog("(FakeIrisXE) [V137] Waiting for GuC boot (timeout: %u ms)...\n", timeoutMs);
+
+    uint64_t start = mach_absolute_time();
+    uint64_t timeoutNs = timeoutMs * 1000000ULL;
+
+    while (mach_absolute_time() - start < timeoutNs) {
+        uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
+
+        uint32_t bootrom_status = FIELD_GET_V137(GUC_BOOTROM_STATUS_MASK_V137, status);
+        uint32_t ukernel_status = FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, status);
+        uint32_t mia_core_status = FIELD_GET_V137(GUC_MIA_CORE_STATUS_MASK_V137, status);
+
+        IOLog("(FakeIrisXE) [V137] STATUS=0x%08X bootrom=%u ukernel=%u mia=%u\n",
+              status, bootrom_status, ukernel_status, mia_core_status);
+
+        if (bootrom_status == 0x7F && ukernel_status == 0xFF) {
+            IOLog("(FakeIrisXE) [V137] ✅ GuC booted successfully!\n");
+            return true;
+        }
+
+        if (bootrom_status != 0 && bootrom_status != 0x7F) {
+            IOLog("(FakeIrisXE) [V137] ❌ GuC boot failed! bootrom_status=0x%02X\n", bootrom_status);
+            return false;
+        }
+
+        IOSleep(10);
+    }
+
+    IOLog("(FakeIrisXE) [V137] ❌ Timeout waiting for GuC boot\n");
+    return false;
+}
+
+// ============================================================================
+// V137: Complete GuC Load Sequence (uses all correct Tiger Lake methods)
+// Replaces initGuCForAppleDMA with correct Linux-style sequence
+// ============================================================================
+bool FakeIrisXEGuC::loadGuCWithV137Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
+{
+    IOLog("(FakeIrisXE) [V137] ============================================\n");
+    IOLog("(FakeIrisXE) [V137] V137 GuC Load Sequence (Tiger Lake)\n");
+    IOLog("(FakeIrisXE) [V137] ============================================\n");
+
+    if (!acquireForceWake()) {
+        IOLog("(FakeIrisXE) [V137] ⚠️ ForceWake warning, continuing...\n");
+    }
+
+    programShimControl();
+    IOSleep(10);
+
+    size_t payloadOffset, payloadSize;
+    deriveLayoutFromCSS(fwData, fwSize, &payloadOffset, &payloadSize);
+
+    writeRsaScratch(fwData, fwSize);
+
+    uint32_t wopcmSize = 0x100000;
+    uint32_t wopcmOffset = 0x2000;
+    if (!programWopcmForTgl(wopcmSize, wopcmOffset)) {
+        IOLog("(FakeIrisXE) [V137] ❌ WOPCM configuration failed!\n");
+        return false;
+    }
+
+    if (!dmaCopyGttToWopcm(gpuAddr + payloadOffset, wopcmOffset, payloadSize)) {
+        IOLog("(FakeIrisXE) [V137] ❌ DMA copy failed!\n");
+        return false;
+    }
+
+    if (!waitForGucBoot(5000)) {
+        IOLog("(FakeIrisXE) [V137] ❌ GuC boot failed!\n");
+        return false;
+    }
+
+    releaseForceWake();
+
+    IOLog("(FakeIrisXE) [V137] ✅ V137 GuC load sequence complete!\n");
+    return true;
 }
