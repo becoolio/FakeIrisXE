@@ -91,6 +91,12 @@ private:
     // V53: Enhanced HuC loading with DMA
     bool loadHuCFirmwareWithDMA(const uint8_t* fwData, size_t fwSize);
     
+    // V133: RPS/Frequency control for Execlist optimization
+    void configureRPS();
+    
+    // V133: MMIO-based firmware loading (bypass DMA)
+    bool loadFirmwareViaMMIO(uint64_t sourceGpuAddr, uint32_t destOffset, size_t fwSize);
+    
     // V53: Doorbell initialization (for GuC submission)
     bool initDoorbells();
     
@@ -99,4 +105,7 @@ private:
     
     // V53: Full GuC subsystem initialization
     bool initGuCSubsystem();
+    
+    // V135: Aggressive Linux GT initialization before GuC load
+    void initGTPreWorkaround();
 };

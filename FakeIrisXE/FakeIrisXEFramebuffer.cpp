@@ -159,7 +159,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║         FAKEIRISXE V84 - Tiger Lake GPU Driver          ║\n");
+    IOLog("║         FAKEIRISXE V134 - Tiger Lake GPU Driver          ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -246,7 +246,7 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     vramMemory = nullptr;
   //  mmioBase = nullptr;
    // mmioWrite32 = nullptr;
-    currentMode = 1;  // V87: Start with mode 1 (1920x1080) instead of 0
+    currentMode = 1;  // V131: Start with mode 1 (1920x1080) instead of 0
     currentDepth = 0;
     vramSize = 1920 * 1080 * 4;
     controllerEnabled = false;
@@ -662,15 +662,15 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  FAKEIRISXE V82 - start() - WindowServer Integration         ║\n");
+    IOLog("║  FAKEIRISXE V131 - start() - WindowServer Integration         ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
     if (!super::start(provider)) {
-        IOLog("❌ [V82] super::start() failed\n");
+        IOLog("❌ [V131] super::start() failed\n");
         return false;
     }
-    IOLog("✅ [V82] super::start() succeeded\n");
+    IOLog("✅ [V131] super::start() succeeded\n");
 
     
 
@@ -1070,10 +1070,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     IOLog("[V75] HDA audio properties published\n");
     
-    // V76: Connector/Framebuffer patch configuration
+    // V131: Connector/Framebuffer patch configuration
     // Tiger Lake has 4 DDI ports: A, B, C, D (some shared with USB-C)
     // Port A = eDP (internal panel), Port B = HDMI, Port C = DP, Port D = USB-C
-    IOLog("[V76] Setting up connector/framebuffer patch properties...\n");
+    IOLog("[V131] Setting up connector/framebuffer patch properties...\n");
     
     // Enable framebuffer patching
     setProperty("framebuffer-patch-enable", kOSBooleanTrue);
@@ -1124,13 +1124,31 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("complete-modeset", kOSBooleanTrue);
     setProperty("force-online", kOSBooleanTrue);
     
-    // V77: Additional GPU detection properties for About This Mac
-    IOLog("[V77] Adding GPU detection properties...\n");
+    // V131: Additional GPU detection properties for About This Mac
+    IOLog("[V131] Adding GPU detection properties...\n");
     
     // Critical for About This Mac GPU detection
     setProperty("model", OSString::withCString("Intel Iris Xe Graphics"));
     setProperty("model Alias", OSString::withCString("Intel Iris Xe"));
     setProperty("IOName", OSString::withCString("Intel Iris Xe Graphics"));
+    
+    // V131: Internal display properties
+    // These tell macOS this is the built-in display (like a MacBook Pro)
+    setProperty("IODisplayIsInternal", kOSBooleanTrue);
+    setProperty("builtin", kOSBooleanTrue);
+    setProperty("display-type", OSString::withCString("built-in"));
+    setProperty("panel-orientation", OSString::withCString("normal"));
+    
+    // V131: Display vendor/product IDs for proper Mac detection
+    // Use Intel vendor (0x8086) and MacBook Pro-like product code
+    setProperty("vendor-id", OSNumber::withNumber(0x8086, 32));
+    setProperty("product-id", OSNumber::withNumber(0x9B00, 32));  // Similar to MacBook Pro
+    setProperty("serial-number", OSNumber::withNumber(0x12345678, 32));
+    setProperty("display-serial-number", OSNumber::withNumber(0x12345678, 32));
+    setProperty("vendor-name", OSString::withCString("Intel"));
+    setProperty("product-name", OSString::withCString("Intel Iris Xe Graphics"));
+    
+    IOLog("[V131] ✅ Internal display properties set\n");
     
     // Metal/Acceleration properties
     setProperty("IOAccelTypes", OSArray::withObjects((const OSObject*[]){
@@ -1145,11 +1163,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         pciDevice->setProperty("model Alias", OSString::withCString("Intel Xe"));
     }
     
-    IOLog("[V76] Connector/framebuffer patch properties published\n");
-    IOLog("[V76] - Port 0: eDP (internal panel)\n");
-    IOLog("[V76] - Port 1: HDMI\n");
-    IOLog("[V76] - Port 2: DP\n");
-    IOLog("[V77] GPU detection properties added\n");
+    IOLog("[V131] Connector/framebuffer patch properties published\n");
+    IOLog("[V131] - Port 0: eDP (internal panel)\n");
+    IOLog("[V131] - Port 1: HDMI\n");
+    IOLog("[V131] - Port 2: DP\n");
+    IOLog("[V131] GPU detection properties added\n");
     
 
     
@@ -2049,10 +2067,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     
     
-    // V82: Final initialization diagnostics with WindowServer info
+    // V131: Final initialization diagnostics with WindowServer info
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  V82 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
+    IOLog("║  V131 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  FRAMEBUFFER STATUS                                          ║\n");
     IOLog("║  Framebuffer:     %s\n", framebufferMemory ? "✅ ALLOCATED" : "❌ MISSING");
@@ -2078,11 +2096,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
-    IOLog("[V82] WindowServer should now be able to render to this framebuffer\n");
-    IOLog("[V82] Look for color bars on screen (V81 test pattern)\n");
+    IOLog("[V131] WindowServer should now be able to render to this framebuffer\n");
+    IOLog("[V131] Look for color bars on screen (V81 test pattern)\n");
     IOLog("\n");
     
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V82)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V134)\n");
     return true;
 
 }
@@ -2527,19 +2545,19 @@ static constexpr uint32_t BXT_BLC_PWM_DUTY1 = 0x000C8254;  // duty (maybe low 16
 IOReturn FakeIrisXEFramebuffer::enableController() {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  V85: enableController() - Comprehensive Diagnostics         ║\n");
+    IOLog("║  V131: enableController() - Comprehensive Diagnostics         ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     IOSleep(30);
 
     if (!mmioBase || !framebufferMemory) {
-        IOLog("❌ [V85] CRITICAL: MMIO or framebuffer not set!\n");
+        IOLog("❌ [V131] CRITICAL: MMIO or framebuffer not set!\n");
         IOLog("   mmioBase: %p\n", mmioBase);
         IOLog("   framebufferMemory: %p\n", framebufferMemory);
         return kIOReturnError;
     }
     
-    IOLog("✅ [V85] Prerequisites check passed\n");
+    IOLog("✅ [V131] Prerequisites check passed\n");
     IOLog("   mmioBase: %p\n", mmioBase);
     IOLog("   framebufferMemory: %p (size: %llu bytes)\n", 
           framebufferMemory, framebufferMemory->getLength());
@@ -2587,11 +2605,11 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
          return kIOReturnError;
      }
 
-     // V87: WRITE TEST PATTERN BEFORE ENABLING PLANE
+     // V131: WRITE TEST PATTERN BEFORE ENABLING PLANE
      // This ensures the GPU sees colors immediately when plane is enabled
      IOLog("\n");
      IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-     IOLog("║  V87: PRE-ENABLE TEST PATTERN                                ║\n");
+     IOLog("║  V131: PRE-ENABLE TEST PATTERN                                ║\n");
      IOLog("╚══════════════════════════════════════════════════════════════╝\n");
      IOLog("\n");
      
@@ -2602,8 +2620,8 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
          uint32_t height = V_ACTIVE;  // 1080
          uint32_t stride = width;     // pixels per row
          
-         IOLog("[V87] Writing test pattern BEFORE enabling plane...\n");
-         IOLog("[V87] Framebuffer: %p, Size: %zu bytes\n", fb, fbSize);
+         IOLog("[V131] Writing test pattern BEFORE enabling plane...\n");
+         IOLog("[V131] Framebuffer: %p, Size: %zu bytes\n", fb, fbSize);
          
          // Write test pattern: color bars
          uint32_t barWidth = width / 8;
@@ -2640,8 +2658,8 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
          __asm__ volatile("mfence" ::: "memory");
          IOSleep(10);  // Give memory time to settle
          
-         IOLog("[V87] ✅ Test pattern written to framebuffer\n");
-         IOLog("[V87] Colors should appear immediately when plane is enabled\n");
+         IOLog("[V131] ✅ Test pattern written to framebuffer\n");
+         IOLog("[V131] Colors should appear immediately when plane is enabled\n");
      }
 
      // --------- PROGRAM PLANE SURFACE ---------
@@ -2769,11 +2787,11 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
 
     IOLog("✅ Panel fitter / pipe scaler forced OFF\n");
 
-    // V84: CRITICAL FIX - Power up eDP Panel BEFORE enabling pipe/transcoder
+    // V131: CRITICAL FIX - Power up eDP Panel BEFORE enabling pipe/transcoder
     // For eDP, panel must be powered before enabling display pipeline
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  V84: PANEL POWER SEQUENCING (Critical Fix)                  ║\n");
+    IOLog("║  V131: PANEL POWER SEQUENCING (Critical Fix)                  ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
@@ -2781,17 +2799,17 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     const uint32_t PP_STATUS  = 0x00064024;
     
     // Step 1: Power up panel
-    IOLog("[V84] Step 1: Powering up eDP panel...\n");
+    IOLog("[V131] Step 1: Powering up eDP panel...\n");
     wr(PP_CONTROL, (1u << 31) | (1u << 30));
     IOSleep(100);  // Longer delay for panel power
     
     // Step 2: Wait for panel power ready (CRITICAL)
-    IOLog("[V84] Step 2: Waiting for panel power ready...\n");
+    IOLog("[V131] Step 2: Waiting for panel power ready...\n");
     bool panelReady = false;
     for (int i = 0; i < 200; i++) {  // Increased timeout
         uint32_t status = rd(PP_STATUS);
         if (status & (1u << 31)) {
-            IOLog("[V84] ✅ Panel power ready (PP_STATUS=0x%08X)\n", status);
+            IOLog("[V131] ✅ Panel power ready (PP_STATUS=0x%08X)\n", status);
             panelReady = true;
             break;
         }
@@ -2799,45 +2817,45 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     }
     
     if (!panelReady) {
-        IOLog("[V84] ⚠️ Panel power timeout - continuing anyway\n");
+        IOLog("[V131] ⚠️ Panel power timeout - continuing anyway\n");
     }
     
     IOSleep(200);  // Extra delay after panel power
     
     // Step 3: Enable DDI A buffer (before pipe/transcoder)
-    IOLog("[V84] Step 3: Enabling DDI A buffer...\n");
+    IOLog("[V131] Step 3: Enabling DDI A buffer...\n");
     uint32_t ddi = rd(DDI_BUF_CTL_A);
     ddi |= (1u << 31);  // Enable
     ddi &= ~(7u << 24);
     ddi |= (1u << 24);  // x1 width for eDP
     wr(DDI_BUF_CTL_A, ddi);
     IOSleep(20);
-    IOLog("[V84] DDI_BUF_CTL_A = 0x%08X\n", rd(DDI_BUF_CTL_A));
+    IOLog("[V131] DDI_BUF_CTL_A = 0x%08X\n", rd(DDI_BUF_CTL_A));
     
     // Step 4: Enable Pipe A
-    IOLog("[V84] Step 4: Enabling Pipe A...\n");
+    IOLog("[V131] Step 4: Enabling Pipe A...\n");
     uint32_t pipeconf = rd(PIPECONF_A);
     pipeconf |= (1u << 31);  // Enable
     pipeconf |= (1u << 30);  // Progressive
     wr(PIPECONF_A, pipeconf);
     IOSleep(20);
-    IOLog("[V84] PIPECONF_A = 0x%08X\n", rd(PIPECONF_A));
+    IOLog("[V131] PIPECONF_A = 0x%08X\n", rd(PIPECONF_A));
     
     // Step 5: Enable Transcoder A
-    IOLog("[V84] Step 5: Enabling Transcoder A...\n");
+    IOLog("[V131] Step 5: Enabling Transcoder A...\n");
     uint32_t trans = rd(TRANS_CONF_A);
     trans |= (1u << 31);  // Enable
     wr(TRANS_CONF_A, trans);
     IOSleep(20);
-    IOLog("[V84] TRANS_CONF_A = 0x%08X\n", rd(TRANS_CONF_A));
+    IOLog("[V131] TRANS_CONF_A = 0x%08X\n", rd(TRANS_CONF_A));
     
     // Step 6: Force display online
-    IOLog("[V84] Step 6: Forcing display online...\n");
+    IOLog("[V131] Step 6: Forcing display online...\n");
     displayOnline = true;
     controllerEnabled = true;
     setProperty("IOFBDisplayOnline", kOSBooleanTrue);
     setProperty("display-online", kOSBooleanTrue);
-    IOLog("[V84] ✅ Display forced online\n");
+    IOLog("[V131] ✅ Display forced online\n");
 
     
     
@@ -3868,10 +3886,10 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
     IODisplayModeID mode,
     IODisplayModeInformation* info)
 {
-    IOLog("[V82] getInformationForDisplayMode(mode=%d)\n", mode);
+    IOLog("[V131] getInformationForDisplayMode(mode=%d)\n", mode);
 
     if (!info) {
-        IOLog("[V82] ❌ Invalid info pointer\n");
+        IOLog("[V131] ❌ Invalid info pointer\n");
         return kIOReturnBadArgument;
     }
 
@@ -3885,7 +3903,7 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
     }
 
     if (!modeInfo) {
-        IOLog("[V82] ❌ Mode %d not found in supported modes\n", mode);
+        IOLog("[V131] ❌ Mode %d not found in supported modes\n", mode);
         return kIOReturnUnsupportedMode;
     }
 
@@ -3900,7 +3918,7 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
     info->reserved[0] = kIOTimingIDDefault;
     info->reserved[1] = kIOTimingInfoValid_AppleTimingID;
     
-    IOLog("[V82] ✅ Mode info: %dx%d @ 60Hz\n", modeInfo->width, modeInfo->height);
+    IOLog("[V131] ✅ Mode info: %dx%d @ 60Hz\n", modeInfo->width, modeInfo->height);
 
     IOLog("Returning display mode info: 1920x1080 @ 60Hz\n");
     return kIOReturnSuccess;
