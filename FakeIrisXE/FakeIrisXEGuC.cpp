@@ -596,11 +596,11 @@ bool FakeIrisXEGuC::initGuC()
         // V52.1: IMPORTANT - We need to load firmware BEFORE deciding to fallback!
         // The GuC hardware is not accessible until firmware is loaded via DMA
         // Load the GuC firmware first (this triggers the DMA upload)
-        extern const unsigned char adlp_guc_70_1_1_bin[];
-        extern const unsigned int adlp_guc_70_1_1_bin_len;
+        extern const unsigned char tgl_guc_70_1_1_bin[];
+        extern const unsigned int tgl_guc_70_1_1_bin_len;
         
         IOLog("(FakeIrisXE) [V52.1] Loading GuC firmware to enable GuC hardware...\n");
-        bool fwLoaded = loadGuCFirmware(adlp_guc_70_1_1_bin, adlp_guc_70_1_1_bin_len);
+        bool fwLoaded = loadGuCFirmware(tgl_guc_70_1_1_bin, tgl_guc_70_1_1_bin_len);
         
         if (fwLoaded) {
             IOLog("(FakeIrisXE) [V52.1] ✅ Firmware load attempted, re-checking CAPS...\n");

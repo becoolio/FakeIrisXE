@@ -5286,10 +5286,10 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
     UInt16 deviceID = pciDevice->configRead16(kIOPCIConfigDeviceID);
 
     if (deviceID == 0x46A3) {
-        // Alder Lake P
-        guc_bin = adlp_guc_70_1_1_bin;
-        guc_len = adlp_guc_70_1_1_bin_len;
-        IOLog("(FakeIrisXE) Selected ADL-P GuC firmware\n");
+        // Alder Lake P - using TGL firmware as fallback
+        guc_bin = tgl_guc_70_1_1_bin;
+        guc_len = tgl_guc_70_1_1_bin_len;
+        IOLog("(FakeIrisXE) Selected TGL GuC firmware for ADL-P\n");
     } else {
         // Default to Tiger Lake
         guc_bin = tgl_guc_70_1_1_bin;
