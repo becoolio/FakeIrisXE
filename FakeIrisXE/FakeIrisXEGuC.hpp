@@ -117,4 +117,9 @@ private:
     bool dmaCopyGttToWopcm(uint64_t sourceGpuAddr, uint32_t destOffset, size_t fwSize);
     bool waitForGucBoot(uint32_t timeoutMs = 5000);
     bool loadGuCWithV137Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    
+    // V138: Fixed WOPCM configuration
+    bool guclResetForWopcmV138();
+    bool programWopcmForTglV138(uint32_t wopcmSize, uint32_t wopcmOffset);
+    bool loadGuCWithV138Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
 };

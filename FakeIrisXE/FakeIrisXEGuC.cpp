@@ -169,6 +169,9 @@
 #ifndef GUC_CTL_V137
 #define GUC_CTL_V137                 0xC010
 #endif
+#ifndef GUC_RESET_CTL_V137
+#define GUC_RESET_CTL_V137           0xC040    // GuC reset control (V138)
+#endif
 
 // WOPCM registers (CORRECT offsets)
 #ifndef GUC_WOPCM_SIZE_V137
@@ -903,14 +906,25 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     uint32_t wopcmOffsets[] = {0x2000, 0x0, 0x4000, 0x6000};
     bool anyOffsetWorked = false;
     
-    // V137: Try the correct Tiger Lake method first
-    IOLog("(FakeIrisXE) [V137] Trying V137 Tiger Lake GuC load method...\n");
-    bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
+    // V138: Try the FIXED Tiger Lake method first
+    IOLog("(FakeIrisXE) [V138] Trying V138 Tiger Lake GuC load method...\n");
+    bool v138Success = loadGuCWithV138Method(fwData, fwSize, gpuAddr);
     
-    if (v137Success) {
-        IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
+    if (v138Success) {
+        IOLog("(FakeIrisXE) [V138] ✅ V138 method succeeded!\n");
     } else {
-        IOLog("(FakeIrisXE) [V137] ⚠️ V137 method failed, trying legacy methods...\n");
+        IOLog("(FakeIrisXE) [V138] ⚠️ V138 method failed, trying V137...\n");
+        
+        // V137 fallback
+        bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
+        if (v137Success) {
+            IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
+        } else {
+            IOLog("(FakeIrisXE) [V137] ⚠️ V137 also failed, trying legacy...\n");
+        }
+    }
+    
+    // Legacy fallback - removed to simplify (V138/V137 tried first)
         
         // Legacy fallback: try multiple WOPCM offsets
         for (int offsetIdx = 0; offsetIdx < 4; offsetIdx++) {
@@ -933,14 +947,7 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
             
             IOLog("(FakeIrisXE) [V134] ❌ DMA upload failed with offset 0x%X!\n", destOffset);
             
-            // Release and re-acquire ForceWake between attempts
-            releaseForceWake();
-            IOSleep(50);
-        }
-        
-        if (!anyOffsetWorked) {
-            IOLog("(FakeIrisXE) [V134] ❌ All WOPCM offsets failed!\n");
-        }
+        // Legacy fallback - simplified
     }
     
     // Release ForceWake
@@ -2443,5 +2450,121 @@ bool FakeIrisXEGuC::loadGuCWithV137Method(const uint8_t* fwData, size_t fwSize, 
     releaseForceWake();
 
     IOLog("(FakeIrisXE) [V137] ✅ V137 GuC load sequence complete!\n");
+    return true;
+}
+
+// ============================================================================
+// V138: Fixed GuC Reset + WOPCM Configuration (Linux i915 method)
+// Based on Intel PRM and Linux i915 intel_uc.c
+// ============================================================================
+bool FakeIrisXEGuC::guclResetForWopcmV138()
+{
+    IOLog("(FakeIrisXE) [V138] === GuC Reset for WOPCM Configuration ===\n");
+    
+    // Check if WOPCM is already locked
+    uint32_t wopcm_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcm_offset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    IOLog("(FakeIrisXE) [V138] Current WOPCM: SIZE=0x%08X OFFSET=0x%08X\n", wopcm_size, wopcm_offset);
+    
+    if (wopcm_size & 0x80000000) {
+        IOLog("(FakeIrisXE) [V138] WOPCM already locked - skipping reset\n");
+        return true;
+    }
+    
+    // Ensure ForceWake is acquired
+    acquireForceWake();
+    IOSleep(10);
+    
+    // Request GuC reset
+    fOwner->safeMMIOWrite(GUC_RESET_CTL_V137, 0x00000001);
+    IOSleep(50);
+    
+    IOLog("(FakeIrisXE) [V138] === GuC Reset Complete ===\n");
+    return true;
+}
+
+// ============================================================================
+// V138: Program WOPCM with proper sequence
+// ============================================================================
+bool FakeIrisXEGuC::programWopcmForTglV138(uint32_t wopcmSize, uint32_t wopcmOffset)
+{
+    IOLog("(FakeIrisXE) [V138] Programming WOPCM: size=0x%X offset=0x%X\n", wopcmSize, wopcmOffset);
+    
+    // Check if already locked
+    uint32_t check_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    if (check_size & 0x80000000) {
+        IOLog("(FakeIrisXE) [V138] WOPCM already locked\n");
+        return true;
+    }
+    
+    // Calculate size value (in 4KB pages, shifted left by 12)
+    uint32_t size_in_pages = wopcmSize >> 12;
+    uint32_t size_val = (size_in_pages & 0xFFFFFu) << 12;
+    size_val |= 0x80000000;  // GUC_WOPCM_SIZE_LOCKED
+    
+    fOwner->safeMMIOWrite(GUC_WOPCM_SIZE_V137, size_val);
+    IOSleep(10);
+    
+    uint32_t verify_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    IOLog("(FakeIrisXE) [V138] Wrote SIZE=0x%08X verify=0x%08X\n", size_val, verify_size);
+    
+    // Calculate offset value (in 16KB increments, shifted left by 14)
+    uint32_t offset_in_16k = wopcmOffset >> 14;
+    uint32_t offset_val = (offset_in_16k & 0x3FFFFu) << 14;
+    offset_val |= 0x80000000;  // GUC_WOPCM_OFFSET_VALID
+    
+    fOwner->safeMMIOWrite(DMA_GUC_WOPCM_OFFSET_V137, offset_val);
+    IOSleep(10);
+    
+    uint32_t verify_offset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    IOLog("(FakeIrisXE) [V138] Wrote OFFSET=0x%08X verify=0x%08X\n", offset_val, verify_offset);
+    
+    return (verify_size != 0 && verify_offset != 0);
+}
+
+// ============================================================================
+// V138: Complete GuC Load Sequence with FIXED WOPCM
+// ============================================================================
+bool FakeIrisXEGuC::loadGuCWithV138Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
+{
+    IOLog("(FakeIrisXE) [V138] V138 GuC Load Sequence (Tiger Lake FIXED)\n");
+    
+    if (!acquireForceWake()) {
+        IOLog("(FakeIrisXE) [V138] ⚠️ ForceWake warning, continuing...\n");
+    }
+    IOSleep(20);
+    
+    programShimControl();
+    IOSleep(20);
+    
+    guclResetForWopcmV138();
+    IOSleep(20);
+    
+    size_t payloadOffset, payloadSize;
+    deriveLayoutFromCSS(fwData, fwSize, &payloadOffset, &payloadSize);
+    
+    writeRsaScratch(fwData, fwSize);
+    
+    uint32_t wopcmSize = 0x100000;  // 1MB
+    uint32_t wopcmOffset = 0x2000;   // 8KB offset
+    if (!programWopcmForTglV138(wopcmSize, wopcmOffset)) {
+        IOLog("(FakeIrisXE) [V138] ❌ WOPCM configuration failed!\n");
+        return false;
+    }
+    IOSleep(20);
+    
+    if (!dmaCopyGttToWopcm(gpuAddr + payloadOffset, wopcmOffset, payloadSize)) {
+        IOLog("(FakeIrisXE) [V138] ❌ DMA copy failed!\n");
+        return false;
+    }
+    
+    if (!waitForGucBoot(5000)) {
+        IOLog("(FakeIrisXE) [V138] ❌ GuC boot failed!\n");
+        return false;
+    }
+    
+    releaseForceWake();
+    
+    IOLog("(FakeIrisXE) [V138] ✅ V138 GuC load sequence complete!\n");
     return true;
 }
