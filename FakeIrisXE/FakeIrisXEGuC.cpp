@@ -906,21 +906,29 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     uint32_t wopcmOffsets[] = {0x2000, 0x0, 0x4000, 0x6000};
     bool anyOffsetWorked = false;
     
-    // V138: Try the FIXED Tiger Lake method first
-    IOLog("(FakeIrisXE) [V138] Trying V138 Tiger Lake GuC load method...\n");
-    bool v138Success = loadGuCWithV138Method(fwData, fwSize, gpuAddr);
+    // V139: Try STRICT i915 method first
+    IOLog("(FakeIrisXE) [V139] Trying V139 STRICT i915 method...\n");
+    bool v139Success = loadGuCWithV139Method(fwData, fwSize, gpuAddr);
     
-    if (v138Success) {
-        IOLog("(FakeIrisXE) [V138] ✅ V138 method succeeded!\n");
+    if (v139Success) {
+        IOLog("(FakeIrisXE) [V139] ✅ V139 method succeeded!\n");
     } else {
-        IOLog("(FakeIrisXE) [V138] ⚠️ V138 method failed, trying V137...\n");
+        IOLog("(FakeIrisXE) [V139] ⚠️ V139 failed, trying V138...\n");
         
-        // V137 fallback
-        bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
-        if (v137Success) {
-            IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
+        // V138 fallback
+        bool v138Success = loadGuCWithV138Method(fwData, fwSize, gpuAddr);
+        if (v138Success) {
+            IOLog("(FakeIrisXE) [V138] ✅ V138 method succeeded!\n");
         } else {
-            IOLog("(FakeIrisXE) [V137] ⚠️ V137 also failed, trying legacy...\n");
+            IOLog("(FakeIrisXE) [V138] ⚠️ V138 failed, trying V137...\n");
+        
+            // V137 fallback
+            bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
+            if (v137Success) {
+                IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
+            } else {
+                IOLog("(FakeIrisXE) [V137] ⚠️ All methods failed\n");
+            }
         }
     }
     
@@ -2566,5 +2574,218 @@ bool FakeIrisXEGuC::loadGuCWithV138Method(const uint8_t* fwData, size_t fwSize, 
     releaseForceWake();
     
     IOLog("(FakeIrisXE) [V138] ✅ V138 GuC load sequence complete!\n");
+    return true;
+}
+
+// ============================================================================
+// V139: STRICT CSS Parser (Linux i915 exact method)
+// ============================================================================
+#pragma pack(push, 1)
+struct GuCCssHeader {
+    uint32_t module_type;
+    uint32_t header_size_dw;
+    uint32_t header_version;
+    uint32_t module_id;
+    uint32_t module_vendor;
+    uint32_t date;
+    uint32_t size_dw;
+    uint32_t key_size_dw;
+    uint32_t modulus_size_dw;
+    uint32_t exponent_size_dw;
+    uint32_t reserved[52];
+} __attribute__((packed));
+#pragma pack(pop)
+
+bool FakeIrisXEGuC::parseGuCFirmwareV139(const uint8_t* fwData, size_t fwSize, GuCFwLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V139] === STRICT CSS Parser (i915 method) ===\n");
+    
+    if (fwSize < sizeof(GuCCssHeader)) {
+        IOLog("(FakeIrisXE) [V139] ❌ File too small for CSS header\n");
+        return false;
+    }
+    
+    auto* css = reinterpret_cast<const GuCCssHeader*>(fwData);
+    
+    IOLog("(FakeIrisXE) [V139] CSS: header_size_dw=%u size_dw=%u key_size_dw=%u modulus_size_dw=%u exponent_size_dw=%u\n",
+          css->header_size_dw, css->size_dw, css->key_size_dw, css->modulus_size_dw, css->exponent_size_dw);
+    
+    if (css->header_size_dw == 0 || css->size_dw == 0) {
+        IOLog("(FakeIrisXE) [V139] ❌ Invalid header_size_dw or size_dw\n");
+        return false;
+    }
+    
+    if (css->size_dw < css->header_size_dw) {
+        IOLog("(FakeIrisXE) [V139] ❌ size_dw < header_size_dw\n");
+        return false;
+    }
+    
+    if (css->key_size_dw != 64) {
+        IOLog("(FakeIrisXE) [V139] ⚠️ key_size_dw=%u (expected 64)\n", css->key_size_dw);
+    }
+    
+    uint32_t header_size = (css->header_size_dw - css->modulus_size_dw - css->key_size_dw - css->exponent_size_dw) * 4;
+    
+    IOLog("(FakeIrisXE) [V139] Computed header_size=%u bytes\n", header_size);
+    
+    uint32_t ucode_offset = 0 + header_size;
+    uint32_t ucode_size = (css->size_dw - css->header_size_dw) * 4;
+    uint32_t rsa_offset = ucode_offset + ucode_size;
+    uint32_t rsa_size = css->key_size_dw * 4;
+    
+    IOLog("(FakeIrisXE) [V139] layout: header@0 size=%u ucode@0x%x size=%u RSA@0x%x size=%u\n",
+          header_size, ucode_offset, ucode_size, rsa_offset, rsa_size);
+    
+    uint64_t need = (uint64_t)header_size + (uint64_t)ucode_size + (uint64_t)rsa_size;
+    if (fwSize < need) {
+        IOLog("(FakeIrisXE) [V139] ❌ File too small: need=%llu have=%zu\n", need, fwSize);
+        return false;
+    }
+    
+    layout = {
+        .header_offset = 0,
+        .header_size = header_size,
+        .ucode_offset = ucode_offset,
+        .ucode_size = ucode_size,
+        .rsa_offset = rsa_offset,
+        .rsa_size = rsa_size,
+        .dma_copy_size = header_size + ucode_size
+    };
+    
+    IOLog("(FakeIrisXE) [V139] ✅ DMA copy size: %u bytes (header + ucode)\n", layout.dma_copy_size);
+    return true;
+}
+
+// ============================================================================
+// V139: Write RSA scratch from rsa_offset (i915 method)
+// ============================================================================
+bool FakeIrisXEGuC::writeRsaScratchV139(const uint8_t* fwData, const GuCFwLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V139] Writing RSA scratch from offset 0x%x\n", layout.rsa_offset);
+    
+    const uint32_t* rsaDw = reinterpret_cast<const uint32_t*>(fwData + layout.rsa_offset);
+    
+    for (uint32_t i = 0; i < 64; i++) {
+        fOwner->safeMMIOWrite(UOS_RSA_SCRATCH_BASE_V137 + (i * 4), rsaDw[i]);
+    }
+    
+    IOLog("(FakeIrisXE) [V139] ✅ Wrote 64 dwords to UOS_RSA_SCRATCH\n");
+    return true;
+}
+
+// ============================================================================
+// V139: DMA copy header + uCode (NOT payload-only)
+// FIXED: Source HIGH has no address-space OR
+// ============================================================================
+bool FakeIrisXEGuC::dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuCFwLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V139] DMA: copy %u bytes from GGTT+0 to WOPCM:0x2000\n", layout.dma_copy_size);
+    
+    fOwner->safeMMIOWrite(DMA_COPY_SIZE_V137, layout.dma_copy_size);
+    
+    uint64_t srcAddr = fwGgttAddr + layout.header_offset;
+    uint32_t srcLow = (uint32_t)(srcAddr & 0xFFFFFFFFULL);
+    uint32_t srcHigh = (uint32_t)((srcAddr >> 32) & 0x0000FFFFULL);
+    
+    fOwner->safeMMIOWrite(DMA_ADDR_0_LOW_V137, srcLow);
+    fOwner->safeMMIOWrite(DMA_ADDR_0_HIGH_V137, srcHigh);
+    
+    IOLog("(FakeIrisXE) [V139] SRC=0x%016llX (LO=0x%08X HI=0x%08X - no addr-space!)\n", srcAddr, srcLow, srcHigh);
+    
+    fOwner->safeMMIOWrite(DMA_ADDR_1_LOW_V137, 0x2000);
+    fOwner->safeMMIOWrite(DMA_ADDR_1_HIGH_V137, DMA_ADDRESS_SPACE_WOPCM_V137);
+    
+    uint32_t ctrl = START_DMA_V137 | UOS_MOVE_V137;
+    fOwner->safeMMIOWrite(DMA_CTRL_V137, ctrl);
+    IOLog("(FakeIrisXE) [V139] Started DMA: CTRL=0x%08X\n", ctrl);
+    
+    uint64_t start = mach_absolute_time();
+    uint64_t timeoutNs = 100 * 1000000ULL;
+    bool completed = false;
+    
+    while (mach_absolute_time() - start < timeoutNs) {
+        uint32_t status = fOwner->safeMMIORead(DMA_CTRL_V137);
+        if (!(status & START_DMA_V137)) {
+            completed = true;
+            IOLog("(FakeIrisXE) [V139] ✅ DMA done! status=0x%08X\n", status);
+            break;
+        }
+        IOSleep(1);
+    }
+    
+    if (!completed) {
+        IOLog("(FakeIrisXE) [V139] ❌ DMA timeout!\n");
+        IOLog("(FakeIrisXE) [V139] DMA_CTRL=0x%08X\n", fOwner->safeMMIORead(DMA_CTRL_V137));
+        return false;
+    }
+    
+    fOwner->safeMMIOWrite(DMA_CTRL_V137, 0);
+    return true;
+}
+
+// ============================================================================
+// V139: Complete GuC Load with STRICT i915 method
+// ============================================================================
+bool FakeIrisXEGuC::loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
+{
+    IOLog("(FakeIrisXE) [V139] === V139 STRICT i915 METHOD ===\n");
+    
+    GuCFwLayout layout{};
+    if (!parseGuCFirmwareV139(fwData, fwSize, layout)) {
+        IOLog("(FakeIrisXE) [V139] ❌ Parse failed!\n");
+        return false;
+    }
+    
+    // Step 6: Check GGTT pin bias (firmware must be above WOPCM size)
+    uint32_t wopcmSizeReg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcmSize = (wopcmSizeReg >> 12) & 0xFFFFFu; // Extract size in 4KB pages
+    uint64_t wopcmSizeBytes = (uint64_t)wopcmSize * 4096;
+    
+    IOLog("(FakeIrisXE) [V139] WOPCM size from HW: 0x%X (%u bytes)\n", wopcmSize, (unsigned)wopcmSizeBytes);
+    IOLog("(FakeIrisXE) [V139] Firmware GGTT addr: 0x%llx\n", gpuAddr);
+    
+    if (gpuAddr < wopcmSizeBytes) {
+        IOLog("(FakeIrisXE) [V139] ⚠️ GGTT pin bias violation! fw_addr < wopcm_size\n");
+        IOLog("(FakeIrisXE) [V139] Firmware will be pinned at wrong location!\n");
+    } else {
+        IOLog("(FakeIrisXE) [V139] ✅ GGTT pin bias OK (fw >= wopcm)\n");
+    }
+    
+    if (!acquireForceWake()) {
+        IOLog("(FakeIrisXE) [V139] ⚠️ ForceWake warning\n");
+    }
+    IOSleep(20);
+    
+    programShimControl();
+    IOSleep(20);
+    
+    guclResetForWopcmV138();
+    IOSleep(20);
+    
+    writeRsaScratchV139(fwData, layout);
+    
+    uint32_t wopcm_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcm_offset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    
+    if (!(wopcm_size & 0x80000000) || !(wopcm_offset & 0x80000000)) {
+        programWopcmForTglV138(0x100000, 0x2000);
+    }
+    IOSleep(20);
+    
+    if (!dmaCopyHeaderUcodeToWopcmV139(gpuAddr, layout)) {
+        IOLog("(FakeIrisXE) [V139] ❌ DMA failed!\n");
+        IOLog("(FakeIrisXE) [V139] GUC_STATUS=0x%08X\n", fOwner->safeMMIORead(GUC_STATUS_V137));
+        releaseForceWake();
+        return false;
+    }
+    
+    if (!waitForGucBoot(5000)) {
+        IOLog("(FakeIrisXE) [V139] ❌ Boot failed! STATUS=0x%08X\n", fOwner->safeMMIORead(GUC_STATUS_V137));
+        releaseForceWake();
+        return false;
+    }
+    
+    releaseForceWake();
+    IOLog("(FakeIrisXE) [V139] ✅ SUCCESS!\n");
     return true;
 }

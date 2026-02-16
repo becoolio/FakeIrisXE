@@ -122,4 +122,19 @@ private:
     bool guclResetForWopcmV138();
     bool programWopcmForTglV138(uint32_t wopcmSize, uint32_t wopcmOffset);
     bool loadGuCWithV138Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    
+    // V139: Strict i915 method
+    struct GuCFwLayout {
+        uint32_t header_offset;
+        uint32_t header_size;
+        uint32_t ucode_offset;
+        uint32_t ucode_size;
+        uint32_t rsa_offset;
+        uint32_t rsa_size;
+        uint32_t dma_copy_size;
+    };
+    bool parseGuCFirmwareV139(const uint8_t* fwData, size_t fwSize, GuCFwLayout& layout);
+    bool writeRsaScratchV139(const uint8_t* fwData, const GuCFwLayout& layout);
+    bool dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuCFwLayout& layout);
+    bool loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
 };
