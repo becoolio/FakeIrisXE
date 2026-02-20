@@ -1,23 +1,9 @@
 #include "FakeIrisXEAccelerator.hpp"
 #include "FakeIrisXEAccelShared.h"
 #include "FakeIrisXEFramebuffer.hpp"
+#include "FakeIrisXEIosurfaceCompat.hpp"
 #include <IOKit/IOLib.h>
 #include <IOKit/IOTimerEventSource.h>
-#include <IOKit/IOLib.h>
-#include <IOKit/IOLib.h>
-
-
-
-// cheap forward-declare (only if header isn't available)
-typedef struct __IOSurface * IOSurfaceRef;
-extern "C" IOSurfaceRef IOSurfaceLookup(uint32_t);
-extern "C" int IOSurfaceLock(IOSurfaceRef, uint32_t, void *);
-extern "C" int IOSurfaceUnlock(IOSurfaceRef, uint32_t, void *);
-extern "C" void *IOSurfaceGetBaseAddress(IOSurfaceRef);
-extern "C" size_t IOSurfaceGetBytesPerRow(IOSurfaceRef);
-extern "C" size_t IOSurfaceGetWidth(IOSurfaceRef);
-extern "C" size_t IOSurfaceGetHeight(IOSurfaceRef);
-extern "C" void IOSurfaceRelease(IOSurfaceRef);
 
 
 
@@ -98,6 +84,9 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
         return false;
     }
 
+    // Initialize IOSurface symbols (will fail safely if not available)
+    InitIOSurfaceSymbols();
+
     // advertise ourselves to IOAccelFamily / OS
     setProperty("MetalSupported", true);
     setProperty("IOAccelFamily", true);
@@ -115,8 +104,7 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     
 
 
-    /*
-    // timer (inside start)
+    // V145: Start the timer for pollRing
     if (!fWL) {
         fWL = getWorkLoop();
         if (!fWL) fWL = IOWorkLoop::workLoop();
@@ -126,9 +114,8 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     if (!createAndArmTimer(this, fWL, fTimer, 16)) {
         IOLog("(FakeIrisXEFramebuffer) [Accel] start(): failed to create timer\n");
     } else {
-        IOLog("(FakeIrisXEFramebuffer) [Accel] start(): timer created\n");
+        IOLog("(FakeIrisXEFramebuffer) [Accel] start(): timer created successfully\n");
     }
-*/
     
     
 
@@ -432,45 +419,40 @@ void FakeIrisXEAccelerator::processCommand(const XECmd &cmd, const void* payload
                 break;
             }
 
-            if (!ctx->surfCPU || ctx->surfRowBytes == 0 ||
-                ctx->surfWidth == 0 || ctx->surfHeight == 0)
-            {
-                IOLockUnlock(fCtxLock);
-                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: invalid surface for ctx %u\n", cmd.ctxId);
-                break;
-            }
-
-            uint8_t* srcBase = (uint8_t*)ctx->surfCPU;
-            uint32_t srcRB   = ctx->surfRowBytes;
-            uint32_t srcW    = ctx->surfWidth;
-            uint32_t srcH    = ctx->surfHeight;
-
+            uint32_t iosID = ctx->surfIOSurfaceID;
+            uint32_t srcW  = ctx->surfWidth;
+            uint32_t srcH  = ctx->surfHeight;
+            uint32_t srcRB = ctx->surfRowBytes;
             IOLockUnlock(fCtxLock);
 
-            if (!fPixels || !fStride) {
-                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: framebuffer pixels missing\n");
+            // V145: Copy from pixel buffer to framebuffer
+            if (!fPixelBufferPtr) {
+                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: No pixel buffer allocated\n");
                 break;
             }
-
-            // Clip copy area to framebuffer bounds
+            
+            if (!fPixels || !fStride) {
+                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: Framebuffer not available\n");
+                break;
+            }
+            
+            // Copy pixels from shared buffer to framebuffer
+            // Assuming both are BGRA 640x480
             uint32_t copyW = MIN(fW, srcW);
             uint32_t copyH = MIN(fH, srcH);
-
-            uint8_t* dstBase = (uint8_t*)fPixels;
-            uint32_t dstRB   = fStride;
-
-            // ARGB8888 fast memcpy per row
-            for (uint32_t y = 0; y < copyH; ++y) {
-                memcpy(dstBase + y * dstRB,
-                       srcBase + y * srcRB,
-                       copyW * 4 /* bytes per pixel */);
+            uint32_t copyBytesPerRow = MIN(fStride, srcRB);
+            
+            uint8_t* src = (uint8_t*)fPixelBufferPtr;
+            uint8_t* dst = (uint8_t*)fPixels;
+            
+            for (uint32_t y = 0; y < copyH; y++) {
+                memcpy(dst + y * fStride, src + y * srcRB, copyBytesPerRow);
             }
-
-            // Request a flush, but do NOT block in timer thread
+            
             fNeedFlush = true;
-
-            IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT OK ctx=%u (%ux%u)\n",
-                  cmd.ctxId, copyW, copyH);
+            
+            IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: Copied %ux%u pixels to framebuffer\n",
+                  copyW, copyH);
             break;
         }
 
@@ -529,7 +511,7 @@ void FakeIrisXEAccelerator::cmdCopy(const XECopyPayload& p) {
 }
 
 
-// Replace current bindSurface implementation with this (in FakeIrisXEAccelerator.cpp)
+// Updated bindSurface with IOSurface validation
 IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceIn& in, XEBindSurfaceOut& out)
 {
     if (!fCtxLock) return kIOReturnNoResources;
@@ -541,27 +523,27 @@ IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceI
         return kIOReturnNotFound;
     }
 
-    // Store metadata reported by user-space
     ctx->hasSurface       = true;
-    ctx->surfWidth        = in.width;
-    ctx->surfHeight       = in.height;
-    ctx->surfRowBytes     = in.bytesPerRow;
     ctx->surfPixelFormat  = in.pixelFormat;
     ctx->surfIOSurfaceID  = in.ioSurfaceID;
     ctx->surfID           = in.surfaceID;
-
-    // IMPORTANT: user-space must pass a pointer that's already mapped into the client task
-    // (for testing we accept that pointer value and store it).
-    // We save as void* kernel-side, but it points into the client's address space.
-    ctx->surfCPU = reinterpret_cast<void*>( (uintptr_t) in.cpuPtr );
+    ctx->surfCPU          = nullptr; // no longer used - we lookup each time
+    ctx->surfWidth        = in.width;
+    ctx->surfHeight       = in.height;
+    ctx->surfRowBytes     = in.bytesPerRow;
 
     IOLockUnlock(fCtxLock);
 
-    out.gpuAddr = 0; // fake
+    // Note: IOSurface validation skipped - kernel symbols not available
+    // Trust the values passed from user space (which created the surface)
+    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u %ux%u stride=%u fmt=0x%08x\n",
+          ctxId, in.ioSurfaceID, in.width, in.height, in.bytesPerRow, in.pixelFormat);
+
+    out.gpuAddr = 0;
     out.status  = kIOReturnSuccess;
 
-    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u cpuPtr=%p %ux%u stride=%u fmt=0x%08x\n",
-          ctxId, in.ioSurfaceID, ctx->surfCPU, in.width, in.height, in.bytesPerRow, in.pixelFormat);
+    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u %ux%u stride=%u fmt=0x%08x\n",
+          ctxId, in.ioSurfaceID, in.width, in.height, in.bytesPerRow, in.pixelFormat);
 
     return kIOReturnSuccess;
 }
@@ -705,27 +687,28 @@ uint32_t FakeIrisXEAccelerator::createContext()
 
 bool FakeIrisXEAccelerator::destroyContext(uint32_t ctxId)
 {
-    if (!contexts) return false;
-    IOLockLock(contextsLock);
-    for (unsigned i = 0; i < contexts->getCount(); ++i) {
-        OSData *d = OSDynamicCast(OSData, contexts->getObject(i));
+    if (!fContexts) return false;
+    IOLockLock(fCtxLock);
+    for (unsigned i = 0; i < fContexts->getCount(); ++i) {
+        OSData *d = OSDynamicCast(OSData, fContexts->getObject(i));
         if (!d) continue;
-        XECtx *c = (XECtx*)d->getBytesNoCopy();
-        if (c && c->ctxId == ctxId) {
+        XEContext *ctx = (XEContext*)d->getBytesNoCopy();
+        if (ctx && ctx->ctxId == ctxId) {
             // clear any bound mapping info but don't free user memory
-            c->surf_vaddr = 0;
-            c->surf_bytes = 0;
-            c->surf_rowbytes = 0;
-            c->surf_w = 0;
-            c->surf_h = 0;
-            contexts->removeObject(i);
-            IOFree(c, sizeof(XECtx));
-            IOLockUnlock(contextsLock);
+            ctx->surfCPU = nullptr;
+            ctx->surfWidth = 0;
+            ctx->surfHeight = 0;
+            ctx->surfRowBytes = 0;
+            ctx->surfIOSurfaceID = 0;
+            ctx->hasSurface = false;
+            fContexts->removeObject(i);
+            // Note: OSData will free the bytes when released
+            IOLockUnlock(fCtxLock);
             IOLog("(FakeIrisXEFramebuffer) [Accel] destroyContext %u\n", ctxId);
             return true;
         }
     }
-    IOLockUnlock(contextsLock);
+    IOLockUnlock(fCtxLock);
     return false;
 }
 
@@ -867,14 +850,40 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     fFB = fb;
     fExeclistFromFB = fb->getExeclist();
     fRcsRingFromFB  = fb->getRcsRing();
+    
+    // V145: Get framebuffer display buffer pointer
+    fPixels = fb->getPixelBuffer();
+    fStride = fb->getStride();
+    fW = fb->getWidth();
+    fH = fb->getHeight();
 
-    IOLog("🧩 LINK DEBUG: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
+    IOLog("🧩 LINK DEBUG: Exec=%p Ring=%p Pixels=%p %ux%u stride=%u\n", 
+          fExeclistFromFB, fRcsRingFromFB, fPixels, fW, fH, fStride);
 
-    if (!fExeclistFromFB || !fRcsRingFromFB)
+    if (!fExeclistFromFB || !fRcsRingFromFB || !fPixels)
     {
-        IOLog("❌ Accelerator link FAILED — missing RING or EXECLIST\n");
+        IOLog("❌ Accelerator link FAILED — missing RING, EXECLIST, or PIXELS\n");
         return;
     }
 
-    IOLog("🟢 Accelerator LINK COMPLETE\n");
+    IOLog("🟢 Accelerator LINK COMPLETE (with display buffer)\n");
+}
+
+// V145: Set pixel buffer for shared memory rendering
+void FakeIrisXEAccelerator::setPixelBuffer(IOBufferMemoryDescriptor* buffer)
+{
+    if (fPixelBuffer) {
+        fPixelBuffer->release();
+        fPixelBuffer = nullptr;
+        fPixelBufferPtr = nullptr;
+    }
+    
+    if (buffer) {
+        buffer->retain();
+        fPixelBuffer = buffer;
+        fPixelBufferPtr = buffer->getBytesNoCopy();
+        fPixelBufferSize = buffer->getLength();
+        IOLog("(FakeIrisXEFramebuffer) [Accel] Pixel buffer set: %p, %zu bytes\n", 
+              fPixelBufferPtr, fPixelBufferSize);
+    }
 }

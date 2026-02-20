@@ -8,6 +8,8 @@
 // FakeIrisXEGuC.cpp
 #include "FakeIrisXEGuC.hpp"
 #include "i915_reg.h"
+#include "IntelGucRegs.hpp"
+#include "GucFwLayout.hpp"
 
 // V135: Add missing register defines - aggressive Linux GT initialization
 // V135: Added PPGTT, GART, additional power management, GT workarounds
@@ -393,6 +395,127 @@
 #define GT_DOORBELL_ENABLE    0x1
 #endif
 
+// V141: New helper functions for correct GuC bring-up (from ChatGPT analysis)
+// These use the guc namespace from IntelGucRegs.hpp
+
+// Helper to read little-endian 32-bit value from unaligned buffer
+static inline uint32_t read_le32_unaligned(const uint8_t* p) {
+    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static inline void posting_read_v141(FakeIrisXEFramebuffer* fb, uint32_t reg) {
+    (void)fb->safeMMIORead(reg);
+}
+
+static inline void log_guc_status_v141(FakeIrisXEFramebuffer* fb, const char* tag) {
+    uint32_t st = fb->safeMMIORead(i915_guc::REG_STATUS);
+    uint32_t boot = (st & i915_guc::GS_BOOTROM_MASK) >> i915_guc::GS_BOOTROM_SHIFT;
+    uint32_t uk   = (st & i915_guc::GS_UKERNEL_MASK) >> i915_guc::GS_UKERNEL_SHIFT;
+    uint32_t miaR = (st & i915_guc::GS_MIA_IN_RESET) ? 1u : 0u;
+    uint32_t mia  = (st & i915_guc::GS_MIA_MASK) >> i915_guc::GS_MIA_SHIFT;
+    uint32_t auth = (st & i915_guc::GS_AUTH_STATUS_MASK) >> i915_guc::GS_AUTH_STATUS_SHIFT;
+    
+    IOLog("(FakeIrisXE) [V141] [GuC] %s STATUS=0x%08x mia_in_reset=%u boot=0x%02x uk=0x%02x mia=0x%x auth=%u\n",
+          tag, st, miaR, boot, uk, mia, auth);
+}
+
+// WOPCM read + bias extract (handles lock bit correctly)
+static inline bool read_wopcm_bias_v141(FakeIrisXEFramebuffer* fb, uint32_t& wopcmSizeBytes, uint32_t& wopcmBaseBytes) {
+    uint32_t sizeReg = fb->safeMMIORead(i915_guc::WOPCM_SIZE_REG);
+    uint32_t offReg  = fb->safeMMIORead(i915_guc::WOPCM_OFFSET_REG);
+    
+    // IMPORTANT: size field is already positioned; just mask.
+    wopcmSizeBytes = (sizeReg & i915_guc::WOPCM_SIZE_MASK);
+    wopcmBaseBytes = (offReg  & i915_guc::WOPCM_OFFSET_MASK);
+    
+    bool locked = (sizeReg & i915_guc::WOPCM_SIZE_LOCKED);
+    bool valid  = (offReg  & i915_guc::WOPCM_OFFSET_VALID);
+    
+    IOLog("(FakeIrisXE) [V141] [GuC] WOPCM raw SIZE=0x%08x OFF=0x%08x -> size=0x%x base=0x%x locked=%u valid=%u\n",
+          sizeReg, offReg, wopcmSizeBytes, wopcmBaseBytes, locked ? 1u : 0u, valid ? 1u : 0u);
+    
+    return (wopcmSizeBytes != 0);
+}
+
+static inline void guc_prepare_xfer_v141(FakeIrisXEFramebuffer* fb) {
+    uint32_t shim =
+        i915_guc::SHIM_DISABLE_SRAM_INIT |
+        i915_guc::SHIM_ENABLE_CACHE |
+        i915_guc::SHIM_ENABLE_MIA_CACHE |
+        i915_guc::SHIM_ENABLE_SRAM_CACHE |
+        i915_guc::SHIM_ENABLE_WOPCM_CACHE |
+        i915_guc::SHIM_ENABLE_MIA_CLK;
+
+    fb->safeMMIOWrite(i915_guc::SHIM_REG, shim);
+    posting_read_v141(fb, i915_guc::SHIM_REG);
+
+    fb->safeMMIOWrite(i915_guc::PM_CONFIG_REG, i915_guc::PM_DOORBELL_ENABLE);
+    posting_read_v141(fb, i915_guc::PM_CONFIG_REG);
+
+    IOLog("(FakeIrisXE) [V141] [GuC] prepare_xfer shim=0x%08x doorbell=1\n", shim);
+}
+
+// RSA scratch load (expects rsa_bytes >= 256)
+static inline void load_rsa_scratch_v141(FakeIrisXEFramebuffer* fb, const uint8_t* rsa, uint32_t rsa_bytes) {
+    uint32_t dwords = rsa_bytes / 4;
+    if (dwords > 64) dwords = 64;
+
+    for (uint32_t i = 0; i < dwords; i++) {
+        uint32_t v = read_le32_unaligned(rsa + i * 4);
+        fb->safeMMIOWrite(i915_guc::RSA_SCRATCH(i), v);
+    }
+    posting_read_v141(fb, i915_guc::RSA_SCRATCH(63));
+}
+
+// DMA program + completion poll
+static inline bool guc_dma_to_wopcm_v141(FakeIrisXEFramebuffer* fb,
+                                        uint64_t srcGgttAddr,
+                                        uint32_t dstWopcmOffset,
+                                        uint32_t bytes,
+                                        uint32_t timeoutMs)
+{
+    bytes &= ~3u; // dword-align
+    if (bytes == 0) return false;
+
+    fb->safeMMIOWrite(i915_guc::DMA_SRC_LOW,  (uint32_t)(srcGgttAddr & 0xFFFFFFFFull));
+    fb->safeMMIOWrite(i915_guc::DMA_SRC_HIGH, (uint32_t)((srcGgttAddr >> 32) & 0xFFFFull) | i915_guc::DMA_SPACE_GTT);
+
+    fb->safeMMIOWrite(i915_guc::DMA_DST_LOW,  dstWopcmOffset);
+    fb->safeMMIOWrite(i915_guc::DMA_DST_HIGH, i915_guc::DMA_SPACE_WOPCM);
+
+    fb->safeMMIOWrite(i915_guc::DMA_SIZE, bytes);
+    fb->safeMMIOWrite(i915_guc::DMA_CONTROL, i915_guc::DMA_FLAG_UOS_MOVE | i915_guc::DMA_FLAG_START);
+
+    posting_read_v141(fb, i915_guc::DMA_CONTROL);
+
+    for (uint32_t t = 0; t < timeoutMs; t++) {
+        // Detect RSA/auth failures early
+        uint32_t st = fb->safeMMIORead(i915_guc::REG_STATUS);
+        if ((st & i915_guc::GS_BOOTROM_MASK) == i915_guc::GS_BOOTROM_RSA_FAILED) {
+            IOLog("(FakeIrisXE) [V141] [GuC] ❌ BootROM RSA FAILED\n");
+            log_guc_status_v141(fb, "rsa_failed");
+            return false;
+        }
+        if ((st & i915_guc::GS_AUTH_STATUS_MASK) == i915_guc::GS_AUTH_STATUS_BAD) {
+            IOLog("(FakeIrisXE) [V141] [GuC] ❌ AUTH STATUS BAD\n");
+            log_guc_status_v141(fb, "auth_bad");
+            return false;
+        }
+
+        uint32_t ctrl = fb->safeMMIORead(i915_guc::DMA_CONTROL);
+        if ((ctrl & i915_guc::DMA_FLAG_START) == 0) {
+            IOLog("(FakeIrisXE) [V141] [GuC] DMA complete (DMA_CTRL=0x%08x)\n", ctrl);
+            return true;
+        }
+
+        if ((t % 10) == 0) log_guc_status_v141(fb, "poll");
+        IOSleep(1);
+    }
+
+    IOLog("(FakeIrisXE) [V141] [GuC] ❌ DMA timeout\n");
+    return false;
+}
+
 #define super OSObject
 
 OSDefineMetaClassAndStructors(FakeIrisXEGuC, OSObject);
@@ -430,6 +553,13 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
     }
     
     obj->fOwner = owner;
+    obj->fGuCMode = false;
+    obj->fGuCFirmwareLoadAttempted = false;
+    obj->fGuCFirmwareLoadResult = false;
+    obj->fEngineAvailabilityMask = 0;
+    obj->fCurrentGuCBootStage = kGuCBootStagePrepare;
+    obj->fLastGuCStatus = 0;
+    obj->fLastGuCTimeoutCode = kGuCTimeoutNone;
     return obj;
 }
 
@@ -596,14 +726,24 @@ bool FakeIrisXEGuC::initGuC()
         IOLog("(FakeIrisXE) [V52.1] ⚠️ GuC CAPS are zero BEFORE firmware load - this is expected!\n");
         IOLog("(FakeIrisXE) [V52.1] ℹ️ Loading GuC firmware should make CAPS accessible...\n");
         
-        // V52.1: IMPORTANT - We need to load firmware BEFORE deciding to fallback!
-        // The GuC hardware is not accessible until firmware is loaded via DMA
-        // Load the GuC firmware first (this triggers the DMA upload)
-        extern const unsigned char tgl_guc_70_1_1_bin[];
-        extern const unsigned int tgl_guc_70_1_1_bin_len;
+        // V52.1: IMPORTANT - We need to load firmware BEFORE deciding fallback mode.
+        // V149: Apple-only isolation path. Do NOT fall back to Linux firmware here.
+        extern const unsigned char apple_guc_bin[];
+        extern const unsigned int apple_guc_bin_len;
         
-        IOLog("(FakeIrisXE) [V52.1] Loading GuC firmware to enable GuC hardware...\n");
-        bool fwLoaded = loadGuCFirmware(tgl_guc_70_1_1_bin, tgl_guc_70_1_1_bin_len);
+        bool fwLoaded = false;
+        
+        // V142: Attempt Apple TGL firmware first
+        IOLog("(FakeIrisXE) [V142] ============================================\n");
+        IOLog("(FakeIrisXE) [V142] Trying Apple TGL GuC firmware (61,888 bytes)\n");
+        IOLog("(FakeIrisXE) [V142] ============================================\n");
+        fwLoaded = loadGuCFirmware(apple_guc_bin, apple_guc_bin_len);
+        
+        if (!fwLoaded) {
+            IOLog("(FakeIrisXE) [V149] Apple-only isolation: Linux firmware fallback DISABLED\n");
+        } else {
+            IOLog("(FakeIrisXE) [V142] ✅ Apple TGL firmware load completed!\n");
+        }
         
         if (fwLoaded) {
             IOLog("(FakeIrisXE) [V52.1] ✅ Firmware load attempted, re-checking CAPS...\n");
@@ -801,12 +941,46 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
         IOLog("(FakeIrisXE) [GuC] Invalid firmware data\n");
         return false;
     }
+
+    // V149: Deterministic single-attempt guard.
+    // Prevent duplicate firmware bring-up attempts in the same boot path.
+    if (fGuCFirmwareLoadAttempted) {
+        IOLog("(FakeIrisXE) [V149] Skipping duplicate GuC firmware load attempt (cached result=%s)\n",
+              fGuCFirmwareLoadResult ? "SUCCESS" : "FAILURE");
+        return fGuCFirmwareLoadResult;
+    }
+    fGuCFirmwareLoadAttempted = true;
+    fGuCFirmwareLoadResult = false;
     
-    // Check for new CSS header format (type 0x6)
-    uint32_t headerType = *(uint32_t*)fwData;
+    // Check firmware container format.
+    // Linux blobs have CSS at offset 0x00 (headerType == 0x00000006).
+    // Apple TGL blobs have a 256-byte security block at 0x00 and CSS at 0x100.
+    uint32_t headerType = read_le32_unaligned(fwData);
+    uint32_t cssTypeAt100 = 0;
+    bool isAppleTglContainer = false;
     size_t payloadOffset, payloadSize;
-    
-    if (headerType == 0xABCD) {
+
+    if (fwSize >= 0x104) {
+        cssTypeAt100 = read_le32_unaligned(fwData + 0x100);
+        if (headerType != 0x00000006 && cssTypeAt100 == 0x00000006) {
+            isAppleTglContainer = true;
+        }
+    }
+
+    if (isAppleTglContainer) {
+        const AppleTGLCssHeader* cssHeader = reinterpret_cast<const AppleTGLCssHeader*>(fwData + 0x100);
+        fGuCVersion = cssHeader->header_version;
+
+        // Keep full Apple container in GEM (SB + CSS + payload).
+        // V142 method will DMA from gpuAddr + layout.payload_offset.
+        payloadOffset = 0;
+        payloadSize = fwSize;
+
+        IOLog("(FakeIrisXE) [V146] Apple TGL firmware container accepted\n");
+        IOLog("(FakeIrisXE) [V146] Header@0x0: 0x%08X, CSS@0x100: 0x%08X\n", headerType, cssTypeAt100);
+        IOLog("(FakeIrisXE) [V146] Header version: 0x%08X, total size: %zu\n", fGuCVersion, fwSize);
+    }
+    else if (headerType == 0xABCD) {
         // Old format
         struct GuCFirmwareHeader {
             uint32_t headerMarker;    // 0xABCD
@@ -856,7 +1030,8 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
               payloadOffset, payloadSize);
     }
     else {
-        IOLog("(FakeIrisXE) [GuC] Unknown firmware header: 0x%08x\n", headerType);
+        IOLog("(FakeIrisXE) [GuC] Unknown firmware header: 0x%08x (css@0x100=0x%08x)\n",
+              headerType, cssTypeAt100);
         return false;
     }
     
@@ -914,14 +1089,76 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     IOLog("(FakeIrisXE) [V56] === DMA Firmware Upload (Apple first, Linux fallback) ===\n");
     IOLog("(FakeIrisXE) [V56] Firmware size: %zu bytes, payload offset: 0x%zx\n", fwSize, payloadOffset);
     
+    // V142: Check if this is Apple TGL firmware format (SB at 0x00, CSS at 0x100)
+    bool isAppleTglFormat = false;
+    IOLog("(FakeIrisXE) [V142] Checking firmware format...\n");
+    IOLog("(FakeIrisXE) [V142] Firmware size: %zu bytes\n", fwSize);
+    
+    if (fwSize >= 0x100 + sizeof(uint32_t)) {
+        uint32_t cssType = *(uint32_t*)(fwData + 0x100);
+        uint32_t firstBytes = *(uint32_t*)(fwData);
+        IOLog("(FakeIrisXE) [V142] First 4 bytes: 0x%08X (SB header)\n", firstBytes);
+        IOLog("(FakeIrisXE) [V142] Bytes at offset 0x100: 0x%08X (CSS type)\n", cssType);
+        
+        if (cssType == 0x00000006) {
+            isAppleTglFormat = true;
+            IOLog("(FakeIrisXE) [V142] ✅ DETECTED: Apple TGL firmware format!\n");
+            IOLog("(FakeIrisXE) [V142]    SB (Security Block): offset 0x00, size 256 bytes\n");
+            IOLog("(FakeIrisXE) [V142]    CSS header: offset 0x100, type 0x%08X\n", cssType);
+        } else {
+            IOLog("(FakeIrisXE) [V142] Not Apple TGL format (expected 0x00000006 at offset 0x100, got 0x%08X)\n", cssType);
+            if (firstBytes == 0x00000006) {
+                IOLog("(FakeIrisXE) [V142] This appears to be Linux CSS format (CSS at offset 0x00)\n");
+            }
+        }
+    } else {
+        IOLog("(FakeIrisXE) [V142] Firmware too small for Apple TGL format check (need >= 260 bytes)\n");
+    }
+    
     // V112: Try multiple WOPCM offsets
     // Common offsets: 0x2000 (standard), 0x0, 0x4000, 0x6000
     uint32_t wopcmOffsets[] = {0x2000, 0x0, 0x4000, 0x6000};
-    bool anyOffsetWorked = false;
     
-    // V139: Try STRICT i915 method first
+    // Declare method results upfront to avoid goto issues
+    bool v142Success = false;
+    bool v139Success = false;
+    bool v138Success = false;
+    bool v137Success = false;
+    
+    // V142: Try Apple TGL method FIRST if firmware is in Apple format
+    if (isAppleTglFormat) {
+        IOLog("(FakeIrisXE) [V142] ============================================\n");
+        IOLog("(FakeIrisXE) [V142] EXECUTING APPLE TGL METHOD (V142)\n");
+        IOLog("(FakeIrisXE) [V142] ============================================\n");
+        IOLog("(FakeIrisXE) [V142] This will:\n");
+        IOLog("(FakeIrisXE) [V142]  1. Parse SB (Security Block) at offset 0x00\n");
+        IOLog("(FakeIrisXE) [V142]  2. Program RSA scratch with 256-byte SB\n");
+        IOLog("(FakeIrisXE) [V142]  3. Parse CSS at offset 0x100\n");
+        IOLog("(FakeIrisXE) [V142]  4. DMA payload to WOPCM\n");
+        IOLog("(FakeIrisXE) [V142]  5. Dump diagnostics at each stage\n");
+        v142Success = loadGuCWithAppleTglMethod(fwData, fwSize, gpuAddr);
+        
+        if (v142Success) {
+            IOLog("(FakeIrisXE) [V142] ============================================\n");
+            IOLog("(FakeIrisXE) [V142] ✅✅✅ APPLE TGL METHOD SUCCEEDED! ✅✅✅\n");
+            IOLog("(FakeIrisXE) [V142] ============================================\n");
+            goto post_load_check;
+        } else {
+            IOLog("(FakeIrisXE) [V142] ============================================\n");
+            IOLog("(FakeIrisXE) [V142] ⚠️ Apple TGL method FAILED\n");
+            IOLog("(FakeIrisXE) [V148] Apple-only isolation mode active\n");
+            IOLog("(FakeIrisXE) [V148] Linux fallback methods are DISABLED\n");
+            IOLog("(FakeIrisXE) [V142] ============================================\n");
+            return false;
+        }
+    } else {
+        IOLog("(FakeIrisXE) [V142] Skipping Apple TGL method (not Apple format)\n");
+        IOLog("(FakeIrisXE) [V142] Using standard Linux firmware methods...\n");
+    }
+    
+    // V139: Try STRICT i915 method
     IOLog("(FakeIrisXE) [V139] Trying V139 STRICT i915 method...\n");
-    bool v139Success = loadGuCWithV139Method(fwData, fwSize, gpuAddr);
+    v139Success = loadGuCWithV139Method(fwData, fwSize, gpuAddr);
     
     if (v139Success) {
         IOLog("(FakeIrisXE) [V139] ✅ V139 method succeeded!\n");
@@ -929,14 +1166,14 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
         IOLog("(FakeIrisXE) [V139] ⚠️ V139 failed, trying V138...\n");
         
         // V138 fallback
-        bool v138Success = loadGuCWithV138Method(fwData, fwSize, gpuAddr);
+        v138Success = loadGuCWithV138Method(fwData, fwSize, gpuAddr);
         if (v138Success) {
             IOLog("(FakeIrisXE) [V138] ✅ V138 method succeeded!\n");
         } else {
             IOLog("(FakeIrisXE) [V138] ⚠️ V138 failed, trying V137...\n");
         
             // V137 fallback
-            bool v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
+            v137Success = loadGuCWithV137Method(fwData, fwSize, gpuAddr);
             if (v137Success) {
                 IOLog("(FakeIrisXE) [V137] ✅ V137 method succeeded!\n");
             } else {
@@ -962,7 +1199,6 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
             IOLog("(FakeIrisXE) [V134] Step 2: Attempting DMA upload...\n");
             if (uploadFirmwareWithFallback(gpuAddr, destOffset, dmaTransferSize)) {
                 IOLog("(FakeIrisXE) [V134] ✅ DMA upload succeeded with offset 0x%X!\n", destOffset);
-                anyOffsetWorked = true;
                 break;
             }
             
@@ -970,10 +1206,11 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
             
         // Legacy fallback - simplified
     }
-    
+
+post_load_check:
     // Release ForceWake
     releaseForceWake();
-    
+
     // V108: Comprehensive post-DMA state check
     IOLog("(FakeIrisXE) [V134] ============================================\n");
     IOLog("(FakeIrisXE) [V134] STATE AFTER GUC FIRMWARE LOAD ATTEMPT\n");
@@ -1019,6 +1256,7 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
         configureRPS();
     }
     
+    fGuCFirmwareLoadResult = true;
     return true;
 }
 
@@ -1163,6 +1401,20 @@ bool FakeIrisXEGuC::loadHuCFirmwareWithDMA(const uint8_t* fwData, size_t fwSize)
 bool FakeIrisXEGuC::initDoorbells()
 {
     IOLog("(FakeIrisXE) [V53] Initializing doorbells for GuC submission...\n");
+
+    uint32_t submitPresenceMask = 0;
+    if (isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000001u;
+    if (isEngineAvailable(kHwCsCCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000020u;
+    if (isEngineAvailable(kHwCsBCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000004u;
+    if (isEngineAvailable(kHwCsVCS0, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000002u;
+    if (isEngineAvailable(kHwCsVCS2, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000001u;
+    if (isEngineAvailable(kHwCsVECS0, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000008u;
+
+    if (submitPresenceMask == 0) {
+        IOLog("(FakeIrisXE) [V152] [GuC] Skipping doorbells: no available submit engines (mask=0x%08X)\n",
+              fEngineAvailabilityMask);
+        return false;
+    }
     
     // Initialize doorbell registers (based on Apple's initDoorbells)
     // Each doorbell has: CID (Client ID),phase
@@ -1205,35 +1457,41 @@ bool FakeIrisXEGuC::initDoorbells()
 bool FakeIrisXEGuC::initCommandTransportBuffers()
 {
     IOLog("(FakeIrisXE) [V53] Initializing Command Transport Buffers (CTB)...\n");
+
+    if (!isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) {
+        IOLog("(FakeIrisXE) [V152] [GuC] Skipping CTB setup: RCS unavailable (mask=0x%08X)\n",
+              fEngineAvailabilityMask);
+        return false;
+    }
     
     // Allocate CTB buffers (4KB each for H2G and G2H)
     // In a real implementation, these would be GEM objects
     // For now, we set up the register structures
     
     // H2G CTB Setup
-    uint32_t h2gDb = 0x0;      // Doorbell offset (would be from GEM)
-    uint32_t h2gCtb = 0x1000;  // CTB offset (would be from GEM)
+    uint64_t h2gDb = 0x0;      // Doorbell offset (would be from GEM)
+    uint64_t h2gCtb = 0x1000;  // CTB offset (would be from GEM)
     
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_LO, h2gDb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_HI, (h2gDb >> 32) & 0xFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_LO, h2gCtb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_HI, (h2gCtb >> 32) & 0xFFFF);
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_LO, (uint32_t)(h2gDb & 0xFFFFFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_HI, (uint32_t)((h2gDb >> 32) & 0xFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_LO, (uint32_t)(h2gCtb & 0xFFFFFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_HI, (uint32_t)((h2gCtb >> 32) & 0xFFFFull));
     fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_SIZE, GUC_CTB_SIZE);
     
-    IOLog("(FakeIrisXE) [V53]   H2G CTB configured: DB=0x%X, CTB=0x%X, Size=0x%X\n",
+    IOLog("(FakeIrisXE) [V53]   H2G CTB configured: DB=0x%llX, CTB=0x%llX, Size=0x%X\n",
           h2gDb, h2gCtb, GUC_CTB_SIZE);
     
     // G2H CTB Setup
-    uint32_t g2hDb = 0x2000;   // Doorbell offset
-    uint32_t g2hCtb = 0x3000;  // CTB offset
+    uint64_t g2hDb = 0x2000;   // Doorbell offset
+    uint64_t g2hCtb = 0x3000;  // CTB offset
     
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_LO, g2hDb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_HI, (g2hDb >> 32) & 0xFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_LO, g2hCtb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_HI, (g2hCtb >> 32) & 0xFFFF);
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_LO, (uint32_t)(g2hDb & 0xFFFFFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_HI, (uint32_t)((g2hDb >> 32) & 0xFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_LO, (uint32_t)(g2hCtb & 0xFFFFFFFFull));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_HI, (uint32_t)((g2hCtb >> 32) & 0xFFFFull));
     fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_SIZE, GUC_CTB_SIZE);
     
-    IOLog("(FakeIrisXE) [V53]   G2H CTB configured: DB=0x%X, CTB=0x%X, Size=0x%X\n",
+    IOLog("(FakeIrisXE) [V53]   G2H CTB configured: DB=0x%llX, CTB=0x%llX, Size=0x%X\n",
           g2hDb, g2hCtb, GUC_CTB_SIZE);
     
     IOLog("(FakeIrisXE) [V53] ✅ CTB buffers initialized\n");
@@ -1247,6 +1505,21 @@ bool FakeIrisXEGuC::initCommandTransportBuffers()
 bool FakeIrisXEGuC::initGuCSubsystem()
 {
     IOLog("(FakeIrisXE) [V53] === Full GuC Subsystem Initialization ===\n");
+
+    if (fEngineAvailabilityMask == 0) {
+        uint32_t mediaDisableFuse = fOwner->safeMMIORead(0x9140);
+        if (mediaDisableFuse == 0xFFFFFFFF) {
+            mediaDisableFuse = 0;
+        }
+        fEngineAvailabilityMask = computeEngineAvailabilityMask(mediaDisableFuse);
+        exportEngineAvailabilityToRegistry(fEngineAvailabilityMask);
+    }
+
+    if (!isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) {
+        IOLog("(FakeIrisXE) [V152] [GuC] GuC subsystem disabled: RCS unavailable (mask=0x%08X)\n",
+              fEngineAvailabilityMask);
+        return false;
+    }
     
     // Step 1: Initialize doorbells
     if (!initDoorbells()) {
@@ -1553,11 +1826,43 @@ bool FakeIrisXEGuC::enableGuCSubmission()
     uint32_t fw_size = fOwner->safeMMIORead(GEN11_GUC_FW_SIZE);
     IOLog("(FakeIrisXE) [V45] [GuC] Firmware addr: 0x%08X%08X, size: %u pages\n",
           fw_addr_hi, fw_addr_lo, fw_size);
+
+    // V152: Compute dynamic engine availability and gate submission on result.
+    // The media-fuse register offset differs by platform stepping; prefer known TGL offsets.
+    const uint32_t kMediaFuseRegs[] = {0x9140, 0x9118, 0x9134};
+    uint32_t mediaFuseMask = 0;
+    for (size_t i = 0; i < sizeof(kMediaFuseRegs) / sizeof(kMediaFuseRegs[0]); i++) {
+        uint32_t v = fOwner->safeMMIORead(kMediaFuseRegs[i]);
+        if (v != 0xFFFFFFFF) {
+            mediaFuseMask = v;
+            break;
+        }
+    }
+
+    fEngineAvailabilityMask = computeEngineAvailabilityMask(mediaFuseMask);
+    uint32_t submitPresenceMask = 0;
+    if (isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000001u;
+    if (isEngineAvailable(kHwCsCCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000020u;
+    if (isEngineAvailable(kHwCsBCS, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000004u;
+    if (isEngineAvailable(kHwCsVCS0, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000002u;
+    if (isEngineAvailable(kHwCsVCS2, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000001u;
+    if (isEngineAvailable(kHwCsVECS0, fEngineAvailabilityMask)) submitPresenceMask |= 0x00000008u;
+
+    fOwner->setProperty("FakeIrisXEEngineSubmitPresenceMask", submitPresenceMask, 32);
+    exportEngineAvailabilityToRegistry(fEngineAvailabilityMask);
+
+    if (!isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) {
+        IOLog("(FakeIrisXE) [V152] [GuC] ❌ RCS engine unavailable from computed mask=0x%08X\n",
+              fEngineAvailabilityMask);
+        return false;
+    }
     
     // Step 3: Program GUC_CTL to start GuC (auto-releases reset per PRM)
     uint32_t guc_ctl = 0;
     guc_ctl |= (1 << 0);   // Enable GuC (triggers auto-reset-release)
-    guc_ctl |= (1 << 6);   // Enable submission
+    if (submitPresenceMask != 0) {
+        guc_ctl |= (1 << 6);   // Enable submission only when at least one engine is available
+    }
     guc_ctl |= (1 << 7);   // Load GuC firmware
     
     if (fHuCFwGem) {
@@ -1694,6 +1999,12 @@ void FakeIrisXEGuC::dumpGuCStatus()
 // ============================================================================
 bool FakeIrisXEGuC::testCommandSubmission()
 {
+    if (!isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask)) {
+        IOLog("(FakeIrisXE) [V152] Skipping command submission test: RCS unavailable (mask=0x%08X)\n",
+              fEngineAvailabilityMask);
+        return false;
+    }
+
     IOLog("(FakeIrisXE) [V48] Creating test command buffer...\n");
     
     // Create a simple batch buffer with MI_NOOP commands
@@ -2398,9 +2709,13 @@ bool FakeIrisXEGuC::dmaCopyGttToWopcm(uint64_t sourceGpuAddr, uint32_t destOffse
 bool FakeIrisXEGuC::waitForGucBoot(uint32_t timeoutMs)
 {
     IOLog("(FakeIrisXE) [V140] Waiting for GuC boot (timeout: %u ms)...\n", timeoutMs);
+    setGuCBootStage(kGuCBootStageBootWait, fOwner->safeMMIORead(GUC_STATUS_V137),
+                    kGuCTimeoutBootWait, "wait_for_boot_start");
 
     uint64_t start = mach_absolute_time();
     uint64_t timeoutNs = timeoutMs * 1000000ULL;
+    uint32_t pollCount = 0;
+    uint32_t lastStatus = 0xFFFFFFFF;
 
     while (mach_absolute_time() - start < timeoutNs) {
         uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
@@ -2409,29 +2724,39 @@ bool FakeIrisXEGuC::waitForGucBoot(uint32_t timeoutMs)
         uint32_t ukernel_status = FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, status);
         uint32_t mia_core_status = FIELD_GET_V137(GUC_MIA_CORE_STATUS_MASK_V137, status);
 
-        IOLog("(FakeIrisXE) [V140] STATUS=0x%08X bootrom=%u ukernel=%u mia=%u\n",
-              status, bootrom_status, ukernel_status, mia_core_status);
+        // Reduce boot-log spam: log on status changes and every 100th poll.
+        if (status != lastStatus || (pollCount % 100) == 0) {
+            IOLog("(FakeIrisXE) [V140] STATUS=0x%08X bootrom=%u ukernel=%u mia=%u (poll=%u)\n",
+                  status, bootrom_status, ukernel_status, mia_core_status, pollCount);
+            lastStatus = status;
+        }
 
         // V140: Check for RSA verification failure
         if (bootrom_status == 0x06) {
             IOLog("(FakeIrisXE) [V140] ❌ RSA VERIFICATION FAILED! (bootrom_status=0x06)\n");
+            setGuCBootStage(kGuCBootStageAuth, status, kGuCTimeoutAuth, "bootrom_rsa_failure");
             return false;
         }
 
         if (bootrom_status == 0x7F && ukernel_status == 0xFF) {
             IOLog("(FakeIrisXE) [V140] ✅ GuC booted successfully!\n");
+            setGuCBootStage(kGuCBootStageRunning, status, kGuCTimeoutNone, "ukernel_ready");
             return true;
         }
 
         if (bootrom_status != 0 && bootrom_status != 0x7F && bootrom_status != 0x06) {
             IOLog("(FakeIrisXE) [V140] ❌ GuC boot failed! bootrom_status=0x%02X\n", bootrom_status);
+            setGuCBootStage(kGuCBootStageBootWait, status, kGuCTimeoutBootWait, "bootrom_error");
             return false;
         }
 
+        pollCount++;
         IOSleep(10);
     }
 
     IOLog("(FakeIrisXE) [V140] ❌ Timeout waiting for GuC boot\n");
+    setGuCBootStage(kGuCBootStageBootWait, fOwner->safeMMIORead(GUC_STATUS_V137),
+                    kGuCTimeoutBootWait, "boot_timeout");
     return false;
 }
 
@@ -2743,11 +3068,93 @@ bool FakeIrisXEGuC::dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuC
 }
 
 // ============================================================================
+// V141: New GuC Load with correct status decode + DMA address spaces + RSA/DMA sequencing
+// This implements the fixes from ChatGPT analysis for "stuck at 0x00000001"
+// ============================================================================
+bool FakeIrisXEGuC::guc_load_fw_v141(const uint8_t* fw, size_t fwLen, uint64_t fwGgttAddr)
+{
+    IOLog("(FakeIrisXE) [V141] === V141 i915-Correct GuC Load ===\n");
+    
+    GucFwLayout layout{};
+    if (!parse_guc_layout(fw, fwLen, layout)) {
+        IOLog("(FakeIrisXE) [V141] [GuC] ❌ parse_guc_layout failed\n");
+        return false;
+    }
+    
+    uint32_t wopcmSizeBytes = 0, wopcmBaseBytes = 0;
+    if (!read_wopcm_bias_v141(fOwner, wopcmSizeBytes, wopcmBaseBytes)) {
+        IOLog("(FakeIrisXE) [V141] [GuC] ❌ WOPCM size is 0\n");
+        return false;
+    }
+    
+    // If you log 0x00000001, that is MIA_IN_RESET by definition.
+    log_guc_status_v141(fOwner, "before");
+    
+    guc_prepare_xfer_v141(fOwner);
+    
+    // RSA must be written BEFORE DMA
+    const uint8_t* rsa = fw + layout.rsa_offset;
+    load_rsa_scratch_v141(fOwner, rsa, layout.rsa_bytes);
+    
+    // DMA copies header+ucode only into WOPCM at offset 0x2000
+    const uint32_t dst = 0x2000;
+    const uint32_t dmaBytes = layout.dma_bytes;
+    
+    IOLog("(FakeIrisXE) [V141] [GuC] DMA: srcGGTT=0x%llx dstWOPCM=0x%x bytes=%u rsaOff=0x%x rsaBytes=%u\n",
+          fwGgttAddr, dst, dmaBytes, layout.rsa_offset, layout.rsa_bytes);
+    
+    if (!guc_dma_to_wopcm_v141(fOwner, fwGgttAddr, dst, dmaBytes, /*timeoutMs*/ 100)) {
+        IOLog("(FakeIrisXE) [V141] [GuC] ❌ DMA failed\n");
+        return false;
+    }
+    
+    // Post-DMA: wait for uKernel ready; if still 0x1, MIA is still in reset.
+    for (uint32_t t = 0; t < 500; t++) { // 500ms
+        uint32_t st = fOwner->safeMMIORead(i915_guc::REG_STATUS);
+
+        if ((st & i915_guc::GS_BOOTROM_MASK) == i915_guc::GS_BOOTROM_RSA_FAILED) {
+            IOLog("(FakeIrisXE) [V141] [GuC] ❌ RSA FAILED after DMA\n");
+            log_guc_status_v141(fOwner, "rsa_failed_after");
+            return false;
+        }
+
+        if ((st & i915_guc::GS_UKERNEL_MASK) == i915_guc::GS_UKERNEL_READY) {
+            IOLog("(FakeIrisXE) [V141] [GuC] ✅ uKernel READY\n");
+            log_guc_status_v141(fOwner, "ready");
+            return true;
+        }
+
+        if ((t % 25) == 0) log_guc_status_v141(fOwner, "waiting");
+        IOSleep(1);
+    }
+    
+    IOLog("(FakeIrisXE) [V141] [GuC] ❌ Timeout waiting for uKernel READY\n");
+    log_guc_status_v141(fOwner, "timeout");
+    // Dump scratch for more signal
+    for (uint32_t i = 0; i < 16; i++) {
+        uint32_t v = fOwner->safeMMIORead(i915_guc::SOFT_SCRATCH(i));
+        IOLog("(FakeIrisXE) [V141] [GuC] SOFT_SCRATCH[%u]=0x%08x\n", i, v);
+    }
+    return false;
+}
+
+// ============================================================================
 // V140: Complete GuC Load with STRICT i915 method
 // ============================================================================
 bool FakeIrisXEGuC::loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
 {
     IOLog("(FakeIrisXE) [V140] === V140 STRICT i915 METHOD ===\n");
+    
+    // V141: Try new correct implementation first
+    IOLog("(FakeIrisXE) [V141] Trying V141 i915-correct method first...\n");
+    bool v141Success = guc_load_fw_v141(fwData, fwSize, gpuAddr);
+    
+    if (v141Success) {
+        IOLog("(FakeIrisXE) [V141] ✅ V141 method succeeded!\n");
+        return true;
+    }
+    
+    IOLog("(FakeIrisXE) [V141] ⚠️ V141 failed, falling back to V140...\n");
     
     GuCFwLayout layout{};
     if (!parseGuCFirmwareV139(fwData, fwSize, layout)) {
@@ -2815,4 +3222,576 @@ bool FakeIrisXEGuC::loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, 
     releaseForceWake();
     IOLog("(FakeIrisXE) [V139] ✅ SUCCESS!\n");
     return true;
+}
+
+// ============================================================================
+// V142: Apple TGL GuC Firmware Format Support
+// Apple TGL firmware has SB (Security Block) at offset 0x00 (256 bytes)
+// CSS header at offset 0x100, payload at 0x100 + CSS header_len
+// ============================================================================
+
+bool FakeIrisXEGuC::parseAppleTglFirmware(const uint8_t* fwData, size_t fwSize, AppleTGLFirmwareLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V142] === Apple TGL Firmware Parser ===\n");
+    
+    // Check for SB + CSS format
+    if (fwSize < 0x100 + sizeof(AppleTGLCssHeader)) {
+        IOLog("(FakeIrisXE) [V142] ❌ Firmware too small for SB+CSS format\n");
+        return false;
+    }
+    
+    // Check if CSS starts at offset 0x100 (Apple TGL format)
+    const AppleTGLCssHeader* css = reinterpret_cast<const AppleTGLCssHeader*>(fwData + 0x100);
+    if (css->module_type != 0x00000006) {
+        IOLog("(FakeIrisXE) [V142] ❌ Not Apple TGL format (expected 0x6 at offset 0x100, got 0x%08X)\n",
+              css->module_type);
+        return false;
+    }
+    
+    IOLog("(FakeIrisXE) [V142] ✅ Apple TGL format detected\n");
+    const uint32_t headerLenRaw = css->header_len;
+    uint32_t headerLenBytes = headerLenRaw;
+    uint32_t headerLenDwordsBytes = headerLenRaw * 4;
+
+    // Intel CSS header_len is typically in DWORDs. Keep a guarded fallback for bytes.
+    if (headerLenDwordsBytes >= sizeof(AppleTGLCssHeader) &&
+        (0x100 + headerLenDwordsBytes) <= fwSize) {
+        headerLenBytes = headerLenDwordsBytes;
+    }
+
+    IOLog("(FakeIrisXE) [V142] CSS at offset 0x100:\n");
+    IOLog("  module_type:   0x%08X\n", css->module_type);
+    IOLog("  header_len:    0x%08X (raw), %u bytes (effective)\n", headerLenRaw, headerLenBytes);
+    IOLog("  header_version: 0x%08X\n", css->header_version);
+    IOLog("  module_vendor:  0x%08X (Intel=0x8086)\n", css->module_vendor);
+    IOLog("  size:          0x%08X\n", css->size);
+    IOLog("  key_size:      %u\n", css->key_size);
+    IOLog("  modulus_size:  %u\n", css->modulus_size);
+    IOLog("  exponent_size: %u\n", css->exponent_size);
+    
+    layout.sb_offset = 0x00;
+    layout.sb_size = 0x100;  // 256 bytes
+    layout.css_offset = 0x100;
+    layout.css_size = headerLenBytes;
+    layout.payload_offset = 0x100 + headerLenBytes;
+    if (layout.payload_offset >= fwSize) {
+        IOLog("(FakeIrisXE) [V142] ❌ Invalid payload offset: 0x%X (fwSize=0x%zX)\n",
+              layout.payload_offset, fwSize);
+        return false;
+    }
+    layout.payload_size = static_cast<uint32_t>(fwSize - layout.payload_offset);
+    
+    IOLog("(FakeIrisXE) [V142] Layout:\n");
+    IOLog("  SB:      offset=0x%04X size=%u\n", layout.sb_offset, layout.sb_size);
+    IOLog("  CSS:     offset=0x%04X size=%u\n", layout.css_offset, layout.css_size);
+    IOLog("  Payload: offset=0x%04X size=%u\n", layout.payload_offset, layout.payload_size);
+    
+    return true;
+}
+
+// V142: Load all 256 bytes of SB into RSA scratch (64 dwords)
+bool FakeIrisXEGuC::loadAppleTglRSAScratch(const uint8_t* fwData, const AppleTGLFirmwareLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V142] Loading Apple TGL RSA scratch from SB (offset 0x00, 256 bytes)\n");
+    
+    const uint32_t* sbDwords = reinterpret_cast<const uint32_t*>(fwData + layout.sb_offset);
+    
+    // Write all 64 dwords (256 bytes) of SB to UOS_RSA_SCRATCH(0-63)
+    for (int i = 0; i < 64; i++) {
+        uint32_t val = sbDwords[i];
+        fOwner->safeMMIOWrite(UOS_RSA_SCRATCH_BASE_V137 + (i * 4), val);
+    }
+    
+    IOLog("(FakeIrisXE) [V142] ✅ Wrote 64 dwords (256 bytes) to UOS_RSA_SCRATCH\n");
+    
+    // Readback verification - dump first 16 dwords
+    IOLog("(FakeIrisXE) [V142] RSA Scratch readback verification (first 16 dwords):\n");
+    for (int i = 0; i < 16; i++) {
+        uint32_t readback = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + (i * 4));
+        if (readback != sbDwords[i]) {
+            IOLog("(FakeIrisXE) [V142] ⚠️ MISMATCH at RSA[%d]: wrote=0x%08X read=0x%08X\n",
+                  i, sbDwords[i], readback);
+        }
+    }
+    IOLog("(FakeIrisXE) [V142] ... (16 dwords verified)\n");
+    
+    return true;
+}
+
+// V142: Comprehensive GuC diagnostics dump
+void FakeIrisXEGuC::dumpGuCDiagnostics(const char* stage)
+{
+    IOLog("(FakeIrisXE) [V142] === GuC Diagnostics: %s ===\n", stage);
+    
+    // Core GuC status registers
+    uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
+    uint32_t ctl = fOwner->safeMMIORead(GUC_CTL_V137);
+    uint32_t reset = fOwner->safeMMIORead(GUC_RESET_CTL_V137);
+    
+    IOLog("  GUC_STATUS (0x1C000): 0x%08X\n", status);
+    IOLog("    MIA_IN_RESET: %s\n", (status & 0x00000001) ? "YES" : "NO");
+    IOLog("    BOOTROM:      0x%02X\n", (status >> 1) & 0x7F);
+    IOLog("    UKERNEL:      0x%02X\n", (status >> 8) & 0xFF);
+    IOLog("    MIA_CORE:     0x%02X\n", (status >> 16) & 0x07);
+    IOLog("    AUTH_STATUS:  0x%02X\n", (status >> 27) & 0x1F);
+    IOLog("  GUC_CTL    (0x1C010): 0x%08X\n", ctl);
+    IOLog("  GUC_RESET  (0x1C040): 0x%08X\n", reset);
+    
+    // WOPCM registers
+    uint32_t wopcm_size = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcm_offset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    IOLog("  WOPCM_SIZE   (0x1C050): 0x%08X (locked=%s)\n", 
+          wopcm_size, (wopcm_size & 0x80000000) ? "YES" : "NO");
+    if (wopcm_size & 0x80000000) {
+        uint32_t size_val = ((wopcm_size & 0x7FFFFFFF) >> 12) * 4096;
+        IOLog("    Size: %u bytes\n", size_val);
+    }
+    IOLog("  WOPCM_OFFSET (0x1C340): 0x%08X (valid=%s)\n",
+          wopcm_offset, (wopcm_offset & 0x80000000) ? "YES" : "NO");
+    if (wopcm_offset & 0x80000000) {
+        uint32_t offset_val = ((wopcm_offset & 0x7FFFFFFF) >> 14) * 16384;
+        IOLog("    Offset: 0x%X\n", offset_val);
+    }
+    
+    // DMA registers
+    uint32_t dma_src_lo = fOwner->safeMMIORead(DMA_ADDR_0_LOW_V137);
+    uint32_t dma_src_hi = fOwner->safeMMIORead(DMA_ADDR_0_HIGH_V137);
+    uint32_t dma_dst_lo = fOwner->safeMMIORead(DMA_ADDR_1_LOW_V137);
+    uint32_t dma_dst_hi = fOwner->safeMMIORead(DMA_ADDR_1_HIGH_V137);
+    uint32_t dma_size = fOwner->safeMMIORead(DMA_COPY_SIZE_V137);
+    uint32_t dma_ctrl = fOwner->safeMMIORead(DMA_CTRL_V137);
+    IOLog("  DMA_SRC_LO  (0x1C300): 0x%08X\n", dma_src_lo);
+    IOLog("  DMA_SRC_HI  (0x1C304): 0x%08X\n", dma_src_hi);
+    IOLog("  DMA_DST_LO  (0x1C308): 0x%08X\n", dma_dst_lo);
+    IOLog("  DMA_DST_HI  (0x1C30C): 0x%08X\n", dma_dst_hi);
+    IOLog("  DMA_SIZE    (0x1C310): 0x%08X\n", dma_size);
+    IOLog("  DMA_CTRL    (0x1C314): 0x%08X\n", dma_ctrl);
+    
+    // RSA scratch readback (first 8 dwords)
+    IOLog("  RSA_SCRATCH (0x1C200) first 8 dwords:\n");
+    for (int i = 0; i < 8; i++) {
+        uint32_t rsa_val = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + (i * 4));
+        IOLog("    [%d]: 0x%08X\n", i, rsa_val);
+    }
+    
+    // CAPS registers
+    uint32_t caps1 = fOwner->safeMMIORead(GEN11_GUC_CAPS1);
+    uint32_t caps2 = fOwner->safeMMIORead(GEN11_GUC_CAPS2);
+    uint32_t caps3 = fOwner->safeMMIORead(GEN11_GUC_CAPS3);
+    uint32_t caps4 = fOwner->safeMMIORead(GEN11_GUC_CAPS4);
+    IOLog("  GUC_CAPS1 (0x1C0A0): 0x%08X\n", caps1);
+    IOLog("  GUC_CAPS2 (0x1C0A4): 0x%08X\n", caps2);
+    IOLog("  GUC_CAPS3 (0x1C0A8): 0x%08X\n", caps3);
+    IOLog("  GUC_CAPS4 (0x1C0AC): 0x%08X\n", caps4);
+    
+    // SHIM control
+    uint32_t shim = fOwner->safeMMIORead(GUC_SHIM_CONTROL);
+    IOLog("  SHIM_CTRL (0x1C064): 0x%08X\n", shim);
+    
+    // PM/ForceWake
+    uint32_t pm_config = fOwner->safeMMIORead(GT_PM_CONFIG);
+    uint32_t fw_ack = fOwner->safeMMIORead(FORCEWAKE_ACK);
+    IOLog("  GT_PM_CONFIG: 0x%08X\n", pm_config);
+    IOLog("  FORCEWAKE_ACK: 0x%08X\n", fw_ack);
+    
+    IOLog("(FakeIrisXE) [V142] === End Diagnostics ===\n");
+}
+
+bool FakeIrisXEGuC::preflightAppleTglLoad(const uint8_t* fwData, size_t fwSize,
+                                          const AppleTGLFirmwareLayout& layout)
+{
+    IOLog("(FakeIrisXE) [V150] === Apple GuC Preflight ===\n");
+
+    // 1) Security block sanity
+    bool allZero = true;
+    bool allFF = true;
+    for (uint32_t i = 0; i < layout.sb_size; i++) {
+        uint8_t b = fwData[layout.sb_offset + i];
+        if (b != 0x00) allZero = false;
+        if (b != 0xFF) allFF = false;
+        if (!allZero && !allFF) break;
+    }
+    if (allZero || allFF) {
+        IOLog("(FakeIrisXE) [V150] ❌ PRECHECK_FAIL: invalid SB entropy (all %s)\n",
+              allZero ? "zeros" : "FF");
+        return false;
+    }
+
+    // 2) Basic WOPCM/MMIO visibility
+    uint32_t wopcmReg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    if (wopcmReg == 0xFFFFFFFF || wopcmReg == 0x00000000) {
+        IOLog("(FakeIrisXE) [V150] ❌ PRECHECK_FAIL: WOPCM register invalid (0x%08X)\n", wopcmReg);
+        return false;
+    }
+
+    // 3) IMEI service presence (proxy signal for ME path availability)
+    bool imeiPresent = false;
+    OSDictionary* imeiMatch = IOService::nameMatching("IMEI@16");
+    if (imeiMatch) {
+        IOService* imei = IOService::waitForService(imeiMatch, 0);
+        if (imei) {
+            imeiPresent = true;
+        }
+    }
+    IOLog("(FakeIrisXE) [V150] IMEI service present: %s\n", imeiPresent ? "YES" : "NO");
+
+    // Non-fatal today: some systems expose ME path differently.
+    if (!imeiPresent) {
+        IOLog("(FakeIrisXE) [V150] ⚠️ PRECHECK_WARN: IMEI service not found by name; ME path may be unavailable\n");
+    }
+
+    IOLog("(FakeIrisXE) [V150] Preflight OK: fwSize=%zu payloadOffset=0x%X payloadSize=%u\n",
+          fwSize, layout.payload_offset, layout.payload_size);
+    return true;
+}
+
+void FakeIrisXEGuC::classifyAppleTglFailure(const char* stage, uint32_t status)
+{
+    uint32_t bootrom_status = FIELD_GET_V137(GUC_BOOTROM_STATUS_MASK_V137, status);
+    uint32_t ukernel_status = FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, status);
+
+    const char* cls = "UNKNOWN";
+    if (status == 0x00000001 && bootrom_status == 0 && ukernel_status == 0) {
+        cls = "MIA_RESET_STUCK";
+    } else if (bootrom_status == 0x06) {
+        cls = "RSA_AUTH_FAILURE";
+    } else if (status == 0 || status == 0xFFFFFFFF) {
+        cls = "MMIO_OR_POWER_GATED";
+    } else if (bootrom_status != 0 && bootrom_status != 0x7F) {
+        cls = "BOOTROM_ERROR_STATE";
+    }
+
+    IOLog("(FakeIrisXE) [V150] CLASSIFIED_FAILURE stage=%s class=%s status=0x%08X bootrom=0x%02X ukernel=0x%02X\n",
+          stage, cls, status, bootrom_status, ukernel_status);
+}
+
+void FakeIrisXEGuC::resetGucForRetry()
+{
+    IOLog("(FakeIrisXE) [V150] Resetting GuC for retry\n");
+    fOwner->safeMMIOWrite(DMA_CTRL_V137, 0x0);
+    fOwner->safeMMIOWrite(GUC_RESET_CTL_V137, 0x1);
+    IOSleep(5);
+    fOwner->safeMMIOWrite(GUC_RESET_CTL_V137, 0x0);
+    IOSleep(20);
+}
+
+// V142/V150: Complete Apple TGL GuC loading method with preflight, retries, and classified failures
+bool FakeIrisXEGuC::loadGuCWithAppleTglMethod(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr)
+{
+    IOLog("(FakeIrisXE) [V142] ============================================\n");
+    IOLog("(FakeIrisXE) [V142] Apple TGL GuC Load Method\n");
+    IOLog("(FakeIrisXE) [V142] Firmware: %zu bytes at GGTT 0x%016llX\n", fwSize, gpuAddr);
+    IOLog("(FakeIrisXE) [V142] ============================================\n");
+
+    AppleTGLFirmwareLayout layout{};
+    setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                    kGuCTimeoutPrepare, "apple_tgl_begin");
+    if (!parseAppleTglFirmware(fwData, fwSize, layout)) {
+        IOLog("(FakeIrisXE) [V142] ❌ Failed to parse Apple TGL firmware\n");
+        classifyAppleTglFailure("parse", fOwner->safeMMIORead(GUC_STATUS_V137));
+        return false;
+    }
+
+    if (!preflightAppleTglLoad(fwData, fwSize, layout)) {
+        classifyAppleTglFailure("preflight", fOwner->safeMMIORead(GUC_STATUS_V137));
+        return false;
+    }
+
+    static const int kMaxAttempts = 3;
+    for (int attempt = 1; attempt <= kMaxAttempts; attempt++) {
+        IOLog("(FakeIrisXE) [V150] --- Apple GuC attempt %d/%d ---\n", attempt, kMaxAttempts);
+        setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutPrepare, "attempt_begin");
+
+        dumpGuCDiagnostics("pre");
+
+        if (!acquireForceWake()) {
+            IOLog("(FakeIrisXE) [V142] ⚠️ ForceWake warning\n");
+        }
+        IOSleep(20);
+
+        programShimControl();
+        IOSleep(20);
+
+        uint32_t wopcm_size_reg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+        uint32_t wopcm_size_bytes = 0;
+        if (wopcm_size_reg & 0x80000000) {
+            wopcm_size_bytes = ((wopcm_size_reg & 0x7FFFFFFF) >> 12) * 4096;
+        } else {
+            wopcm_size_bytes = 0x100000;
+        }
+
+        if (layout.payload_size + 0x2000 > wopcm_size_bytes) {
+            IOLog("(FakeIrisXE) [V142] ❌ Firmware too large for WOPCM!\n");
+            IOLog("  Payload: %u bytes\n", layout.payload_size);
+            IOLog("  WOPCM:   %u bytes\n", wopcm_size_bytes);
+            classifyAppleTglFailure("wopcm_fit", fOwner->safeMMIORead(GUC_STATUS_V137));
+            releaseForceWake();
+            return false;
+        }
+
+        IOLog("(FakeIrisXE) [V142] WOPCM check passed: %u bytes available\n", wopcm_size_bytes);
+
+        loadAppleTglRSAScratch(fwData, layout);
+        setGuCBootStage(kGuCBootStageAuth, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutAuth, "rsa_scratch_loaded");
+        IOSleep(10);
+
+        if (!programWopcmForTglV138(wopcm_size_bytes, 0x2000)) {
+            IOLog("(FakeIrisXE) [V142] ❌ WOPCM programming failed\n");
+            classifyAppleTglFailure("wopcm_program", fOwner->safeMMIORead(GUC_STATUS_V137));
+            releaseForceWake();
+            return false;
+        }
+        IOSleep(20);
+
+        dumpGuCDiagnostics("post_rsa_wopcm");
+
+        IOLog("(FakeIrisXE) [V142] DMA: copying payload 0x%04X -> WOPCM:0x2000 (size=%u)\n",
+              layout.payload_offset, layout.payload_size);
+        setGuCBootStage(kGuCBootStageDma, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutDma, "dma_begin");
+
+        if (!dmaCopyGttToWopcm(gpuAddr + layout.payload_offset, 0x2000, layout.payload_size)) {
+            IOLog("(FakeIrisXE) [V142] ❌ DMA copy failed\n");
+            dumpGuCDiagnostics("dma_failed");
+            classifyAppleTglFailure("dma", fOwner->safeMMIORead(GUC_STATUS_V137));
+            releaseForceWake();
+            return false;
+        }
+
+        dumpGuCDiagnostics("post_dma");
+
+        setGuCBootStage(kGuCBootStageBootWait, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutBootWait, "boot_wait");
+        if (waitForGucBoot(5000)) {
+            releaseForceWake();
+            dumpGuCDiagnostics("success");
+            IOLog("(FakeIrisXE) [V142] ✅ Apple TGL GuC load successful!\n");
+            setGuCBootStage(kGuCBootStageRunning, fOwner->safeMMIORead(GUC_STATUS_V137),
+                            kGuCTimeoutNone, "apple_tgl_success");
+            return true;
+        }
+
+        IOLog("(FakeIrisXE) [V142] ❌ GuC boot failed\n");
+        dumpGuCDiagnostics("boot_failed");
+        classifyAppleTglFailure("boot", fOwner->safeMMIORead(GUC_STATUS_V137));
+        releaseForceWake();
+
+        if (attempt < kMaxAttempts) {
+            resetGucForRetry();
+        }
+    }
+
+    IOLog("(FakeIrisXE) [V150] ❌ Exhausted Apple GuC retries\n");
+    return false;
+}
+
+uint32_t FakeIrisXEGuC::computeEngineAvailabilityMask(uint32_t mediaFuseMask) const
+{
+    static const HwCsDesc kHwCsDesc[] = {
+        {kHwCsRCS,   "RCS",   0, 0x00000001u, 0x00000000u},
+        {kHwCsCCS,   "CCS",   4, 0x00000020u, 0x00000000u},
+        {kHwCsBCS,   "BCS",   3, 0x00000004u, 0x00000000u},
+        {kHwCsVCS0,  "VCS0",  1, 0x00000002u, 0x00000001u},
+        {kHwCsVCS2,  "VCS2",  5, 0x00000001u, 0x00000004u},
+        {kHwCsVECS0, "VECS0", 2, 0x00000008u, 0x00000100u},
+    };
+
+    const uint32_t mediaEnableMask = (~mediaFuseMask) & 0x000F00FFu;
+
+    uint32_t availabilityMask = 0;
+    for (size_t i = 0; i < sizeof(kHwCsDesc) / sizeof(kHwCsDesc[0]); i++) {
+        const HwCsDesc& d = kHwCsDesc[i];
+        bool enabled = true;
+
+        if (d.mediaFuseBit != 0) {
+            enabled = ((mediaEnableMask & d.mediaFuseBit) != 0);
+        }
+
+        if (enabled) {
+            availabilityMask |= (1u << static_cast<uint32_t>(d.type));
+        }
+    }
+
+    IOLog("(FakeIrisXE) [V152] Engine availability computed: mediaDisable=0x%08X mediaEnable=0x%08X -> mask=0x%08X\n",
+          mediaFuseMask, mediaEnableMask, availabilityMask);
+    return availabilityMask;
+}
+
+uint8_t FakeIrisXEGuC::getUkEngineClassForType(HwCsType type) const
+{
+    switch (type) {
+        case kHwCsRCS:   return 0;
+        case kHwCsCCS:   return 4;
+        case kHwCsBCS:   return 3;
+        case kHwCsVCS0:  return 1;
+        case kHwCsVCS2:  return 5;
+        case kHwCsVECS0: return 2;
+        default:         return 0;
+    }
+}
+
+bool FakeIrisXEGuC::isEngineAvailable(HwCsType type, uint32_t availabilityMask) const
+{
+    if (type >= kHwCsCount) {
+        return false;
+    }
+
+    return (availabilityMask & (1u << static_cast<uint32_t>(type))) != 0;
+}
+
+void FakeIrisXEGuC::exportEngineAvailabilityToRegistry(uint32_t availabilityMask)
+{
+    if (!fOwner) {
+        return;
+    }
+
+    fOwner->setProperty("FakeIrisXEEngineAvailabilityMask", availabilityMask, 32);
+    fOwner->setProperty("FakeIrisXEEngineMaskRCS", isEngineAvailable(kHwCsRCS, availabilityMask));
+    fOwner->setProperty("FakeIrisXEEngineMaskCCS", isEngineAvailable(kHwCsCCS, availabilityMask));
+    fOwner->setProperty("FakeIrisXEEngineMaskBCS", isEngineAvailable(kHwCsBCS, availabilityMask));
+    fOwner->setProperty("FakeIrisXEEngineMaskVCS0", isEngineAvailable(kHwCsVCS0, availabilityMask));
+    fOwner->setProperty("FakeIrisXEEngineMaskVCS2", isEngineAvailable(kHwCsVCS2, availabilityMask));
+    fOwner->setProperty("FakeIrisXEEngineMaskVECS0", isEngineAvailable(kHwCsVECS0, availabilityMask));
+
+    uint32_t submitPresenceMask = 0;
+    if (isEngineAvailable(kHwCsRCS, availabilityMask)) {
+        submitPresenceMask |= 0x00000001u;
+    }
+    if (isEngineAvailable(kHwCsCCS, availabilityMask)) {
+        submitPresenceMask |= 0x00000020u;
+    }
+    if (isEngineAvailable(kHwCsBCS, availabilityMask)) {
+        submitPresenceMask |= 0x00000004u;
+    }
+    if (isEngineAvailable(kHwCsVCS0, availabilityMask)) {
+        submitPresenceMask |= 0x00000002u;
+    }
+    if (isEngineAvailable(kHwCsVCS2, availabilityMask)) {
+        submitPresenceMask |= 0x00000001u;
+    }
+    if (isEngineAvailable(kHwCsVECS0, availabilityMask)) {
+        submitPresenceMask |= 0x00000008u;
+    }
+    fOwner->setProperty("FakeIrisXEEngineSubmitPresenceMask", submitPresenceMask, 32);
+
+    // V152: MMIO topology snapshot aligned with Apple getGPUInfo decode.
+    const uint32_t kGpuSkuReg = 0x9120;
+    const uint32_t kSliceCountFuseReg = 0x9138;
+    const uint32_t kSubsliceDisableFuseReg = 0x913C;
+    const uint32_t kEuDisableFuseReg = 0x9134;
+    const uint32_t kMediaDisableFuseReg = 0x9140;
+
+    uint32_t gpuSkuRaw = fOwner->safeMMIORead(kGpuSkuReg);
+    uint32_t sliceCountFuseRaw = fOwner->safeMMIORead(kSliceCountFuseReg);
+    uint32_t subsliceDisableFuseRaw = fOwner->safeMMIORead(kSubsliceDisableFuseReg);
+    uint32_t euDisableFuseRaw = fOwner->safeMMIORead(kEuDisableFuseReg);
+    uint32_t mediaDisableFuseRaw = fOwner->safeMMIORead(kMediaDisableFuseReg);
+
+    uint32_t gpuSku = (gpuSkuRaw >> 28) & 0xFu;
+    uint32_t sliceCount = __builtin_popcount(sliceCountFuseRaw & 0xFFu);
+    if (sliceCount == 0) {
+        sliceCount = 1;
+    }
+
+    uint32_t subsliceEnableMask = (~subsliceDisableFuseRaw) & 0xFFu;
+    uint32_t subsliceCount = __builtin_popcount(subsliceEnableMask);
+
+    uint32_t euDisableCount = __builtin_popcount(euDisableFuseRaw & 0xFFu);
+    uint32_t maxEuPerSubslice = (euDisableCount < 8) ? (8u - euDisableCount) : 0u;
+    uint32_t euCount = subsliceCount * maxEuPerSubslice;
+
+    uint32_t mediaEnableMask = (~mediaDisableFuseRaw) & 0x000F00FFu;
+    uint32_t vdboxCount = __builtin_popcount(mediaEnableMask & 0xFFu);
+    uint32_t veboxCount = __builtin_popcount((mediaEnableMask >> 8) & 0x0Fu);
+
+    // Keep legacy keys for existing tooling compatibility.
+    fOwner->setProperty("FakeIrisXETopoSliceEnableRaw", sliceCountFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoSubsliceEnableRaw", subsliceEnableMask, 32);
+    fOwner->setProperty("FakeIrisXETopoEuDisable0Raw", euDisableFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoEuDisable1Raw", static_cast<unsigned long long>(0), 32);
+
+    // Extended topology/fuse keys.
+    fOwner->setProperty("FakeIrisXETopoGPUSku", gpuSku, 32);
+    fOwner->setProperty("FakeIrisXETopoSliceFuseRaw", sliceCountFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoSubsliceDisableFuseRaw", subsliceDisableFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoEUDisableFuseRaw", euDisableFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoMediaDisableFuseRaw", mediaDisableFuseRaw, 32);
+    fOwner->setProperty("FakeIrisXETopoSubsliceEnableMask", subsliceEnableMask, 32);
+    fOwner->setProperty("FakeIrisXETopoMediaEnableMask", mediaEnableMask, 32);
+
+    fOwner->setProperty("FakeIrisXETopoSliceCount", sliceCount, 32);
+    fOwner->setProperty("FakeIrisXETopoSubsliceCount", subsliceCount, 32);
+    fOwner->setProperty("FakeIrisXETopoMaxEUPerSubslice", maxEuPerSubslice, 32);
+    fOwner->setProperty("FakeIrisXETopoEUCountEstimate", euCount, 32);
+    fOwner->setProperty("FakeIrisXETopoVDBOXCount", vdboxCount, 32);
+    fOwner->setProperty("FakeIrisXETopoVEBOXCount", veboxCount, 32);
+
+    dumpV152BringupSummary("engine_topology_export",
+                           submitPresenceMask,
+                           gpuSku,
+                           sliceCount,
+                           subsliceCount,
+                           euCount,
+                           vdboxCount,
+                           veboxCount);
+}
+
+void FakeIrisXEGuC::dumpV152BringupSummary(const char* reason,
+                                           uint32_t submitPresenceMask,
+                                           uint32_t gpuSku,
+                                           uint32_t sliceCount,
+                                           uint32_t subsliceCount,
+                                           uint32_t euCount,
+                                           uint32_t vdboxCount,
+                                           uint32_t veboxCount) const
+{
+    uint32_t rcs = isEngineAvailable(kHwCsRCS, fEngineAvailabilityMask) ? 1u : 0u;
+    uint32_t ccs = isEngineAvailable(kHwCsCCS, fEngineAvailabilityMask) ? 1u : 0u;
+    uint32_t bcs = isEngineAvailable(kHwCsBCS, fEngineAvailabilityMask) ? 1u : 0u;
+    uint32_t vcs0 = isEngineAvailable(kHwCsVCS0, fEngineAvailabilityMask) ? 1u : 0u;
+    uint32_t vcs2 = isEngineAvailable(kHwCsVCS2, fEngineAvailabilityMask) ? 1u : 0u;
+    uint32_t vecs0 = isEngineAvailable(kHwCsVECS0, fEngineAvailabilityMask) ? 1u : 0u;
+
+    IOLog("(FakeIrisXE) [V152] ===== Bring-up Summary (%s) =====\n", reason ? reason : "n/a");
+    IOLog("(FakeIrisXE) [V152] stage=%u status=0x%08X timeout=0x%04X engMask=0x%08X submitMask=0x%08X\n",
+          static_cast<uint32_t>(fCurrentGuCBootStage),
+          fLastGuCStatus,
+          fLastGuCTimeoutCode,
+          fEngineAvailabilityMask,
+          submitPresenceMask);
+    IOLog("(FakeIrisXE) [V152] engines rcs=%u ccs=%u bcs=%u vcs0=%u vcs2=%u vecs0=%u\n",
+          rcs, ccs, bcs, vcs0, vcs2, vecs0);
+    IOLog("(FakeIrisXE) [V152] topo sku=%u slices=%u subslices=%u eus=%u vdbox=%u vebox=%u\n",
+          gpuSku, sliceCount, subsliceCount, euCount, vdboxCount, veboxCount);
+}
+
+void FakeIrisXEGuC::setGuCBootStage(GuCBootStage stage, uint32_t status,
+                                    uint32_t timeoutCode, const char* detail)
+{
+    fCurrentGuCBootStage = stage;
+    fLastGuCStatus = status;
+    fLastGuCTimeoutCode = timeoutCode;
+
+    if (fOwner) {
+        fOwner->setProperty("FakeIrisXEGuCBootStage", static_cast<uint32_t>(stage), 32);
+        fOwner->setProperty("FakeIrisXEGuCLastStatus", status, 32);
+        fOwner->setProperty("FakeIrisXEGuCLastTimeoutCode", timeoutCode, 32);
+    }
+
+    const char* stageName;
+    switch (stage) {
+        case kGuCBootStagePrepare:  stageName = "prepare"; break;
+        case kGuCBootStageDma:      stageName = "dma"; break;
+        case kGuCBootStageAuth:     stageName = "auth"; break;
+        case kGuCBootStageBootWait: stageName = "boot_wait"; break;
+        case kGuCBootStageRunning:  stageName = "running"; break;
+        default:                    stageName = "unknown"; break;
+    }
+
+    IOLog("(FakeIrisXE) [V152] GuC stage=%s status=0x%08X timeout=0x%04X%s%s\n",
+          stageName, status, timeoutCode,
+          detail ? " detail=" : "",
+          detail ? detail : "");
 }

@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.93</string>
+	<string>1.0.101</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.93</string>
+	<string>1.0.101</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V93 - Display Verification and Integration Testing</string>
+	<string>FakeIrisXe V101 - Safe Startup Profile and IOSurface Guard</string>
 	<key>OSBundleRequired</key>
 	<string>Safe Boot</string>
 	<key>IOKitPersonalities</key>

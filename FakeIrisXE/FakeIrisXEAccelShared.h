@@ -15,11 +15,10 @@ enum {
     kFakeIris_Method_BindSurfaceUserMapped  = 3,
     kFakeIris_Method_PresentContext         = 4,
 
-    // New for Phase 8:
-    kFakeIris_Method_SubmitExeclistFenceTest = 5,
+    // Reserve 5/6 for future Submit/Flush if you want
+    // Keep fence test at 7 (matches existing tooling if you used 7)
+    kFakeIris_Method_SubmitExeclistFenceTest = 7,
 };
-
-#define kFakeIris_Method_SubmitExeclistFenceTest  7
 
 
 

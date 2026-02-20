@@ -185,6 +185,11 @@ protected:
     uint32_t getWidth()  const { return H_ACTIVE; }
      uint32_t getHeight() const { return V_ACTIVE; }
     uint32_t getStride() { return 7680; }
+    
+    // V145: Get display buffer pointer for accelerator
+    void* getPixelBuffer() { 
+        return framebufferMemory ? framebufferMemory->getBytesNoCopy() : nullptr; 
+    }
 
     
     
@@ -481,6 +486,11 @@ protected:
     // V90 diagnostic counters
     uint32_t fV90BlitCount = 0;
     uint32_t fV90SurfaceCount = 0;
+
+    // V153: Runtime submission safety gates
+    bool fAllowRuntimeGpuSubmit = false;
+    bool fGpuSubmissionQuarantined = false;
+    uint32_t fGpuSubmissionFailureCount = 0;
     
     // ============================================
     // V91: 2D Blit Command Builders (Intel PRM Vol 10)

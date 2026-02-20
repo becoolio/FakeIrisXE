@@ -35,6 +35,11 @@ extern const unsigned int tgl_dmc_ver2_12_bin_len;
 extern const unsigned char adlp_dmc_ver2_16_bin[];
 extern const unsigned int adlp_dmc_ver2_16_bin_len;
 
+// V142: Apple TGL GuC Firmware (61,888 bytes)
+// From AppleIntelTGLGuC.framework/Resources/GuC.bin
+extern const unsigned char apple_guc_bin[];
+extern const unsigned int apple_guc_bin_len;
+
 #ifdef __cplusplus
 }
 #endif

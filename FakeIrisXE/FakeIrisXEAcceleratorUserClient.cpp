@@ -3,8 +3,34 @@
 #include "FakeIrisXEGEM.hpp"
 #include <IOKit/IOLib.h>
 #include <libkern/c++/OSSymbol.h>
+#include <IOKit/IOMemoryDescriptor.h>
+#include <libkern/OSByteOrder.h>
 #include "FakeIrisXEFramebuffer.hpp"
-#include "FakeIrisXEAccelShared.h"   // for kFakeIris_Method_SubmitExeclistFenceTest
+#include "FakeIrisXEAccelShared.h"
+
+// Helper to allocate and initialize shared ring page
+static IOBufferMemoryDescriptor* AllocateSharedRingPage() {
+    IOBufferMemoryDescriptor* md =
+        IOBufferMemoryDescriptor::inTaskWithOptions(
+            kernel_task,
+            kIOMemoryKernelUserShared | kIODirectionInOut,
+            XE_PAGE,
+            4096
+        );
+    if (!md) return nullptr;
+
+    void* base = md->getBytesNoCopy();
+    if (!base) { md->release(); return nullptr; }
+
+    bzero(base, XE_PAGE);
+    XEHdr* hdr = (XEHdr*)base;
+    hdr->magic = XE_MAGIC;
+    hdr->version = XE_VERSION;
+    hdr->capacity = (uint32_t)(XE_PAGE - sizeof(XEHdr));
+    hdr->head = 0;
+    hdr->tail = 0;
+    return md;
+}
 
 
 #define super OSObject
@@ -215,6 +241,66 @@ IOReturn FakeIrisXEAcceleratorUserClient::clientMemoryForType(
 {
     if (!mem) return kIOReturnBadArgument;
 
+    // type 0 = shared ring page
+    if (type == 0) {
+        if (!fOwner) return kIOReturnNotReady;
+        IOBufferMemoryDescriptor* shared = fOwner->getSharedMD();
+        if (!shared) {
+            shared = AllocateSharedRingPage();
+            if (!shared) return kIOReturnNoMemory;
+            if (!fOwner->attachShared(shared)) {
+                shared->release();
+                return kIOReturnError;
+            }
+            // attachShared() retained it; drop our ref
+            shared->release();
+            shared = fOwner->getSharedMD();
+        }
+        if (!shared) return kIOReturnNoMemory;
+        shared->retain();
+        *mem = shared;
+        if (flags) *flags = 0;
+        return kIOReturnSuccess;
+    }
+    
+    // V145: type 1 = pixel buffer for rendering (640x480x4 = 1.2MB)
+    if (type == 1) {
+        IOLog("(FakeIrisXEFramebuffer) [UC] clientMemoryForType: creating pixel buffer (type=1)\n");
+        
+        // Allocate pixel buffer: 640x480x4 bytes (BGRA)
+        const size_t pixelBufferSize = 640 * 480 * 4;
+        IOBufferMemoryDescriptor* pixelBuffer = IOBufferMemoryDescriptor::inTaskWithOptions(
+            kernel_task,
+            kIOMemoryKernelUserShared | kIODirectionInOut,
+            pixelBufferSize,
+            page_size
+        );
+        
+        if (!pixelBuffer) {
+            IOLog("(FakeIrisXEFramebuffer) [UC] Failed to allocate pixel buffer\n");
+            return kIOReturnNoMemory;
+        }
+        
+        // Zero the buffer
+        void* bufferPtr = pixelBuffer->getBytesNoCopy();
+        if (bufferPtr) {
+            memset(bufferPtr, 0, pixelBufferSize);
+        }
+        
+        // Pass buffer to accelerator for rendering
+        if (fOwner) {
+            fOwner->setPixelBuffer(pixelBuffer);
+        }
+        
+        pixelBuffer->retain();
+        *mem = pixelBuffer;
+        if (flags) *flags = 0;
+        
+        IOLog("(FakeIrisXEFramebuffer) [UC] Pixel buffer allocated: %zu bytes\n", pixelBufferSize);
+        return kIOReturnSuccess;
+    }
+
+    // Existing GEM mapping behavior (leave as-is)
     uint32_t handle = fLastRequestedGemHandle;
     FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
     if (!gem) return kIOReturnNotFound;
@@ -248,16 +334,69 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
 {
     IOLog("(FakeIrisXEFramebuffer) [UC] externalMethod selector=%u\n", selector);
 
+    if (!fOwner) return kIOReturnNotReady;
+
     switch (selector) {
+
+        case kFakeIris_Method_GetCaps: {
+            if (!args || !args->structureOutput) return kIOReturnBadArgument;
+            if (args->structureOutputSize < sizeof(XEAccelCaps)) return kIOReturnMessageTooLarge;
+            XEAccelCaps caps{};
+            fOwner->getCaps(caps);
+            bcopy(&caps, args->structureOutput, sizeof(caps));
+            args->structureOutputSize = sizeof(caps);
+            return kIOReturnSuccess;
+        }
+
+        case kFakeIris_Method_CreateContext: {
+            if (!args || !args->structureInput || args->structureInputSize < sizeof(XECreateCtxIn))
+                return kIOReturnBadArgument;
+            if (!args->structureOutput || args->structureOutputSize < sizeof(XECreateCtxOut))
+                return kIOReturnBadArgument;
+
+            const XECreateCtxIn* in = (const XECreateCtxIn*)args->structureInput;
+            XECreateCtxOut out{};
+            out.ctxId = fOwner->createContext(in->sharedGPUPtr, in->flags);
+            if (!out.ctxId) return kIOReturnNoMemory;
+
+            bcopy(&out, args->structureOutput, sizeof(out));
+            args->structureOutputSize = sizeof(out);
+            return kIOReturnSuccess;
+        }
+
+        case kFakeIris_Method_DestroyContext: {
+            if (!args || args->scalarInputCount < 1) return kIOReturnBadArgument;
+            uint32_t ctxId = (uint32_t)args->scalarInput[0];
+            bool ok = fOwner->destroyContext(ctxId);
+            return ok ? kIOReturnSuccess : kIOReturnNotFound;
+        }
+
+        case kFakeIris_Method_BindSurfaceUserMapped: {
+            if (!args || !args->structureInput || args->structureInputSize < sizeof(XEBindSurfaceIn))
+                return kIOReturnBadArgument;
+            if (!args->structureOutput || args->structureOutputSize < sizeof(XEBindSurfaceOut))
+                return kIOReturnBadArgument;
+
+            const XEBindSurfaceIn* in = (const XEBindSurfaceIn*)args->structureInput;
+            XEBindSurfaceOut out{};
+            IOReturn kr = fOwner->bindSurface(in->ctxId, *in, out);
+            if (kr != kIOReturnSuccess) return kr;
+
+            bcopy(&out, args->structureOutput, sizeof(out));
+            args->structureOutputSize = sizeof(out);
+            return kIOReturnSuccess;
+        }
+
+        case kFakeIris_Method_PresentContext: {
+            if (!args || args->scalarInputCount < 1) return kIOReturnBadArgument;
+            uint32_t ctxId = (uint32_t)args->scalarInput[0];
+            IOReturn kr = fOwner->flush(ctxId);
+            return kr;
+        }
 
         case kFakeIris_Method_SubmitExeclistFenceTest:
         {
             IOLog("(FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called\n");
-
-            if (!fOwner) {
-                IOLog("(FakeIrisXEFramebuffer) [UC] no owner\n");
-                return kIOReturnNotReady;
-            }
 
             FakeIrisXEFramebuffer* fb = fOwner->getFramebufferOwner();
             if (!fb) {
@@ -265,7 +404,6 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
                 return kIOReturnNotReady;
             }
 
-            
             FakeIrisXEExeclist* exec = fOwner->fExeclistFromFB;
             FakeIrisXERing* ring = fOwner->fRcsRingFromFB;
 
@@ -274,9 +412,6 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
                 return kIOReturnNotReady;
             }
 
-
-
-            
             FakeIrisXEGEM* batchGem = fb->createTinyBatchGem();
             if (!batchGem) {
                 IOLog("(FakeIrisXEFramebuffer) [UC] createTinyBatchGem FAILED\n");
@@ -284,8 +419,6 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
             }
 
             bool ok = exec->submitBatchWithExeclist(fb, batchGem, 0, ring, 2000);
-
-
             batchGem->release();
 
             IOLog("(FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=%d\n",

@@ -201,6 +201,9 @@ public:
     FakeIrisXERing*     fRcsRingFromFB  = nullptr;
 
     void linkFromFramebuffer(FakeIrisXEFramebuffer* fb);
+    
+    // V145: Set pixel buffer for shared memory rendering
+    void setPixelBuffer(IOBufferMemoryDescriptor* buffer);
 
     
 private:
@@ -238,6 +241,11 @@ private:
     FakeIrisXEFramebuffer* fFB {nullptr};
     void* fPixels{nullptr};   // Kernel-mapped FB pointer
     uint32_t                  fW{0}, fH{0}, fStride{0};
+    
+    // V145: Pixel buffer for shared memory rendering
+    IOBufferMemoryDescriptor* fPixelBuffer{nullptr};
+    void* fPixelBufferPtr{nullptr};
+    size_t fPixelBufferSize{0};
 
 
     // Context Management

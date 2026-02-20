@@ -18,6 +18,40 @@ class FakeIrisXEGuC : public OSObject {
     OSDeclareDefaultStructors(FakeIrisXEGuC);
     
 private:
+    enum HwCsType : uint8_t {
+        kHwCsRCS = 0,
+        kHwCsCCS = 1,
+        kHwCsBCS = 2,
+        kHwCsVCS0 = 3,
+        kHwCsVCS2 = 4,
+        kHwCsVECS0 = 5,
+        kHwCsCount = 6
+    };
+
+    enum GuCBootStage : uint32_t {
+        kGuCBootStagePrepare = 0,
+        kGuCBootStageDma = 1,
+        kGuCBootStageAuth = 2,
+        kGuCBootStageBootWait = 3,
+        kGuCBootStageRunning = 4
+    };
+
+    enum GuCTimeoutCode : uint32_t {
+        kGuCTimeoutNone = 0x0000,
+        kGuCTimeoutPrepare = 0x1501,
+        kGuCTimeoutDma = 0x1502,
+        kGuCTimeoutAuth = 0x1503,
+        kGuCTimeoutBootWait = 0x1504
+    };
+
+    struct HwCsDesc {
+        HwCsType type;
+        const char* name;
+        uint8_t ukEngineClass;
+        uint32_t submitPresenceMask;
+        uint32_t mediaFuseBit;
+    };
+
     FakeIrisXEFramebuffer* fOwner;
     FakeIrisXEGEM* fGuCFwGem;
     FakeIrisXEGEM* fHuCFwGem;
@@ -34,6 +68,16 @@ private:
     
     // V50: Mode tracking
     bool fGuCMode;  // true = GuC submission, false = Execlist fallback
+
+    // V149: Single-attempt guard for deterministic bring-up traces
+    bool fGuCFirmwareLoadAttempted;
+    bool fGuCFirmwareLoadResult;
+
+    // V152: Engine topology and GuC boot stage tracking
+    uint32_t fEngineAvailabilityMask;
+    GuCBootStage fCurrentGuCBootStage;
+    uint32_t fLastGuCStatus;
+    uint32_t fLastGuCTimeoutCode;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -137,4 +181,62 @@ private:
     bool writeRsaScratchV139(const uint8_t* fwData, const GuCFwLayout& layout);
     bool dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuCFwLayout& layout);
     bool loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    
+    // V141: New i915-correct GuC load method
+    bool guc_load_fw_v141(const uint8_t* fw, size_t fwLen, uint64_t fwGgttAddr);
+    
+    // V142: Apple TGL GuC firmware format support
+    struct AppleTGLSecurityBlock {
+        uint8_t data[256];  // 256-byte security block (SB)
+    };
+    
+    struct AppleTGLCssHeader {
+        uint32_t module_type;       // 0x00000006 at offset 0x100
+        uint32_t header_len;        // 0xA1 (161 bytes)
+        uint32_t header_version;    // 0x10000
+        uint32_t module_id;
+        uint32_t module_vendor;     // 0x8086 (Intel)
+        uint32_t date;
+        uint32_t size;              // Total module size
+        uint32_t key_size;
+        uint32_t modulus_size;
+        uint32_t exponent_size;
+        uint32_t reserved[22];
+    } __attribute__((packed));
+    
+    struct AppleTGLFirmwareLayout {
+        uint32_t sb_offset;         // 0x00
+        uint32_t sb_size;           // 0x100 (256 bytes)
+        uint32_t css_offset;        // 0x100
+        uint32_t css_size;          // From CSS header_len
+        uint32_t payload_offset;    // 0x100 + css_size
+        uint32_t payload_size;      // Remaining firmware
+    };
+    
+    bool parseAppleTglFirmware(const uint8_t* fwData, size_t fwSize, AppleTGLFirmwareLayout& layout);
+    bool loadAppleTglRSAScratch(const uint8_t* fwData, const AppleTGLFirmwareLayout& layout);
+    bool loadGuCWithAppleTglMethod(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    bool preflightAppleTglLoad(const uint8_t* fwData, size_t fwSize, const AppleTGLFirmwareLayout& layout);
+    void classifyAppleTglFailure(const char* stage, uint32_t status);
+    void resetGucForRetry();
+    void dumpGuCDiagnostics(const char* stage);
+
+    // V152: TGL-style engine descriptor table and dynamic availability mask
+    uint32_t computeEngineAvailabilityMask(uint32_t mediaFuseMask) const;
+    uint8_t getUkEngineClassForType(HwCsType type) const;
+    bool isEngineAvailable(HwCsType type, uint32_t availabilityMask) const;
+    void exportEngineAvailabilityToRegistry(uint32_t availabilityMask);
+    void dumpV152BringupSummary(const char* reason,
+                                uint32_t submitPresenceMask,
+                                uint32_t gpuSku,
+                                uint32_t sliceCount,
+                                uint32_t subsliceCount,
+                                uint32_t euCount,
+                                uint32_t vdboxCount,
+                                uint32_t veboxCount) const;
+
+    // V152: Explicit GuC stage markers + timeout codes
+    void setGuCBootStage(GuCBootStage stage, uint32_t status,
+                         uint32_t timeoutCode = kGuCTimeoutNone,
+                         const char* detail = nullptr);
 };
