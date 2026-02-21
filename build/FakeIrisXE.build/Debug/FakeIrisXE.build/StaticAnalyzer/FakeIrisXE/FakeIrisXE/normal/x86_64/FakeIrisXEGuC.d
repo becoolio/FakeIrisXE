@@ -346,4 +346,6 @@ dependencies: \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/i915_reg.h \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/IntelGucRegs.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/GucFwLayout.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXETrace.hpp
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXETrace.hpp \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FXE_ABI.hpp \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FXE_Trace.hpp

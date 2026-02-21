@@ -7,65 +7,22 @@
 
 #include <IOKit/IOService.h>
 
+#include "FXE_ABI.hpp"
+
 
 enum {
-    kFakeIris_Method_GetCaps                = 0,
-    kFakeIris_Method_CreateContext          = 1,
-    kFakeIris_Method_DestroyContext         = 2,
-    kFakeIris_Method_BindSurfaceUserMapped  = 3,
-    kFakeIris_Method_PresentContext         = 4,
-
-    // Reserve 5/6 for future Submit/Flush if you want
-    // Keep fence test at 7 (matches existing tooling if you used 7)
-    kFakeIris_Method_SubmitExeclistFenceTest = 7,
+    kFakeIris_Method_GetCaps                = FXE_SEL_GET_VERSION,
+    kFakeIris_Method_CreateContext          = FXE_SEL_CREATE_CTX,
+    kFakeIris_Method_DestroyContext         = FXE_SEL_ATTACH_SHARED,
+    kFakeIris_Method_BindSurfaceUserMapped  = FXE_SEL_BIND_SURFACE,
+    kFakeIris_Method_PresentContext         = FXE_SEL_PRESENT,
+    kFakeIris_Method_SubmitExeclistFenceTest = FXE_SEL_FENCE_TEST,
 };
 
 enum {
-    kFakeIrisXE_ABI_Major = 1,
-    kFakeIrisXE_ABI_Minor = 154,
-    kFakeIrisXE_KextVersion_u32 = 0x0001009A
-};
-
-struct FXE_VersionInfo {
-    uint32_t abiMajor;
-    uint32_t abiMinor;
-    uint32_t kextVersion;
-};
-
-struct FXE_BindSurface_In {
-    uint32_t surfaceId;
-    uint32_t flags;
-};
-
-struct FXE_BindSurface_Out {
-    uint64_t surfaceHandle;
-    uint32_t width;
-    uint32_t height;
-    uint32_t pixelFormat;
-    uint32_t stride;
-    uint32_t rc;
-};
-
-struct FXE_Present_In {
-    uint64_t surfaceHandle;
-    uint64_t frameId;
-    uint32_t flags;
-};
-
-struct FXE_Present_Out {
-    uint64_t completionValue;
-    uint32_t rc;
-};
-
-struct FXE_FenceTest_In {
-    uint32_t engine;
-    uint32_t timeoutMs;
-};
-
-struct FXE_FenceTest_Out {
-    uint32_t pass;
-    uint32_t reason;
-    uint32_t rc;
+    kFakeIrisXE_ABI_Major = FXE_ABI_MAJOR,
+    kFakeIrisXE_ABI_Minor = FXE_ABI_MINOR,
+    kFakeIrisXE_KextVersion_u32 = FXE_KEXT_VERSION_PACKED
 };
 
 

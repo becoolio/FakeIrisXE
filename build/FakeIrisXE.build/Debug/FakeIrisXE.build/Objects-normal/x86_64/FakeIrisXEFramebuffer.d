@@ -355,9 +355,13 @@ dependencies: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/IOTimerEventSource.h \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelerator.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAcceleratorUserClient.hpp \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FXE_SurfaceStore.hpp \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEIosurfaceCompat.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/i915_reg.h \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelShared.h \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FXE_ABI.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEGuC.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/embedded_firmware.h \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXETrace.hpp \
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FXE_Trace.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/pexpert/device_tree.h

@@ -4,6 +4,8 @@
 #include <IOKit/IOUserClient.h>
 #include <IOKit/IOLocks.h>
 
+#include "FXE_SurfaceStore.hpp"
+
 class FakeIrisXEAccelerator;
 class FakeIrisXEGEM;
 class GEMHandleTable;   // GLOBAL forward declaration
@@ -55,27 +57,10 @@ private:
     IOReturn methodPresent(IOExternalMethodArguments* args);
     IOReturn methodFenceTest(IOExternalMethodArguments* args);
 
-    void clearSurfaceBindings();
-    uint64_t makeSurfaceHandle(uint32_t surfaceId);
-    bool storeSurfaceBinding(uint64_t handle,
-                             uint32_t surfaceId,
-                             uint32_t width,
-                             uint32_t height,
-                             uint32_t pixelFormat,
-                             uint32_t stride,
-                             uint32_t flags);
-    bool getSurfaceBinding(uint64_t handle,
-                           uint32_t* surfaceId,
-                           uint32_t* width,
-                           uint32_t* height,
-                           uint32_t* pixelFormat,
-                           uint32_t* stride,
-                           uint32_t* flags);
-
-    OSDictionary* fSurfaceBindings = nullptr;
-    IOLock* fSurfaceLock = nullptr;
-    uint32_t fSurfaceSalt = 1;
-    uint64_t fCompletionCounter = 0;
+    FXE_SurfaceStore fSurfaceStore;
+    bool mIOSurfaceEnabled = false;
+    uint64_t mCompletionCounter = 0;
+    uint32_t mNextCtxId = 1;
 
     static const IOExternalMethodDispatch sDispatchTable[8];
     

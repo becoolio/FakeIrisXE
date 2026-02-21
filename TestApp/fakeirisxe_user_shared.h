@@ -6,72 +6,22 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../FakeIrisXE/FXE_ABI.hpp"
+
 enum {
-    kFakeIris_Method_GetCaps                = 0,
-    kFakeIris_Method_CreateContext          = 1,
-    kFakeIris_Method_DestroyContext         = 2,
-    kFakeIris_Method_BindSurfaceUserMapped  = 3,
-    kFakeIris_Method_PresentContext         = 4,
-    kFakeIris_Method_SubmitExeclistFenceTest = 7,
+    kFakeIris_Method_GetCaps                = FXE_SEL_GET_VERSION,
+    kFakeIris_Method_CreateContext          = FXE_SEL_CREATE_CTX,
+    kFakeIris_Method_DestroyContext         = FXE_SEL_ATTACH_SHARED,
+    kFakeIris_Method_BindSurfaceUserMapped  = FXE_SEL_BIND_SURFACE,
+    kFakeIris_Method_PresentContext         = FXE_SEL_PRESENT,
+    kFakeIris_Method_SubmitExeclistFenceTest = FXE_SEL_FENCE_TEST,
 };
 
 enum {
-    kFakeIrisXE_ABI_Major = 1,
-    kFakeIrisXE_ABI_Minor = 154,
-    kFakeIrisXE_KextVersion_u32 = 0x0001009A,
+    kFakeIrisXE_ABI_Major = FXE_ABI_MAJOR,
+    kFakeIrisXE_ABI_Minor = FXE_ABI_MINOR,
+    kFakeIrisXE_KextVersion_u32 = FXE_KEXT_VERSION_PACKED,
 };
-
-enum {
-    FXE_OK = 0,
-    FXE_EINVAL = 0xE001,
-    FXE_ENOTREADY = 0xE002,
-    FXE_ENOSUPPORT = 0xE003,
-    FXE_EINTERNAL = 0xE004,
-    FXE_ETIMEOUT = 0xE005,
-    FXE_ENOENT = 0xE006,
-};
-
-typedef struct {
-    uint32_t abiMajor;
-    uint32_t abiMinor;
-    uint32_t kextVersion;
-} FXE_VersionInfo;
-
-typedef struct {
-    uint32_t surfaceId;
-    uint32_t flags;
-} FXE_BindSurface_In;
-
-typedef struct {
-    uint64_t surfaceHandle;
-    uint32_t width;
-    uint32_t height;
-    uint32_t pixelFormat;
-    uint32_t stride;
-    uint32_t rc;
-} FXE_BindSurface_Out;
-
-typedef struct {
-    uint64_t surfaceHandle;
-    uint64_t frameId;
-    uint32_t flags;
-} FXE_Present_In;
-
-typedef struct {
-    uint64_t completionValue;
-    uint32_t rc;
-} FXE_Present_Out;
-
-typedef struct {
-    uint32_t engine;
-    uint32_t timeoutMs;
-} FXE_FenceTest_In;
-
-typedef struct {
-    uint32_t pass;
-    uint32_t reason;
-    uint32_t rc;
-} FXE_FenceTest_Out;
 
 typedef struct {
     uint32_t version;

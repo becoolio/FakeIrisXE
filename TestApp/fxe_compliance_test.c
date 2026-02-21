@@ -77,11 +77,12 @@ int main(void) {
                                                  0,
                                                  &ver,
                                                  &verOutSize);
-    printf("{\"step\":\"GetVersion\",\"kr\":%d,\"abiMajor\":%u,\"abiMinor\":%u,\"kextVersion\":%u}\n",
+    printf("{\"step\":\"GetVersion\",\"kr\":%d,\"abiMajor\":%u,\"abiMinor\":%u,\"kextVersion\":%u,\"features\":%u}\n",
            kr,
            ver.abiMajor,
            ver.abiMinor,
-           ver.kextVersion);
+           ver.kextVersionPacked,
+           ver.features);
 
     IOSurfaceRef surface = create_surface(640, 480);
     uint64_t boundHandle = 0;

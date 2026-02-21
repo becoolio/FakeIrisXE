@@ -164,6 +164,8 @@
 		<string>1.0.0</string>
 		<key>com.apple.iokit.IOPCIFamily</key>
 		<string>1.0.0</string>
+		<key>com.apple.iokit.IOSurface</key>
+		<string>1.0.0</string>
 		<key>com.apple.kpi.iokit</key>
 		<string>20.6.0</string>
 		<key>com.apple.kpi.libkern</key>

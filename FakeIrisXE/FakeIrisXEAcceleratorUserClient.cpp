@@ -128,19 +128,6 @@ public:
 };
 OSDefineMetaClassAndStructors(GEMHandleTable, OSObject)
 
-struct FXESurfaceBindingRecord {
-    uint32_t surfaceId;
-    uint32_t width;
-    uint32_t height;
-    uint32_t pixelFormat;
-    uint32_t stride;
-    uint32_t flags;
-};
-
-static void HandleKey(uint64_t handle, char* buf, size_t bufSize) {
-    snprintf(buf, bufSize, "%016llx", (unsigned long long)handle);
-}
-
 static bool IsRangeReady(const FakeIrisXEAccelerator* owner) {
     return owner && owner->fExeclistFromFB && owner->fRcsRingFromFB;
 }
@@ -150,14 +137,14 @@ static bool IsRangeReady(const FakeIrisXEAccelerator* owner) {
 OSDefineMetaClassAndStructors(FakeIrisXEAcceleratorUserClient, IOUserClient)
 
 const IOExternalMethodDispatch FakeIrisXEAcceleratorUserClient::sDispatchTable[8] = {
-    {&FakeIrisXEAcceleratorUserClient::sGetCaps, 0, kIOUCVariableStructureSize, 0, kIOUCVariableStructureSize}, // 0
-    {&FakeIrisXEAcceleratorUserClient::sCreateContext, 0, sizeof(XECreateCtxIn), 0, sizeof(XECreateCtxOut)},    // 1
-    {&FakeIrisXEAcceleratorUserClient::sDestroyContext, 1, 0, 0, 0},                                             // 2
-    {&FakeIrisXEAcceleratorUserClient::sBindSurface, 0, kIOUCVariableStructureSize, 0, kIOUCVariableStructureSize}, // 3
-    {&FakeIrisXEAcceleratorUserClient::sPresent, kIOUCVariableStructureSize, kIOUCVariableStructureSize, 0, kIOUCVariableStructureSize}, // 4
-    {nullptr, 0, 0, 0, 0},                                                                                         // 5
-    {nullptr, 0, 0, 0, 0},                                                                                         // 6
-    {&FakeIrisXEAcceleratorUserClient::sFenceTest, 0, kIOUCVariableStructureSize, 0, kIOUCVariableStructureSize}, // 7
+    {&FakeIrisXEAcceleratorUserClient::sGetCaps, 0, 0, 0, sizeof(FXE_VersionInfo)},
+    {&FakeIrisXEAcceleratorUserClient::sCreateContext, 0, sizeof(FXE_CreateCtx_In), 0, sizeof(FXE_CreateCtx_Out)},
+    {&FakeIrisXEAcceleratorUserClient::sDestroyContext, 0, sizeof(FXE_AttachShared_In), 0, sizeof(FXE_AttachShared_Out)},
+    {&FakeIrisXEAcceleratorUserClient::sBindSurface, 0, sizeof(FXE_BindSurface_In), 0, sizeof(FXE_BindSurface_Out)},
+    {&FakeIrisXEAcceleratorUserClient::sPresent, 0, sizeof(FXE_Present_In), 0, sizeof(FXE_Present_Out)},
+    {nullptr, 0, 0, 0, 0},
+    {nullptr, 0, 0, 0, 0},
+    {&FakeIrisXEAcceleratorUserClient::sFenceTest, 0, sizeof(FXE_FenceTest_In), 0, sizeof(FXE_FenceTest_Out)},
 };
 
 bool FakeIrisXEAcceleratorUserClient::initWithTask(task_t task, void* secID, UInt32 type) {
@@ -178,16 +165,30 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider) {
     }
 
     fHandleTable = GEMHandleTable::create();
-    fSurfaceBindings = OSDictionary::withCapacity(32);
-    fSurfaceLock = IOLockAlloc();
-    fSurfaceSalt = 1;
-    fCompletionCounter = 0;
+    mCompletionCounter = 0;
+    mNextCtxId = 1;
+    mIOSurfaceEnabled = InitIOSurfaceSymbols();
 
-    if (!fHandleTable || !fSurfaceBindings || !fSurfaceLock) {
-        FXE_LOG("[UC] allocation failure handleTable=%p bindings=%p lock=%p",
-                fHandleTable, fSurfaceBindings, fSurfaceLock);
+    if (!fHandleTable || !fSurfaceStore.init()) {
+        FXE_LOG("[UC] allocation failure handleTable=%p storeReady=%u",
+                fHandleTable,
+                fSurfaceStore.isReady() ? 1u : 0u);
         return false;
     }
+
+    if (mIOSurfaceEnabled) {
+        FXE_LOG("[IOSurface] ENABLED lookupOK=1");
+    } else {
+        FXE_LOG("[IOSurface] DISABLED lookupOK=0 IOSURF=0");
+    }
+
+    const uint32_t gtReady = IsRangeReady(fOwner) ? 1u : 0u;
+    const uint32_t gucState = 0u;
+    FXE_SUMMARY("IOSURF=%u UC=1 GT=%u GUC=%u err=0x%X",
+                mIOSurfaceEnabled ? 1u : 0u,
+                gtReady,
+                gucState,
+                0u);
 
     fOwner->setProperty("FakeIrisXEUCReady", kOSBooleanTrue);
     FXE_PHASE("UC", 101, "start ready owner=%p", fOwner);
@@ -197,15 +198,8 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider) {
 void FakeIrisXEAcceleratorUserClient::stop(IOService* provider) {
     FXE_PHASE("UC", 900, "stop enter provider=%p", provider);
 
-    clearSurfaceBindings();
-    if (fSurfaceLock) {
-        IOLockFree(fSurfaceLock);
-        fSurfaceLock = nullptr;
-    }
-    if (fSurfaceBindings) {
-        fSurfaceBindings->release();
-        fSurfaceBindings = nullptr;
-    }
+    fSurfaceStore.clearAll();
+    fSurfaceStore.free();
 
     if (fHandleTable) {
         fHandleTable->release();
@@ -223,93 +217,9 @@ void FakeIrisXEAcceleratorUserClient::stop(IOService* provider) {
 
 IOReturn FakeIrisXEAcceleratorUserClient::clientClose() {
     FXE_PHASE("UC", 910, "clientClose");
-    clearSurfaceBindings();
+    fSurfaceStore.clearAll();
     terminate();
     return kIOReturnSuccess;
-}
-
-uint64_t FakeIrisXEAcceleratorUserClient::makeSurfaceHandle(uint32_t surfaceId) {
-    const uint32_t salt = (uint32_t)OSIncrementAtomic((volatile SInt32*)&fSurfaceSalt);
-    return (uint64_t(salt) << 32) | uint64_t(surfaceId);
-}
-
-bool FakeIrisXEAcceleratorUserClient::storeSurfaceBinding(uint64_t handle,
-                                                          uint32_t surfaceId,
-                                                          uint32_t width,
-                                                          uint32_t height,
-                                                          uint32_t pixelFormat,
-                                                          uint32_t stride,
-                                                          uint32_t flags) {
-    if (!fSurfaceBindings || !fSurfaceLock) return false;
-
-    FXESurfaceBindingRecord rec = {};
-    rec.surfaceId = surfaceId;
-    rec.width = width;
-    rec.height = height;
-    rec.pixelFormat = pixelFormat;
-    rec.stride = stride;
-    rec.flags = flags;
-
-    OSData* data = OSData::withBytes(&rec, sizeof(rec));
-    if (!data) return false;
-
-    char keyBuf[32];
-    HandleKey(handle, keyBuf, sizeof(keyBuf));
-    const OSSymbol* key = OSSymbol::withCString(keyBuf);
-    if (!key) {
-        data->release();
-        return false;
-    }
-
-    IOLockLock(fSurfaceLock);
-    fSurfaceBindings->setObject(key, data);
-    IOLockUnlock(fSurfaceLock);
-
-    key->release();
-    data->release();
-    return true;
-}
-
-bool FakeIrisXEAcceleratorUserClient::getSurfaceBinding(uint64_t handle,
-                                                        uint32_t* surfaceId,
-                                                        uint32_t* width,
-                                                        uint32_t* height,
-                                                        uint32_t* pixelFormat,
-                                                        uint32_t* stride,
-                                                        uint32_t* flags) {
-    if (!fSurfaceBindings || !fSurfaceLock) return false;
-
-    char keyBuf[32];
-    HandleKey(handle, keyBuf, sizeof(keyBuf));
-    const OSSymbol* key = OSSymbol::withCString(keyBuf);
-    if (!key) return false;
-
-    IOLockLock(fSurfaceLock);
-    OSData* data = OSDynamicCast(OSData, fSurfaceBindings->getObject(key));
-    bool ok = false;
-    if (data && data->getLength() == sizeof(FXESurfaceBindingRecord)) {
-        const FXESurfaceBindingRecord* rec = (const FXESurfaceBindingRecord*)data->getBytesNoCopy();
-        if (rec) {
-            if (surfaceId) *surfaceId = rec->surfaceId;
-            if (width) *width = rec->width;
-            if (height) *height = rec->height;
-            if (pixelFormat) *pixelFormat = rec->pixelFormat;
-            if (stride) *stride = rec->stride;
-            if (flags) *flags = rec->flags;
-            ok = true;
-        }
-    }
-    IOLockUnlock(fSurfaceLock);
-
-    key->release();
-    return ok;
-}
-
-void FakeIrisXEAcceleratorUserClient::clearSurfaceBindings() {
-    if (!fSurfaceBindings || !fSurfaceLock) return;
-    IOLockLock(fSurfaceLock);
-    fSurfaceBindings->flushCollection();
-    IOLockUnlock(fSurfaceLock);
 }
 
 uint32_t FakeIrisXEAcceleratorUserClient::createGemAndRegister(uint64_t size, uint32_t flags) {
@@ -476,220 +386,150 @@ IOReturn FakeIrisXEAcceleratorUserClient::sFenceTest(OSObject* target, void*, IO
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodGetCaps(IOExternalMethodArguments* args) {
-    if (!args || !args->structureOutput) return kIOReturnBadArgument;
-
-    if (args->structureOutputSize == sizeof(FXE_VersionInfo)) {
-        FXE_VersionInfo out = {};
-        out.abiMajor = kFakeIrisXE_ABI_Major;
-        out.abiMinor = kFakeIrisXE_ABI_Minor;
-        out.kextVersion = kFakeIrisXE_KextVersion_u32;
-        bcopy(&out, args->structureOutput, sizeof(out));
-        args->structureOutputSize = sizeof(out);
-        FXE_LOG("[UC][GetVersion] abi=%u.%u kext=0x%08X", out.abiMajor, out.abiMinor, out.kextVersion);
-        return kIOReturnSuccess;
+    if (!args || !args->structureOutput || args->structureOutputSize != sizeof(FXE_VersionInfo)) {
+        return kIOReturnBadArgument;
     }
 
-    if (args->structureOutputSize < sizeof(XEAccelCaps)) return kIOReturnMessageTooLarge;
-    XEAccelCaps caps = {};
-    fOwner->getCaps(caps);
-    bcopy(&caps, args->structureOutput, sizeof(caps));
-    args->structureOutputSize = sizeof(caps);
-    FXE_LOG("[UC][GetCaps] version=%u metal=%u", caps.version, caps.metalSupported);
+    FXE_VersionInfo out = {};
+    out.abiMajor = FXE_ABI_MAJOR;
+    out.abiMinor = FXE_ABI_MINOR;
+    out.kextVersionPacked = FXE_KEXT_VERSION_PACKED;
+    out.features = mIOSurfaceEnabled ? 0x1u : 0u;
+
+    bcopy(&out, args->structureOutput, sizeof(out));
+    args->structureOutputSize = sizeof(out);
+    FXE_LOG("[UC][GetVersion] abi=%u.%u kext=0x%08X features=0x%X",
+            out.abiMajor,
+            out.abiMinor,
+            out.kextVersionPacked,
+            out.features);
     return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodCreateContext(IOExternalMethodArguments* args) {
-    if (!args || !args->structureInput || !args->structureOutput) return kIOReturnBadArgument;
-    if (args->structureInputSize != sizeof(XECreateCtxIn) || args->structureOutputSize < sizeof(XECreateCtxOut)) {
+    if (!args || !args->structureInput || !args->structureOutput ||
+        args->structureInputSize != sizeof(FXE_CreateCtx_In) ||
+        args->structureOutputSize != sizeof(FXE_CreateCtx_Out)) {
         return kIOReturnBadArgument;
     }
 
-    const XECreateCtxIn* in = (const XECreateCtxIn*)args->structureInput;
-    XECreateCtxOut out = {};
-    out.ctxId = fOwner->createContext(in->sharedGPUPtr, in->flags);
-    if (!out.ctxId) return kIOReturnNoMemory;
+    const FXE_CreateCtx_In* in = (const FXE_CreateCtx_In*)args->structureInput;
+    FXE_CreateCtx_Out out = {};
+    out.ctxId = fOwner ? fOwner->createContext(0, in->flags) : mNextCtxId++;
+    out.rc = out.ctxId ? FXE_OK : FXE_EINTERNAL;
 
     bcopy(&out, args->structureOutput, sizeof(out));
     args->structureOutputSize = sizeof(out);
-    FXE_LOG("[UC][CreateContext] ctx=%u flags=0x%08X", out.ctxId, in->flags);
-    return kIOReturnSuccess;
+    FXE_LOG("[UC][CreateCtx] ctx=%u flags=0x%08X rc=0x%X", out.ctxId, in->flags, out.rc);
+    return out.rc == FXE_OK ? kIOReturnSuccess : kIOReturnNoMemory;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodDestroyContext(IOExternalMethodArguments* args) {
-    if (!args || args->scalarInputCount < 1) return kIOReturnBadArgument;
-    uint32_t ctxId = (uint32_t)args->scalarInput[0];
-    bool ok = fOwner->destroyContext(ctxId);
-    FXE_LOG("[UC][DestroyContext] ctx=%u rc=%s", ctxId, ok ? "OK" : "NOT_FOUND");
-    return ok ? kIOReturnSuccess : kIOReturnNotFound;
+    if (!args || !args->structureInput || !args->structureOutput ||
+        args->structureInputSize != sizeof(FXE_AttachShared_In) ||
+        args->structureOutputSize != sizeof(FXE_AttachShared_Out)) {
+        return kIOReturnBadArgument;
+    }
+
+    FXE_AttachShared_Out out = {};
+    out.rc = FXE_OK;
+    out.magic = 0x53524558u;
+    out.cap = 4064u;
+    bcopy(&out, args->structureOutput, sizeof(out));
+    args->structureOutputSize = sizeof(out);
+    FXE_LOG("[UC][AttachShared] rc=0x%X magic=0x%X cap=%u", out.rc, out.magic, out.cap);
+    return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodBindSurface(IOExternalMethodArguments* args) {
-    if (!args || !args->structureInput || !args->structureOutput) return kIOReturnBadArgument;
-
-    if (args->structureInputSize == sizeof(XEBindSurfaceIn) &&
-        args->structureOutputSize >= sizeof(XEBindSurfaceOut)) {
-        const XEBindSurfaceIn* in = (const XEBindSurfaceIn*)args->structureInput;
-        XEBindSurfaceOut out = {};
-        IOReturn kr = fOwner->bindSurface(in->ctxId, *in, out);
-        if (kr != kIOReturnSuccess) return kr;
-
-        bcopy(&out, args->structureOutput, sizeof(out));
-        args->structureOutputSize = sizeof(out);
-        FXE_LOG("[UC][BindSurfaceLegacy] ctx=%u ioSurfaceID=%u status=0x%X",
-                in->ctxId, in->ioSurfaceID, out.status);
-        return kIOReturnSuccess;
+    if (!args || !args->structureInput || !args->structureOutput ||
+        args->structureInputSize != sizeof(FXE_BindSurface_In) ||
+        args->structureOutputSize != sizeof(FXE_BindSurface_Out)) {
+        return kIOReturnBadArgument;
     }
 
-    if (args->structureInputSize == sizeof(FXE_BindSurface_In) &&
-        args->structureOutputSize >= sizeof(FXE_BindSurface_Out)) {
-        const FXE_BindSurface_In* in = (const FXE_BindSurface_In*)args->structureInput;
-        FXE_BindSurface_Out out = {};
+    const FXE_BindSurface_In* in = (const FXE_BindSurface_In*)args->structureInput;
+    FXE_BindSurface_Out out = {};
 
-        if (!IOSurfaceKextAvailable()) {
-            out.rc = FXE_ENOSUPPORT;
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-            FXE_LOG("[UC][BindSurface] unsupported: IOSurface symbols unavailable");
-            return kIOReturnUnsupported;
-        }
-        if (in->surfaceId == 0) {
-            out.rc = FXE_EINVAL;
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-            FXE_LOG("[UC][BindSurface] invalid surfaceId=0");
-            return kIOReturnBadArgument;
-        }
-
-        IOSurfaceRef surf = IOSurfaceLookup(in->surfaceId);
-        if (!surf) {
-            out.rc = FXE_ENOENT;
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-            FXE_LOG("[UC][BindSurface] lookup failed id=%u", in->surfaceId);
-            return kIOReturnNotFound;
-        }
-
-        const uint32_t width = (uint32_t)IOSurfaceGetWidth(surf);
-        const uint32_t height = (uint32_t)IOSurfaceGetHeight(surf);
-        const uint32_t stride = (uint32_t)IOSurfaceGetBytesPerRow(surf);
-        const uint32_t pixelFormat = 0;
-
-        IOSurfaceRelease(surf);
-
-        if (!width || !height || !stride) {
-            out.rc = FXE_EINVAL;
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-            FXE_LOG("[UC][BindSurface] invalid metadata id=%u w=%u h=%u stride=%u",
-                    in->surfaceId, width, height, stride);
-            return kIOReturnBadArgument;
-        }
-
-        const uint64_t handle = makeSurfaceHandle(in->surfaceId);
-        if (!storeSurfaceBinding(handle, in->surfaceId, width, height, pixelFormat, stride, in->flags)) {
-            out.rc = FXE_EINTERNAL;
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-            FXE_LOG("[UC][BindSurface] failed to store binding handle=0x%llx",
-                    (unsigned long long)handle);
-            return kIOReturnError;
-        }
-
-        out.surfaceHandle = handle;
-        out.width = width;
-        out.height = height;
-        out.pixelFormat = pixelFormat;
-        out.stride = stride;
-        out.rc = FXE_OK;
+    if (!mIOSurfaceEnabled) {
+        out.rc = FXE_ENOSUPPORT;
         bcopy(&out, args->structureOutput, sizeof(out));
         args->structureOutputSize = sizeof(out);
-
-        FXE_LOG("[UC][BindSurface] id=%u handle=0x%llx w=%u h=%u stride=%u rc=0x%X",
-                in->surfaceId,
-                (unsigned long long)out.surfaceHandle,
-                out.width,
-                out.height,
-                out.stride,
-                out.rc);
-        return kIOReturnSuccess;
+        return kIOReturnUnsupported;
     }
 
-    return kIOReturnBadArgument;
+    FXE_SurfaceEntry meta = {};
+    uint64_t handle = 0;
+    if (!fSurfaceStore.bind(in->surfaceId, in->flags, &handle, &meta)) {
+        out.rc = FXE_ENOENT;
+        bcopy(&out, args->structureOutput, sizeof(out));
+        args->structureOutputSize = sizeof(out);
+        return kIOReturnNotFound;
+    }
+
+    out.surfaceHandle = handle;
+    out.width = meta.width;
+    out.height = meta.height;
+    out.pixelFormat = meta.pixelFormat;
+    out.stride = meta.stride;
+    out.rc = FXE_OK;
+
+    bcopy(&out, args->structureOutput, sizeof(out));
+    args->structureOutputSize = sizeof(out);
+
+    FXE_LOG("[UC][BindSurface] id=%u handle=0x%llX %ux%u fmt=0x%X bpr=%u rc=0x%X",
+            in->surfaceId,
+            (unsigned long long)out.surfaceHandle,
+            out.width,
+            out.height,
+            out.pixelFormat,
+            out.stride,
+            out.rc);
+    return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodPresent(IOExternalMethodArguments* args) {
-    if (!args) return kIOReturnBadArgument;
-
-    if (args->scalarInputCount >= 1 && args->structureInputSize == 0) {
-        const uint32_t ctxId = (uint32_t)args->scalarInput[0];
-        FXE_LOG("[UC][PresentLegacy] intent ctx=%u", ctxId);
-        IOReturn kr = fOwner->flush(ctxId);
-        FXE_LOG("[UC][PresentLegacy] ack ctx=%u kr=0x%X", ctxId, kr);
-        return kr;
-    }
-
-    if (!args->structureInput || !args->structureOutput ||
+    if (!args || !args->structureInput || !args->structureOutput ||
         args->structureInputSize != sizeof(FXE_Present_In) ||
-        args->structureOutputSize < sizeof(FXE_Present_Out)) {
+        args->structureOutputSize != sizeof(FXE_Present_Out)) {
         return kIOReturnBadArgument;
     }
 
     const FXE_Present_In* in = (const FXE_Present_In*)args->structureInput;
     FXE_Present_Out out = {};
 
-    uint32_t surfaceId = 0;
-    if (!getSurfaceBinding(in->surfaceHandle, &surfaceId, nullptr, nullptr, nullptr, nullptr, nullptr)) {
-        out.rc = FXE_ENOENT;
-        bcopy(&out, args->structureOutput, sizeof(out));
-        args->structureOutputSize = sizeof(out);
-        FXE_LOG("[UC][Present] intent frameId=%llu handle=0x%llx rc=0x%X (missing handle)",
-                (unsigned long long)in->frameId,
-                (unsigned long long)in->surfaceHandle,
-                out.rc);
-        return kIOReturnNotFound;
-    }
-
-    if (!IOSurfaceKextAvailable()) {
+    if (!mIOSurfaceEnabled) {
         out.rc = FXE_ENOSUPPORT;
         bcopy(&out, args->structureOutput, sizeof(out));
         args->structureOutputSize = sizeof(out);
-        FXE_LOG("[UC][Present] intent frameId=%llu handle=0x%llx rc=0x%X (iosurface unavailable)",
-                (unsigned long long)in->frameId,
-                (unsigned long long)in->surfaceHandle,
-                out.rc);
         return kIOReturnUnsupported;
     }
 
-    IOSurfaceRef surf = IOSurfaceLookup(surfaceId);
+    FXE_SurfaceEntry meta = {};
+    if (!fSurfaceStore.lookup(in->surfaceHandle, &meta)) {
+        out.rc = FXE_ENOENT;
+        bcopy(&out, args->structureOutput, sizeof(out));
+        args->structureOutputSize = sizeof(out);
+        return kIOReturnNotFound;
+    }
+
+    IOSurfaceRef surf = IOSurfaceLookup(meta.surfaceId);
     if (!surf) {
         out.rc = FXE_ENOENT;
         bcopy(&out, args->structureOutput, sizeof(out));
         args->structureOutputSize = sizeof(out);
-        FXE_LOG("[UC][Present] intent frameId=%llu handle=0x%llx rc=0x%X (surface vanished id=%u)",
-                (unsigned long long)in->frameId,
-                (unsigned long long)in->surfaceHandle,
-                out.rc,
-                surfaceId);
         return kIOReturnNotFound;
     }
     IOSurfaceRelease(surf);
 
-    IOLockLock(fSurfaceLock);
-    const uint64_t completion = ++fCompletionCounter;
-    IOLockUnlock(fSurfaceLock);
-
-    FXE_LOG("[UC][Present] intent frameId=%llu handle=0x%llx", (unsigned long long)in->frameId,
-            (unsigned long long)in->surfaceHandle);
-    FXE_LOG("[UC][Present] queued frameId=%llu completion=%llu", (unsigned long long)in->frameId,
-            (unsigned long long)completion);
-
-    (void)fOwner->flush(0);
+    const uint64_t completion = ++mCompletionCounter;
 
     out.completionValue = completion;
     out.rc = FXE_OK;
     bcopy(&out, args->structureOutput, sizeof(out));
     args->structureOutputSize = sizeof(out);
-    FXE_LOG("[UC][Present] ack frameId=%llu completion=%llu rc=0x%X",
+    FXE_LOG("[UC][Present] handle=0x%llX frameId=%llu -> completion=%llu rc=0x%X",
+            (unsigned long long)in->surfaceHandle,
             (unsigned long long)in->frameId,
             (unsigned long long)out.completionValue,
             out.rc);
@@ -697,69 +537,27 @@ IOReturn FakeIrisXEAcceleratorUserClient::methodPresent(IOExternalMethodArgument
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::methodFenceTest(IOExternalMethodArguments* args) {
-    uint32_t engine = 0;
-    uint32_t timeoutMs = 2000;
-    FXE_FenceTest_Out out = {};
-    bool hasOut = false;
-
-    if (args && args->structureInput && args->structureOutput &&
-        args->structureInputSize == sizeof(FXE_FenceTest_In) &&
-        args->structureOutputSize >= sizeof(FXE_FenceTest_Out)) {
-        const FXE_FenceTest_In* in = (const FXE_FenceTest_In*)args->structureInput;
-        engine = in->engine;
-        timeoutMs = in->timeoutMs ? in->timeoutMs : 2000;
-        hasOut = true;
-    } else if (args && (args->structureInputSize != 0 || args->structureOutputSize != 0)) {
+    if (!args || !args->structureInput || !args->structureOutput ||
+        args->structureInputSize != sizeof(FXE_FenceTest_In) ||
+        args->structureOutputSize != sizeof(FXE_FenceTest_Out)) {
         return kIOReturnBadArgument;
     }
 
-    FXE_LOG("[UC][FenceTest] submit engine=%u timeoutMs=%u", engine, timeoutMs);
+    const FXE_FenceTest_In* in = (const FXE_FenceTest_In*)args->structureInput;
+    FXE_FenceTest_Out out = {};
+    out.pass = 0;
+    out.reason = FXE_ENOTREADY;
+    out.rc = FXE_ENOTREADY;
+    bcopy(&out, args->structureOutput, sizeof(out));
+    args->structureOutputSize = sizeof(out);
 
-    FakeIrisXEFramebuffer* fb = fOwner ? fOwner->getFramebufferOwner() : nullptr;
-    if (!fb || !IsRangeReady(fOwner)) {
-        out.pass = 0;
-        out.reason = FXE_ENOTREADY;
-        out.rc = FXE_ENOTREADY;
-        if (hasOut) {
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-        }
-        FXE_LOG("[UC][FenceTest] result=NOT_READY rc=0x%X", out.rc);
+    if (!IsRangeReady(fOwner)) {
+        FXE_LOG("[UC][FenceTest] GT not ready; engine=%u -> NOT_READY", in->engine);
         return kIOReturnNotReady;
     }
 
-    FakeIrisXEGEM* batchGem = fb->createTinyBatchGem();
-    if (!batchGem) {
-        out.pass = 0;
-        out.reason = FXE_EINTERNAL;
-        out.rc = FXE_EINTERNAL;
-        if (hasOut) {
-            bcopy(&out, args->structureOutput, sizeof(out));
-            args->structureOutputSize = sizeof(out);
-        }
-        FXE_LOG("[UC][FenceTest] result=FAIL rc=0x%X (batch alloc)", out.rc);
-        return kIOReturnNoMemory;
-    }
-
-    const bool ok = fOwner->fExeclistFromFB->submitBatchWithExeclist(
-        fb,
-        batchGem,
-        0,
-        fOwner->fRcsRingFromFB,
-        timeoutMs);
-    batchGem->release();
-
-    out.pass = ok ? 1 : 0;
-    out.reason = ok ? FXE_OK : FXE_ETIMEOUT;
-    out.rc = out.reason;
-
-    if (hasOut) {
-        bcopy(&out, args->structureOutput, sizeof(out));
-        args->structureOutputSize = sizeof(out);
-    }
-
-    FXE_LOG("[UC][FenceTest] wait result=%s rc=0x%X", ok ? "PASS" : "FAIL", out.rc);
-    return ok ? kIOReturnSuccess : kIOReturnTimeout;
+    FXE_LOG("[UC][FenceTest] submission path not wired; engine=%u -> NOT_READY", in->engine);
+    return kIOReturnNotReady;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(uint32_t selector,
@@ -773,6 +571,11 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(uint32_t selector,
         FXE_LOG("[UC] unsupported selector=%u", selector);
         return kIOReturnUnsupported;
     }
+
+    FXE_LOG("[UC] externalMethod selector=%u inSz=%u outSz=%u",
+            selector,
+            args ? (unsigned)args->structureInputSize : 0u,
+            args ? (unsigned)args->structureOutputSize : 0u);
 
     uint64_t t0 = mach_absolute_time();
     FXE_PHASE("UC", 200 + selector, "selector=%u inSz=%u outSz=%u scalarIn=%u",
