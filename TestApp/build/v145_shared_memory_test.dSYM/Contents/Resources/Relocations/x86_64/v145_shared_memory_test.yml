@@ -1,0 +1,22 @@
+---
+triple:          'x86_64-apple-darwin'
+binary-path:     'build/v145_shared_memory_test'
+relocations:
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x1000012B0, symSize: 0x410 }
+  - { offset: 0x4D, size: 0x8, addend: 0x0, symName: _gRingAddr, symObjAddr: 0x31B0, symBinAddr: 0x100003018, symSize: 0x0 }
+  - { offset: 0x7F, size: 0x8, addend: 0x0, symName: _gRingBase, symObjAddr: 0x31B8, symBinAddr: 0x100003020, symSize: 0x0 }
+  - { offset: 0xAB, size: 0x8, addend: 0x0, symName: _gRingHdr, symObjAddr: 0x3198, symBinAddr: 0x100003000, symSize: 0x0 }
+  - { offset: 0x140, size: 0x8, addend: 0x0, symName: _gConnection, symObjAddr: 0x31A0, symBinAddr: 0x100003008, symSize: 0x0 }
+  - { offset: 0x197, size: 0x8, addend: 0x0, symName: _gPixelBufferAddr, symObjAddr: 0x31A8, symBinAddr: 0x100003010, symSize: 0x0 }
+  - { offset: 0x1C3, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x1000012B0, symSize: 0x410 }
+  - { offset: 0x253, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x410, symBinAddr: 0x1000016C0, symSize: 0xC0 }
+  - { offset: 0x297, size: 0x8, addend: 0x0, symName: _mapSharedRing, symObjAddr: 0x4D0, symBinAddr: 0x100001780, symSize: 0x80 }
+  - { offset: 0x2CD, size: 0x8, addend: 0x0, symName: _closeConnection, symObjAddr: 0x550, symBinAddr: 0x100001800, symSize: 0xB0 }
+  - { offset: 0x2E2, size: 0x8, addend: 0x0, symName: _mapPixelBuffer, symObjAddr: 0x600, symBinAddr: 0x1000018B0, symSize: 0x80 }
+  - { offset: 0x318, size: 0x8, addend: 0x0, symName: _fillGradient, symObjAddr: 0x680, symBinAddr: 0x100001930, symSize: 0xF0 }
+  - { offset: 0x3D6, size: 0x8, addend: 0x0, symName: _fourcc, symObjAddr: 0x770, symBinAddr: 0x100001A20, symSize: 0x40 }
+  - { offset: 0x428, size: 0x8, addend: 0x0, symName: _submitPresentCommand, symObjAddr: 0x7B0, symBinAddr: 0x100001A60, symSize: 0x70 }
+  - { offset: 0x450, size: 0x8, addend: 0x0, symName: _xe_ring_submit_cmd, symObjAddr: 0x820, symBinAddr: 0x100001AD0, symSize: 0x170 }
+  - { offset: 0x530, size: 0x8, addend: 0x0, symName: _xe_align_u32, symObjAddr: 0x990, symBinAddr: 0x100001C40, symSize: 0x20 }
+  - { offset: 0x558, size: 0x8, addend: 0x0, symName: _xe_ring_copy_wrap, symObjAddr: 0x9B0, symBinAddr: 0x100001C60, symSize: 0x9F }
+...

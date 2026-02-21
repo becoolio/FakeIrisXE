@@ -20,6 +20,54 @@ enum {
     kFakeIris_Method_SubmitExeclistFenceTest = 7,
 };
 
+enum {
+    kFakeIrisXE_ABI_Major = 1,
+    kFakeIrisXE_ABI_Minor = 154,
+    kFakeIrisXE_KextVersion_u32 = 0x0001009A
+};
+
+struct FXE_VersionInfo {
+    uint32_t abiMajor;
+    uint32_t abiMinor;
+    uint32_t kextVersion;
+};
+
+struct FXE_BindSurface_In {
+    uint32_t surfaceId;
+    uint32_t flags;
+};
+
+struct FXE_BindSurface_Out {
+    uint64_t surfaceHandle;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pixelFormat;
+    uint32_t stride;
+    uint32_t rc;
+};
+
+struct FXE_Present_In {
+    uint64_t surfaceHandle;
+    uint64_t frameId;
+    uint32_t flags;
+};
+
+struct FXE_Present_Out {
+    uint64_t completionValue;
+    uint32_t rc;
+};
+
+struct FXE_FenceTest_In {
+    uint32_t engine;
+    uint32_t timeoutMs;
+};
+
+struct FXE_FenceTest_Out {
+    uint32_t pass;
+    uint32_t reason;
+    uint32_t rc;
+};
+
 
 
 //
@@ -177,9 +225,11 @@ struct XEContext {
 //
 // ===== Constants =====
 //
-static constexpr uint32_t XE_MAGIC   = 0x53524558u;  // 'XERS'
-static constexpr uint32_t XE_VERSION = 1;
-static constexpr uint32_t XE_PAGE    = 4096;
+enum {
+    XE_MAGIC = 0x53524558u, // 'XERS'
+    XE_VERSION = 1,
+    XE_PAGE = 4096
+};
 
 static inline uint32_t xe_align(uint32_t v) {
     return (v + 3u) & ~3u;   // 4-byte align

@@ -37,6 +37,7 @@
 
 #include "FakeIrisXEGuC.hpp"
 #include "embedded_firmware.h"
+#include "FakeIrisXETrace.hpp"
 
 
 extern "C" {
@@ -48,11 +49,56 @@ extern "C" {
 
 using namespace libkern;
 
+static bool fakeIrisIsArgBoundary(char c)
+{
+    return c == '\0' || c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+static bool fakeIrisBootArgsContainToken(const char* bootArgs, const char* token)
+{
+    if (!bootArgs || !token || !*token) return false;
+
+    const size_t bootLen = strlen(bootArgs);
+    const size_t tokenLen = strlen(token);
+
+    if (bootLen < tokenLen) return false;
+
+    for (size_t i = 0; i <= (bootLen - tokenLen); i++) {
+        if (strncmp(&bootArgs[i], token, tokenLen) == 0) {
+            const char prev = (i == 0) ? '\0' : bootArgs[i - 1];
+            const char next = bootArgs[i + tokenLen];
+            if (fakeIrisIsArgBoundary(prev) && fakeIrisIsArgBoundary(next)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 static bool fakeIrisHasBootArg(const char* arg)
 {
-    if (!arg) return false;
+    if (!arg || !*arg) return false;
+
     char value[8] = {0};
-    return PE_parse_boot_argn(arg, value, sizeof(value));
+    if (PE_parse_boot_argn(arg, value, sizeof(value))) {
+        return true;
+    }
+
+    IORegistryEntry* chosen = IORegistryEntry::fromPath("/chosen", gIOServicePlane);
+    if (!chosen) {
+        return false;
+    }
+
+    bool found = false;
+    OSString* bootargs = OSDynamicCast(OSString, chosen->getProperty("boot-args"));
+    if (bootargs) {
+        const char* bootArgsStr = bootargs->getCStringNoCopy();
+        found = fakeIrisBootArgsContainToken(bootArgsStr, arg);
+    }
+
+    chosen->release();
+    return found;
 }
 
 
@@ -171,54 +217,17 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
-    // V83: Check for -fakeirisxe in boot-args
-    char bootArg[64] = {0};
-    bool hasBootArg = PE_parse_boot_argn("-fakeirisxe", bootArg, sizeof(bootArg));
-    
-    // V83: Also check using IODTNVRAM for OpenCore compatibility
-    bool hasBootArgOC = false;
-    {
-        // Try reading from device tree /chosen/boot-args
-        IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIOServicePlane);
-        if (chosen) {
-            OSString *bootargs = OSDynamicCast(OSString, chosen->getProperty("boot-args"));
-            if (bootargs) {
-                const char *bootArgsStr = bootargs->getCStringNoCopy();
-                if (bootArgsStr) {
-                    // Manual string search for "-fakeirisxe"
-                    const char *needle = "-fakeirisxe";
-                    size_t needleLen = strlen(needle);
-                    size_t haystackLen = strlen(bootArgsStr);
-                    if (haystackLen >= needleLen) {
-                        for (size_t i = 0; i <= haystackLen - needleLen; i++) {
-                            if (strncmp(&bootArgsStr[i], needle, needleLen) == 0) {
-                                hasBootArgOC = true;
-                                IOLog("[V83] Boot-arg found in /chosen/boot-args via IORegistry\n");
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            chosen->release();
-        }
-    }
-    
-    // V83: Check if either method found the boot-arg
-    bool bootArgValid = hasBootArg || hasBootArgOC;
+    // V83: Check for -fakeirisxe in boot-args (PE + /chosen fallback)
+    bool bootArgValid = fakeIrisHasBootArg("-fakeirisxe");
     
     if (!bootArgValid) {
         IOLog("❌ [V83] FAILSAFE TRIGGERED: -fakeirisxe boot-arg NOT detected\n");
-        IOLog("❌ PE_parse_boot_argn returned: %s\n", hasBootArg ? "true" : "false");
-        IOLog("❌ IORegistry check returned: %s\n", hasBootArgOC ? "true" : "false");
         IOLog("❌ To enable: sudo nvram boot-args=\"<existing args> -fakeirisxe\"\n");
         IOLog("============================================================\n");
         return nullptr;
     }
     
     IOLog("✅ [V83] FAILSAFE PASSED: -fakeirisxe detected\n");
-    IOLog("✅ PE_parse_boot_argn: %s\n", hasBootArg ? "found" : "not found (OK)");
-    IOLog("✅ IORegistry check: %s\n", hasBootArgOC ? "found" : "not found (OK)");
     IOLog("✅ Proceeding with kext initialization...\n");
     IOLog("============================================================\n");
     IOLog("\n");
@@ -669,6 +678,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 
 //start
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
+    FXE_PHASE("FB", 100, "start enter provider=%p", provider);
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
     IOLog("║  FAKEIRISXE V131 - start() - WindowServer Integration         ║\n");
@@ -677,19 +687,29 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     if (!super::start(provider)) {
         IOLog("❌ [V131] super::start() failed\n");
+        FXE_LOG("[FB] super::start failed");
         return false;
     }
     IOLog("✅ [V131] super::start() succeeded\n");
+    FXE_PHASE("FB", 101, "super::start ok");
 
     // V151/V153: keep startup conservative unless explicitly requested.
     const bool runDiagnostics = fakeIrisHasBootArg("-fakeirisxe-diag");
     const bool runHeavyStartupTests = fakeIrisHasBootArg("-fakeirisxe-heavy");
+    const bool enableGuCBringup = fakeIrisHasBootArg("-fakeirisxe-guc");
     fAllowRuntimeGpuSubmit = fakeIrisHasBootArg("-fakeirisxe-submit");
     fGpuSubmissionQuarantined = false;
     fGpuSubmissionFailureCount = 0;
 
+    setProperty("V154GuCBringupEnabled", enableGuCBringup ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("V153RuntimeGpuSubmitEnabled", fAllowRuntimeGpuSubmit ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("V153GpuSubmissionQuarantined", kOSBooleanFalse);
+
+    if (enableGuCBringup) {
+        IOLog("FakeIrisXEFramebuffer: [V154] GuC bring-up ENABLED (-fakeirisxe-guc present)\n");
+    } else {
+        IOLog("FakeIrisXEFramebuffer: [V154] GuC bring-up DISABLED by default (add '-fakeirisxe-guc' to enable)\n");
+    }
 
     if (fAllowRuntimeGpuSubmit) {
         IOLog("FakeIrisXEFramebuffer: [V153] Runtime GPU submission ENABLED (-fakeirisxe-submit present)\n");
@@ -1650,7 +1670,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     // optional: create & map fence early (so submitBatch doesn't do it)
     fFenceGEM = FakeIrisXEGEM::withSize(4096, 0);
-    fFenceGEM->pin();
+    if (fFenceGEM) {
+        fFenceGEM->pin();
+    } else {
+        IOLog("(FakeIrisXE) [V154] Fence GEM allocation failed (continuing without early fence)\n");
+    }
 
     // ================================================
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
@@ -1663,15 +1687,20 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("(FakeIrisXE) [V45] ⚠️ MOCS programming failed, continuing anyway\n");
     }
 
-    IOLog("(FakeIrisXE) [V45] Initializing GuC system (PRM sequence)...\n");
+    if (enableGuCBringup) {
+        IOLog("(FakeIrisXE) [V45] Initializing GuC system (PRM sequence)...\n");
 
-    // Initialize GuC system with Intel PRM-compliant sequence
-    if (!initGuCSystem()) {
-        IOLog("(FakeIrisXE) [V45] ⚠️ GuC init failed, falling back to legacy execlist\n");
-        fGuCEnabled = false;
+        // Initialize GuC system with Intel PRM-compliant sequence
+        if (!initGuCSystem()) {
+            IOLog("(FakeIrisXE) [V45] ⚠️ GuC init failed, falling back to legacy execlist\n");
+            fGuCEnabled = false;
+        } else {
+            fGuCEnabled = true;
+            IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
+        }
     } else {
-        fGuCEnabled = true;
-        IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
+        fGuCEnabled = false;
+        IOLog("(FakeIrisXE) [V154] GuC init skipped (service-first startup mode)\n");
     }
 
     //enabling interrupts:
@@ -1961,58 +1990,62 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     
     
-    IOLog("FB scanning IOServicePlane children for FakeIrisXEAccelerator…\n");
+    IOLog("FB scanning IOServicePlane children for FakeIrisXEAccelerator...\n");
 
-    // Create accelerator if not exists
-    bool foundAccel = false;
+    FakeIrisXEAccelerator* accelService = nullptr;
     OSIterator* checkIter = this->getChildIterator(gIOServicePlane);
     if (checkIter) {
         IORegistryEntry* entry = nullptr;
         while ((entry = OSDynamicCast(IORegistryEntry, checkIter->getNextObject()))) {
-            if (OSDynamicCast(FakeIrisXEAccelerator, entry)) {
-                foundAccel = true;
+            accelService = OSDynamicCast(FakeIrisXEAccelerator, entry);
+            if (accelService) {
+                IOLog("Found existing FakeIrisXEAccelerator child %p\n", accelService);
                 break;
             }
         }
         checkIter->release();
     }
 
-    if (!foundAccel) {
-        IOLog("Creating FakeIrisXEAccelerator…\n");
+    if (!accelService) {
+        IOLog("Creating FakeIrisXEAccelerator...\n");
         FakeIrisXEAccelerator* newAccel = OSTypeAlloc(FakeIrisXEAccelerator);
         if (newAccel) {
-            if (newAccel->init(NULL) && newAccel->attach(this)) {
-                if (newAccel->start(this)) {
-                    IOLog("✅ FakeIrisXEAccelerator created and started\n");
-                } else {
-                    IOLog("❌ FakeIrisXEAccelerator failed to start\n");
-                    newAccel->detach(this);
-                    newAccel->release();
-                }
+            if (newAccel->init(nullptr) && newAccel->attach(this) && newAccel->start(this)) {
+                accelService = newAccel;
+                IOLog("✅ FakeIrisXEAccelerator created and started\n");
             } else {
-                IOLog("❌ FakeIrisXEAccelerator failed to init/attach\n");
+                IOLog("❌ FakeIrisXEAccelerator failed to init/attach/start\n");
+                if (newAccel->getProvider()) {
+                    newAccel->detach(this);
+                }
                 newAccel->release();
             }
+        } else {
+            IOLog("❌ FakeIrisXEAccelerator allocation failed\n");
         }
     }
 
-    OSIterator* iter = this->getChildIterator(gIOServicePlane);
-    if (iter)
-    {
-        IORegistryEntry* entry = nullptr;
-        while ((entry = OSDynamicCast(IORegistryEntry, iter->getNextObject())))
-        {
-            FakeIrisXEAccelerator* accel = OSDynamicCast(FakeIrisXEAccelerator, entry);
-            if (accel)
-            {
-                IOLog("🔗 Found Accelerator child %p — linking…\n", accel);
-                accel->linkFromFramebuffer(this);
-                IOLog("🟢 LINK SUCCESS — FB → Accelerator\n");
-                break;  // Important — only 1 accelerator
-            }
-        }
-        iter->release();
+    if (accelService) {
+        IOLog("Linking accelerator %p to framebuffer...\n", accelService);
+        accelService->linkFromFramebuffer(this);
+        setProperty("V154AcceleratorServiceReady", kOSBooleanTrue);
+        IOLog("🟢 LINK SUCCESS - FB -> Accelerator\n");
+        FXE_PHASE("FB", 700, "accelerator linked service=%p", accelService);
+    } else {
+        setProperty("V154AcceleratorServiceReady", kOSBooleanFalse);
+        IOLog("⚠️ Accelerator service unavailable after startup\n");
+        FXE_LOG("[FB] accelerator service unavailable");
     }
+
+    const uint32_t gtReady = (mmioBase != nullptr) ? 1u : 0u;
+    const uint32_t ucReady = (accelService && accelService->getProperty("FakeIrisXEUCReady")) ? 1u : 0u;
+    const uint32_t gucState = fGuCEnabled ? 1u : 0u;
+    const uint32_t ioSurfReady = (accelService && accelService->getProperty("FakeIrisXEIOSurfaceReady")) ? 1u : 0u;
+    FXE_LOG("[INIT][SUMMARY] GT_READY=%u UC_READY=%u GUC_STATE=%u IOSURF_READY=%u",
+            gtReady,
+            ucReady,
+            gucState,
+            ioSurfReady);
 
     
     
@@ -2173,6 +2206,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     
     IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V134)\n");
+    FXE_PHASE("FB", 999, "start completed");
     return true;
 
 }
@@ -2181,6 +2215,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
 void FakeIrisXEFramebuffer::stop(IOService* provider)
 {
+    FXE_PHASE("FB", 900, "stop enter provider=%p", provider);
     IOLog("FakeIrisXEFramebuffer::stop() called — scheduling gated cleanup\n");
 
     // in FakeIrisXEFramebuffer::stop(IOService* provider)
@@ -2235,6 +2270,7 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
 
     // Now call superclass stop after gated cleanup.
     super::stop(provider);
+    FXE_PHASE("FB", 901, "stop done");
 }
 
 
@@ -6861,34 +6897,7 @@ void FakeIrisXEFramebuffer::printV93Summary() {
 
 // Entry points must match CFBundleExecutable name (FakeIrisXE)
 extern "C" kern_return_t FakeIrisXE_start(kmod_info_t *ki, void *data) {
-    char bootArg[64] = {0};
-    bool hasBootArg = PE_parse_boot_argn("-fakeirisxe", bootArg, sizeof(bootArg));
-    bool hasBootArgOC = false;
-
-    IORegistryEntry *chosen = IORegistryEntry::fromPath("/chosen", gIOServicePlane);
-    if (chosen) {
-        OSString *bootargs = OSDynamicCast(OSString, chosen->getProperty("boot-args"));
-        if (bootargs) {
-            const char *bootArgsStr = bootargs->getCStringNoCopy();
-            if (bootArgsStr) {
-                const char *needle = "-fakeirisxe";
-                size_t needleLen = strlen(needle);
-                size_t haystackLen = strlen(bootArgsStr);
-
-                if (haystackLen >= needleLen) {
-                    for (size_t i = 0; i <= haystackLen - needleLen; i++) {
-                        if (strncmp(&bootArgsStr[i], needle, needleLen) == 0) {
-                            hasBootArgOC = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        chosen->release();
-    }
-
-    if (!(hasBootArg || hasBootArgOC)) {
+    if (!fakeIrisHasBootArg("-fakeirisxe")) {
         IOLog("(FakeIrisXE) start denied: missing -fakeirisxe boot-arg\n");
         return KERN_FAILURE;
     }

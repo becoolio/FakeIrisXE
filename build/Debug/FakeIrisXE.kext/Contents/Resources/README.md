@@ -113,3 +113,11 @@ These are huge, but not unknown.
 We follow Linux i915 (which is open-source).
 We follow Intel PRM Vol15–17
 
+Current startup flags:
+
+- `-fakeirisxe` (required): allow probe/start
+- `-fakeirisxe-guc` (optional): enable GuC bring-up path
+- `-fakeirisxe-submit` (optional): enable runtime GPU submit path
+- `-fakeirisxe-diag` (optional): run startup diagnostics
+- `-fakeirisxe-heavy` (optional): run heavy startup tests
+- `-fakeirisxe-iosurface` (optional): enable experimental IOSurface path

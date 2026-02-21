@@ -1,0 +1,20 @@
+---
+triple:          'x86_64-apple-darwin'
+binary-path:     'build/v143_status_check'
+relocations:
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001290, symSize: 0x430 }
+  - { offset: 0x4D, size: 0x8, addend: 0x0, symName: _gRingBase, symObjAddr: 0x35C0, symBinAddr: 0x100003018, symSize: 0x0 }
+  - { offset: 0x79, size: 0x8, addend: 0x0, symName: _gRingAddr, symObjAddr: 0x35A8, symBinAddr: 0x100003000, symSize: 0x0 }
+  - { offset: 0xAB, size: 0x8, addend: 0x0, symName: _gRingHdr, symObjAddr: 0x35B0, symBinAddr: 0x100003008, symSize: 0x0 }
+  - { offset: 0x140, size: 0x8, addend: 0x0, symName: _gConnection, symObjAddr: 0x35B8, symBinAddr: 0x100003010, symSize: 0x0 }
+  - { offset: 0x18C, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001290, symSize: 0x430 }
+  - { offset: 0x292, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x430, symBinAddr: 0x1000016C0, symSize: 0xC0 }
+  - { offset: 0x2D6, size: 0x8, addend: 0x0, symName: _mapSharedRing, symObjAddr: 0x4F0, symBinAddr: 0x100001780, symSize: 0x80 }
+  - { offset: 0x30C, size: 0x8, addend: 0x0, symName: _closeConnection, symObjAddr: 0x570, symBinAddr: 0x100001800, symSize: 0x30 }
+  - { offset: 0x321, size: 0x8, addend: 0x0, symName: _createIOSurfaceIfAllowed, symObjAddr: 0x5A0, symBinAddr: 0x100001830, symSize: 0x160 }
+  - { offset: 0x3C7, size: 0x8, addend: 0x0, symName: _submitCommand, symObjAddr: 0x700, symBinAddr: 0x100001990, symSize: 0x70 }
+  - { offset: 0x3FD, size: 0x8, addend: 0x0, symName: _unmapSharedRing, symObjAddr: 0x770, symBinAddr: 0x100001A00, symSize: 0x60 }
+  - { offset: 0x412, size: 0x8, addend: 0x0, symName: _xe_ring_submit_cmd, symObjAddr: 0x7D0, symBinAddr: 0x100001A60, symSize: 0x170 }
+  - { offset: 0x4F2, size: 0x8, addend: 0x0, symName: _xe_align_u32, symObjAddr: 0x940, symBinAddr: 0x100001BD0, symSize: 0x20 }
+  - { offset: 0x51A, size: 0x8, addend: 0x0, symName: _xe_ring_copy_wrap, symObjAddr: 0x960, symBinAddr: 0x100001BF0, symSize: 0x9F }
+...

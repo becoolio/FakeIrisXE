@@ -10,6 +10,7 @@
 #include "i915_reg.h"
 #include "IntelGucRegs.hpp"
 #include "GucFwLayout.hpp"
+#include "FakeIrisXETrace.hpp"
 
 // V135: Add missing register defines - aggressive Linux GT initialization
 // V135: Added PPGTT, GART, additional power management, GT workarounds
@@ -565,6 +566,7 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
 
 bool FakeIrisXEGuC::initGuC()
 {
+    FXE_PHASE("GUC", 100, "initGuC enter");
     IOLog("(FakeIrisXE) [V136] Initializing Gen12 GuC - FIXED REGISTER OFFSETS\n");
     IOLog("(FakeIrisXE) [V136] CRITICAL: Using 0xC000+ offsets (not 0x5820!)\n");
     
@@ -764,6 +766,11 @@ bool FakeIrisXEGuC::initGuC()
             if (caps1 != 0 || caps2 != 0) {
                 IOLog("(FakeIrisXE) [V52.1] ✅ GuC now accessible after firmware load!\n");
                 fGuCMode = true;
+                FXE_LOG("[GUC][SUMMARY] attempted=%u ready=%u stage=%u err=0x%04X",
+                        fGuCFirmwareLoadAttempted ? 1u : 0u,
+                        isGuCReady() ? 1u : 0u,
+                        static_cast<uint32_t>(fCurrentGuCBootStage),
+                        fLastGuCTimeoutCode);
                 return true;
             }
         }
@@ -772,6 +779,11 @@ bool FakeIrisXEGuC::initGuC()
         IOLog("(FakeIrisXE) [V52.1] 🔄 Falling back to Execlist mode\n");
         IOLog("(FakeIrisXE) [V52.1] ℹ️ Execlist provides full GPU functionality without GuC\n");
         fGuCMode = false;
+        FXE_LOG("[GUC][SUMMARY] attempted=%u ready=%u stage=%u err=0x%04X",
+                fGuCFirmwareLoadAttempted ? 1u : 0u,
+                isGuCReady() ? 1u : 0u,
+                static_cast<uint32_t>(fCurrentGuCBootStage),
+                fLastGuCTimeoutCode);
         return true;  // Return true to allow execlist fallback
     }
     
@@ -784,6 +796,11 @@ bool FakeIrisXEGuC::initGuC()
     IOLog("(FakeIrisXE) [V50] ✅ GuC accessible! Version %u.%u\n",
           supportedMajor, supportedMinor);
     fGuCMode = true;
+    FXE_LOG("[GUC][SUMMARY] attempted=%u ready=%u stage=%u err=0x%04X",
+            fGuCFirmwareLoadAttempted ? 1u : 0u,
+            isGuCReady() ? 1u : 0u,
+            static_cast<uint32_t>(fCurrentGuCBootStage),
+            fLastGuCTimeoutCode);
     return true;
     uint64_t start = mach_absolute_time();
     uint64_t timeout = 100 * 1000000ULL; // 100ms
@@ -937,6 +954,7 @@ bool FakeIrisXEGuC::loadFirmwareViaMMIO(uint64_t sourceGpuAddr, uint32_t destOff
 
 bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
 {
+    FXE_PHASE("GUC", 200, "loadGuCFirmware enter size=%zu", fwSize);
     if (!fwData || fwSize < 4096) {
         IOLog("(FakeIrisXE) [GuC] Invalid firmware data\n");
         return false;
@@ -951,6 +969,7 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     }
     fGuCFirmwareLoadAttempted = true;
     fGuCFirmwareLoadResult = false;
+    FXE_LOG("[GUC] firmware attempt begin size=%zu", fwSize);
     
     // Check firmware container format.
     // Linux blobs have CSS at offset 0x00 (headerType == 0x00000006).
@@ -1257,6 +1276,13 @@ post_load_check:
     }
     
     fGuCFirmwareLoadResult = true;
+    FXE_LOG("[GUC][SUMMARY] attempted=%u ready=%u stage=%u err=0x%04X result=%u",
+            fGuCFirmwareLoadAttempted ? 1u : 0u,
+            isGuCReady() ? 1u : 0u,
+            static_cast<uint32_t>(fCurrentGuCBootStage),
+            fLastGuCTimeoutCode,
+            fGuCFirmwareLoadResult ? 1u : 0u);
+    FXE_PHASE("GUC", 299, "loadGuCFirmware exit");
     return true;
 }
 
@@ -3401,6 +3427,7 @@ bool FakeIrisXEGuC::preflightAppleTglLoad(const uint8_t* fwData, size_t fwSize,
                                           const AppleTGLFirmwareLayout& layout)
 {
     IOLog("(FakeIrisXE) [V150] === Apple GuC Preflight ===\n");
+    IOLog("(FakeIrisXE) [V153] [GuC] Preflight step 1/3: security block sanity\n");
 
     // 1) Security block sanity
     bool allZero = true;
@@ -3418,6 +3445,7 @@ bool FakeIrisXEGuC::preflightAppleTglLoad(const uint8_t* fwData, size_t fwSize,
     }
 
     // 2) Basic WOPCM/MMIO visibility
+    IOLog("(FakeIrisXE) [V153] [GuC] Preflight step 2/3: WOPCM/MMIO visibility\n");
     uint32_t wopcmReg = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
     if (wopcmReg == 0xFFFFFFFF || wopcmReg == 0x00000000) {
         IOLog("(FakeIrisXE) [V150] ❌ PRECHECK_FAIL: WOPCM register invalid (0x%08X)\n", wopcmReg);
@@ -3425,13 +3453,19 @@ bool FakeIrisXEGuC::preflightAppleTglLoad(const uint8_t* fwData, size_t fwSize,
     }
 
     // 3) IMEI service presence (proxy signal for ME path availability)
+    IOLog("(FakeIrisXE) [V153] [GuC] Preflight step 3/3: IMEI presence check (bounded wait)\n");
     bool imeiPresent = false;
     OSDictionary* imeiMatch = IOService::nameMatching("IMEI@16");
     if (imeiMatch) {
-        IOService* imei = IOService::waitForService(imeiMatch, 0);
+        // Use a bounded wait to avoid boot-time stalls.
+        // waitForService() consumes imeiMatch.
+        mach_timespec_t imeiTimeout = {0, 1000000}; // 1 ms
+        IOService* imei = IOService::waitForService(imeiMatch, &imeiTimeout);
         if (imei) {
             imeiPresent = true;
         }
+    } else {
+        IOLog("(FakeIrisXE) [V153] [GuC] IMEI match dictionary creation failed\n");
     }
     IOLog("(FakeIrisXE) [V150] IMEI service present: %s\n", imeiPresent ? "YES" : "NO");
 
@@ -3486,16 +3520,29 @@ bool FakeIrisXEGuC::loadGuCWithAppleTglMethod(const uint8_t* fwData, size_t fwSi
     AppleTGLFirmwareLayout layout{};
     setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
                     kGuCTimeoutPrepare, "apple_tgl_begin");
+    IOLog("(FakeIrisXE) [V153] [GuC] Apple TGL load: parse begin\n");
     if (!parseAppleTglFirmware(fwData, fwSize, layout)) {
         IOLog("(FakeIrisXE) [V142] ❌ Failed to parse Apple TGL firmware\n");
+        setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutPrepare, "parse_fail");
         classifyAppleTglFailure("parse", fOwner->safeMMIORead(GUC_STATUS_V137));
         return false;
     }
 
+    setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                    kGuCTimeoutPrepare, "parse_ok");
+    IOLog("(FakeIrisXE) [V153] [GuC] Apple TGL load: preflight begin\n");
+
     if (!preflightAppleTglLoad(fwData, fwSize, layout)) {
+        setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                        kGuCTimeoutPrepare, "preflight_fail");
         classifyAppleTglFailure("preflight", fOwner->safeMMIORead(GUC_STATUS_V137));
         return false;
     }
+
+    setGuCBootStage(kGuCBootStagePrepare, fOwner->safeMMIORead(GUC_STATUS_V137),
+                    kGuCTimeoutPrepare, "preflight_ok");
+    IOLog("(FakeIrisXE) [V153] [GuC] Apple TGL load: preflight OK\n");
 
     static const int kMaxAttempts = 3;
     for (int attempt = 1; attempt <= kMaxAttempts; attempt++) {
@@ -3794,4 +3841,11 @@ void FakeIrisXEGuC::setGuCBootStage(GuCBootStage stage, uint32_t status,
           stageName, status, timeoutCode,
           detail ? " detail=" : "",
           detail ? detail : "");
+
+    IOLog("FakeIrisXE: [GUC][STATE] attempted=%u ready=%u stage=%s status=0x%08X err=0x%04X\n",
+          fGuCFirmwareLoadAttempted ? 1u : 0u,
+          (stage == kGuCBootStageRunning) ? 1u : 0u,
+          stageName,
+          status,
+          timeoutCode);
 }

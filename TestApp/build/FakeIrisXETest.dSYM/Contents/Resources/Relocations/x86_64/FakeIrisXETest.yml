@@ -1,0 +1,16 @@
+---
+triple:          'x86_64-apple-darwin'
+binary-path:     'build/FakeIrisXETest'
+relocations:
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x100000720, symSize: 0x110 }
+  - { offset: 0x4D, size: 0x8, addend: 0x0, symName: _gConnection, symObjAddr: 0x4588, symBinAddr: 0x100003000, symSize: 0x0 }
+  - { offset: 0xC7, size: 0x8, addend: 0x0, symName: _testSharedRing, symObjAddr: 0xAF0, symBinAddr: 0x100001210, symSize: 0x170 }
+  - { offset: 0x18D, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x100000720, symSize: 0x110 }
+  - { offset: 0x1D1, size: 0x8, addend: 0x0, symName: _closeConnection, symObjAddr: 0x110, symBinAddr: 0x100000830, symSize: 0x30 }
+  - { offset: 0x1E6, size: 0x8, addend: 0x0, symName: _testGetCaps, symObjAddr: 0x140, symBinAddr: 0x100000860, symSize: 0xB0 }
+  - { offset: 0x22A, size: 0x8, addend: 0x0, symName: _testCreateDestroyContext, symObjAddr: 0x1F0, symBinAddr: 0x100000910, symSize: 0x100 }
+  - { offset: 0x28A, size: 0x8, addend: 0x0, symName: _testBindSurface, symObjAddr: 0x2F0, symBinAddr: 0x100000A10, symSize: 0x3F0 }
+  - { offset: 0x3DD, size: 0x8, addend: 0x0, symName: _testPresent, symObjAddr: 0x6E0, symBinAddr: 0x100000E00, symSize: 0x410 }
+  - { offset: 0x546, size: 0x8, addend: 0x0, symName: _printUsage, symObjAddr: 0xC60, symBinAddr: 0x100001380, symSize: 0x90 }
+  - { offset: 0x56C, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0xCF0, symBinAddr: 0x100001410, symSize: 0x2BF }
+...

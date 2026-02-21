@@ -2,6 +2,7 @@
 #include "FakeIrisXEAccelShared.h"
 #include "FakeIrisXEFramebuffer.hpp"
 #include "FakeIrisXEIosurfaceCompat.hpp"
+#include "FakeIrisXETrace.hpp"
 #include <IOKit/IOLib.h>
 #include <IOKit/IOTimerEventSource.h>
 
@@ -76,11 +77,13 @@ IOService* FakeIrisXEAccelerator::probe(IOService* provider, SInt32* score) {
 #pragma mark - Start
 
 bool FakeIrisXEAccelerator::start(IOService* provider) {
+    FXE_PHASE("ACCEL", 100, "start enter provider=%p", provider);
     LOG("start() attaching to framebuffer");
 
     fFB = OSDynamicCast(FakeIrisXEFramebuffer, provider);
     if (!fFB) {
         LOG("provider is not FakeIrisXEFramebuffer");
+        FXE_LOG("[ACCEL] provider cast failed");
         return false;
     }
 
@@ -116,11 +119,19 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     } else {
         IOLog("(FakeIrisXEFramebuffer) [Accel] start(): timer created successfully\n");
     }
+
+    setProperty("FakeIrisXEIOSurfaceReady", IOSurfaceKextAvailable() ? kOSBooleanTrue : kOSBooleanFalse);
+    FXE_LOG("[INIT][SUMMARY] GT_READY=%u UC_READY=%u GUC_STATE=%u IOSURF_READY=%u",
+            1u,
+            0u,
+            0u,
+            IOSurfaceKextAvailable() ? 1u : 0u);
     
     
 
     registerService();
     LOG("started; waiting for user client attachShared()");
+    FXE_PHASE("ACCEL", 101, "start done");
 
     return IOService::start(provider);
 }
@@ -128,6 +139,7 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
 #pragma mark - Stop
 
 void FakeIrisXEAccelerator::stop(IOService* provider) {
+    FXE_PHASE("ACCEL", 900, "stop enter provider=%p", provider);
     LOG("stop");
 
     if (fTimer) {
@@ -154,6 +166,7 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
 
     fFB = nullptr;
     IOService::stop(provider);
+    FXE_PHASE("ACCEL", 901, "stop done");
 }
 
 
@@ -161,6 +174,7 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
 #pragma mark - attachShared (UserClient provides ring)
 
 bool FakeIrisXEAccelerator::attachShared(IOBufferMemoryDescriptor* page) {
+    FXE_PHASE("ACCEL", 200, "attachShared enter page=%p", page);
     if (!page) return false;
 
     if (fSharedMem) { fSharedMem->release(); }
@@ -184,6 +198,7 @@ bool FakeIrisXEAccelerator::attachShared(IOBufferMemoryDescriptor* page) {
     fRingBase = reinterpret_cast<uint8_t*>(base) + sizeof(XEHdr);
 
     LOG("attachShared: OK (magic=0x%08x cap=%u)", hdr->magic, hdr->capacity);
+    FXE_PHASE("ACCEL", 201, "attachShared ready cap=%u", hdr->capacity);
 
     // accelerate polling to 5ms once ring is live
     if (fTimer) fTimer->setTimeoutMS(5);
@@ -212,6 +227,7 @@ FakeIrisXEAccelerator::XEContext* FakeIrisXEAccelerator::lookupContext(uint32_t 
 
 uint32_t FakeIrisXEAccelerator::createContext(uint64_t sharedPtr, uint32_t flags)
 {
+    FXE_PHASE("ACCEL", 300, "createContext enter flags=0x%08x", flags);
     XEContext ctx{};
     ctx.ctxId = fNextCtxId++;
     ctx.active = true;
@@ -225,6 +241,7 @@ uint32_t FakeIrisXEAccelerator::createContext(uint64_t sharedPtr, uint32_t flags
     data->release(); // OSArray retains it
 
     LOG("createContext ctxId=%u", ctx.ctxId);
+    FXE_PHASE("ACCEL", 301, "createContext done ctx=%u", ctx.ctxId);
     return ctx.ctxId;
 }
 
@@ -687,6 +704,7 @@ uint32_t FakeIrisXEAccelerator::createContext()
 
 bool FakeIrisXEAccelerator::destroyContext(uint32_t ctxId)
 {
+    FXE_PHASE("ACCEL", 310, "destroyContext enter ctx=%u", ctxId);
     if (!fContexts) return false;
     IOLockLock(fCtxLock);
     for (unsigned i = 0; i < fContexts->getCount(); ++i) {
@@ -705,10 +723,12 @@ bool FakeIrisXEAccelerator::destroyContext(uint32_t ctxId)
             // Note: OSData will free the bytes when released
             IOLockUnlock(fCtxLock);
             IOLog("(FakeIrisXEFramebuffer) [Accel] destroyContext %u\n", ctxId);
+            FXE_PHASE("ACCEL", 311, "destroyContext done ctx=%u", ctxId);
             return true;
         }
     }
     IOLockUnlock(fCtxLock);
+    FXE_LOG("[ACCEL] destroyContext not found ctx=%u", ctxId);
     return false;
 }
 

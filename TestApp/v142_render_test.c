@@ -12,88 +12,13 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
 #include <mach/vm_map.h>
-
-// Method selectors (must match FakeIrisXEAccelShared.h)
-enum {
-    kFakeIris_Method_GetCaps                = 0,
-    kFakeIris_Method_CreateContext          = 1,
-    kFakeIris_Method_DestroyContext         = 2,
-    kFakeIris_Method_BindSurfaceUserMapped  = 3,
-    kFakeIris_Method_PresentContext         = 4,
-    kFakeIris_Method_SubmitExeclistFenceTest = 7,
-};
-
-// Ring command structures (must match kernel)
-#define XE_MAGIC        0x53524558  // 'XERS'
-#define XE_VERSION      1
-#define XE_PAGE         4096
-#define XE_CMD_NOP      0
-#define XE_CMD_PRESENT  1
-#define XE_CMD_BATCH    2
-
-struct XEHdr {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t capacity;
-    uint32_t head;      // kernel writes
-    uint32_t tail;      // user writes
-    uint32_t reserved[3];
-};
-
-struct XECmd {
-    uint32_t cmd;       // XE_CMD_*
-    uint32_t ctxId;
-    uint32_t arg0;
-    uint32_t arg1;
-    uint32_t arg2;
-    uint32_t arg3;
-};
-
-// Capability struct
-struct XEAccelCaps {
-    uint32_t version;
-    uint32_t metalSupported;
-    uint32_t reserved0;
-    uint32_t reserved1;
-};
-
-// Context creation structs
-struct XECreateCtxIn {
-    uint32_t flags;
-    uint32_t pad;
-    uint64_t sharedGPUPtr;
-};
-
-struct XECreateCtxOut {
-    uint32_t ctxId;
-    uint32_t pad;
-};
-
-// Surface binding structs
-struct XEBindSurfaceIn {
-    uint32_t ctxId;
-    uint32_t ioSurfaceID;
-    uint32_t width;
-    uint32_t height;
-    uint32_t bytesPerRow;
-    uint32_t surfaceID;
-    void*    cpuPtr;
-    uint64_t gpuAddr;
-    uint32_t pixelFormat;
-    int      valid;
-};
-
-struct XEBindSurfaceOut {
-    uint64_t gpuAddr;
-    uint32_t status;
-    uint32_t reserved;
-};
+#include "fakeirisxe_user_shared.h"
 
 // Global connection
 static io_connect_t gConnection = MACH_PORT_NULL;
 static mach_vm_address_t gRingAddr = 0;
-static struct XEHdr* gRingHdr = NULL;
-static struct XECmd* gRingCmds = NULL;
+static volatile XEHdr* gRingHdr = NULL;
+static uint8_t* gRingBase = NULL;
 
 // Helper: Open connection
 int openConnection() {
@@ -145,8 +70,8 @@ int mapSharedRing() {
         return -1;
     }
     
-    gRingHdr = (struct XEHdr*)gRingAddr;
-    gRingCmds = (struct XECmd*)(gRingAddr + sizeof(struct XEHdr));
+    gRingHdr = (volatile XEHdr*)gRingAddr;
+    gRingBase = (uint8_t*)(gRingAddr + sizeof(XEHdr));
     
     printf("✅ Shared ring mapped:\n");
     printf("   Address: 0x%llx\n", (unsigned long long)gRingAddr);
@@ -154,7 +79,7 @@ int mapSharedRing() {
     printf("   Magic: 0x%08x %s\n", gRingHdr->magic, 
            gRingHdr->magic == XE_MAGIC ? "✓" : "✗");
     printf("   Version: %u\n", gRingHdr->version);
-    printf("   Capacity: %u commands\n", gRingHdr->capacity / sizeof(struct XECmd));
+    printf("   Capacity: %u command-bytes\n", gRingHdr->capacity);
     
     return 0;
 }
@@ -165,41 +90,14 @@ void unmapSharedRing() {
         IOConnectUnmapMemory(gConnection, 0, mach_task_self(), gRingAddr);
         gRingAddr = 0;
         gRingHdr = NULL;
-        gRingCmds = NULL;
+        gRingBase = NULL;
     }
 }
 
 // Helper: Submit command to ring
-bool submitCommand(uint32_t cmd, uint32_t ctxId, uint32_t arg0, uint32_t arg1, uint32_t arg2, uint32_t arg3) {
-    if (!gRingHdr || !gRingCmds) return false;
-    
-    uint32_t tail = gRingHdr->tail;
-    uint32_t head = gRingHdr->head;
-    uint32_t capacity = (gRingHdr->capacity / sizeof(struct XECmd));
-    
-    // Check if ring is full
-    uint32_t nextTail = (tail + 1) % capacity;
-    if (nextTail == head) {
-        printf("⚠️ Ring full, cannot submit command\n");
-        return false;
-    }
-    
-    // Write command
-    struct XECmd* cmdPtr = &gRingCmds[tail];
-    cmdPtr->cmd = cmd;
-    cmdPtr->ctxId = ctxId;
-    cmdPtr->arg0 = arg0;
-    cmdPtr->arg1 = arg1;
-    cmdPtr->arg2 = arg2;
-    cmdPtr->arg3 = arg3;
-    
-    // Memory barrier
-    __sync_synchronize();
-    
-    // Update tail
-    gRingHdr->tail = nextTail;
-    
-    return true;
+bool submitCommand(uint32_t opcode, uint32_t ctxId) {
+    if (!gRingHdr || !gRingBase) return false;
+    return xe_ring_submit_cmd(gRingHdr, gRingBase, opcode, ctxId, NULL, 0);
 }
 
 // Test: Full Rendering Pipeline
@@ -207,7 +105,7 @@ int testRenderingPipeline() {
     printf("\n=== V142: Full Rendering Pipeline Test ===\n");
     
     // Step 1: Get capabilities
-    struct XEAccelCaps caps;
+    XEAccelCaps caps;
     size_t capsSize = sizeof(caps);
     kern_return_t kr = IOConnectCallStructMethod(gConnection,
                                                   kFakeIris_Method_GetCaps,
@@ -246,7 +144,6 @@ int testRenderingPipeline() {
     CFRelease(w);
     CFRelease(h);
     CFRelease(bpr);
-    CFRelease(pixelFormat);
     CFRelease(properties);
     
     if (!surface) {
@@ -278,8 +175,8 @@ int testRenderingPipeline() {
     IOSurfaceUnlock(surface, 0, NULL);
     
     // Step 4: Create context
-    struct XECreateCtxIn ctxIn = {0};
-    struct XECreateCtxOut ctxOut;
+    XECreateCtxIn ctxIn = {0};
+    XECreateCtxOut ctxOut;
     size_t ctxOutSize = sizeof(ctxOut);
     
     kr = IOConnectCallStructMethod(gConnection,
@@ -296,7 +193,7 @@ int testRenderingPipeline() {
     printf("✅ Created context: ctxId=%u\n", ctxId);
     
     // Step 5: Bind surface to context
-    struct XEBindSurfaceIn bindIn = {
+    XEBindSurfaceIn bindIn = {
         .ctxId = ctxId,
         .ioSurfaceID = surfaceID,
         .width = width,
@@ -306,9 +203,9 @@ int testRenderingPipeline() {
         .cpuPtr = NULL,
         .gpuAddr = 0,
         .pixelFormat = 0x42475241, // 'BGRA'
-        .valid = 1
+        .valid = true
     };
-    struct XEBindSurfaceOut bindOut;
+    XEBindSurfaceOut bindOut;
     size_t bindOutSize = sizeof(bindOut);
     
     kr = IOConnectCallStructMethod(gConnection,
@@ -327,7 +224,7 @@ int testRenderingPipeline() {
     
     // Step 6: Submit PRESENT command via shared ring
     printf("📤 Submitting PRESENT command to ring...\n");
-    if (submitCommand(XE_CMD_PRESENT, ctxId, 0, 0, 0, 0)) {
+    if (submitCommand(XE_CMD_PRESENT, ctxId)) {
         printf("✅ Command submitted to ring\n");
         
         // Wait a bit for kernel to process

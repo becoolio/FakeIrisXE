@@ -10,56 +10,7 @@
 #include <IOSurface/IOSurface.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
-
-// Method selectors (must match FakeIrisXEAccelShared.h)
-enum {
-    kFakeIris_Method_GetCaps                = 0,
-    kFakeIris_Method_CreateContext          = 1,
-    kFakeIris_Method_DestroyContext         = 2,
-    kFakeIris_Method_BindSurfaceUserMapped  = 3,
-    kFakeIris_Method_PresentContext         = 4,
-    kFakeIris_Method_SubmitExeclistFenceTest = 7,
-};
-
-// Capability struct
-struct XEAccelCaps {
-    uint32_t version;
-    uint32_t metalSupported;
-    uint32_t reserved0;
-    uint32_t reserved1;
-};
-
-// Context creation structs
-struct XECreateCtxIn {
-    uint32_t flags;
-    uint32_t pad;
-    uint64_t sharedGPUPtr;
-};
-
-struct XECreateCtxOut {
-    uint32_t ctxId;
-    uint32_t pad;
-};
-
-// Surface binding structs
-struct XEBindSurfaceIn {
-    uint32_t ctxId;
-    uint32_t ioSurfaceID;
-    uint32_t width;
-    uint32_t height;
-    uint32_t bytesPerRow;
-    uint32_t surfaceID;
-    void*    cpuPtr;
-    uint64_t gpuAddr;
-    uint32_t pixelFormat;
-    int      valid;
-};
-
-struct XEBindSurfaceOut {
-    uint64_t gpuAddr;
-    uint32_t status;
-    uint32_t reserved;
-};
+#include "fakeirisxe_user_shared.h"
 
 // Global connection
 static io_connect_t gConnection = MACH_PORT_NULL;
@@ -112,7 +63,7 @@ void closeConnection() {
 int testGetCaps() {
     printf("\n=== Test: GetCaps ===\n");
     
-    struct XEAccelCaps caps;
+    XEAccelCaps caps;
     size_t capsSize = sizeof(caps);
     
     kern_return_t kr = IOConnectCallStructMethod(gConnection,
@@ -136,12 +87,12 @@ int testGetCaps() {
 int testCreateDestroyContext() {
     printf("\n=== Test: Create/Destroy Context ===\n");
     
-    struct XECreateCtxIn in = {
+    XECreateCtxIn in = {
         .flags = 0,
         .pad = 0,
         .sharedGPUPtr = 0
     };
-    struct XECreateCtxOut out;
+    XECreateCtxOut out;
     size_t outSize = sizeof(out);
     
     // Create context
@@ -178,8 +129,8 @@ int testBindSurface() {
     printf("\n=== Test: BindSurface with IOSurface ===\n");
     
     // First create a context
-    struct XECreateCtxIn ctxIn = {0};
-    struct XECreateCtxOut ctxOut;
+    XECreateCtxIn ctxIn = {0};
+    XECreateCtxOut ctxOut;
     size_t ctxOutSize = sizeof(ctxOut);
     
     kern_return_t kr = IOConnectCallStructMethod(gConnection,
@@ -221,7 +172,6 @@ int testBindSurface() {
     CFRelease(w);
     CFRelease(h);
     CFRelease(bpr);
-    CFRelease(pixelFormat);
     CFRelease(properties);
     
     if (!surface) {
@@ -235,7 +185,7 @@ int testBindSurface() {
     printf("✅ Created IOSurface: ID=%u, %ux%u\n", surfaceID, width, height);
     
     // Bind surface to context
-    struct XEBindSurfaceIn bindIn = {
+    XEBindSurfaceIn bindIn = {
         .ctxId = ctxId,
         .ioSurfaceID = surfaceID,
         .width = width,
@@ -245,9 +195,9 @@ int testBindSurface() {
         .cpuPtr = NULL,
         .gpuAddr = 0,
         .pixelFormat = 0x42475241, // 'BGRA'
-        .valid = 1
+        .valid = true
     };
-    struct XEBindSurfaceOut bindOut;
+    XEBindSurfaceOut bindOut;
     size_t bindOutSize = sizeof(bindOut);
     
     kr = IOConnectCallStructMethod(gConnection,
@@ -280,8 +230,8 @@ int testPresent() {
     printf("\n=== Test: Present ===\n");
     
     // Create context with bound surface
-    struct XECreateCtxIn ctxIn = {0};
-    struct XECreateCtxOut ctxOut;
+    XECreateCtxIn ctxIn = {0};
+    XECreateCtxOut ctxOut;
     size_t ctxOutSize = sizeof(ctxOut);
     
     kern_return_t kr = IOConnectCallStructMethod(gConnection,
@@ -321,7 +271,6 @@ int testPresent() {
     CFRelease(w);
     CFRelease(h);
     CFRelease(bpr);
-    CFRelease(pixelFormat);
     CFRelease(properties);
     
     if (!surface) {
@@ -333,7 +282,7 @@ int testPresent() {
     
     uint32_t surfaceID = IOSurfaceGetID(surface);
     
-    struct XEBindSurfaceIn bindIn = {
+    XEBindSurfaceIn bindIn = {
         .ctxId = ctxId,
         .ioSurfaceID = surfaceID,
         .width = width,
@@ -343,9 +292,9 @@ int testPresent() {
         .cpuPtr = NULL,
         .gpuAddr = 0,
         .pixelFormat = 0x42475241,
-        .valid = 1
+        .valid = true
     };
-    struct XEBindSurfaceOut bindOut;
+    XEBindSurfaceOut bindOut;
     size_t bindOutSize = sizeof(bindOut);
     
     kr = IOConnectCallStructMethod(gConnection,
@@ -409,17 +358,8 @@ int testSharedRing() {
     printf("   Size: %llu bytes\n", (unsigned long long)size);
     
     // Read ring header
-    struct __attribute__((packed)) XEHdr {
-        uint32_t magic;
-        uint32_t version;
-        uint32_t capacity;
-        uint32_t head;
-        uint32_t tail;
-        uint32_t reserved[3];
-    };
-    
-    struct XEHdr* hdr = (struct XEHdr*)address;
-    printf("   Magic: 0x%08x (expected: 0x53524558)\n", hdr->magic);
+    XEHdr* hdr = (XEHdr*)address;
+    printf("   Magic: 0x%08x (expected: 0x%08x)\n", hdr->magic, XE_MAGIC);
     printf("   Version: %u\n", hdr->version);
     printf("   Capacity: %u\n", hdr->capacity);
     printf("   Head: %u, Tail: %u\n", hdr->head, hdr->tail);

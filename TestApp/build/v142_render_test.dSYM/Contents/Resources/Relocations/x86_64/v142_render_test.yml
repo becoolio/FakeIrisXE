@@ -2,16 +2,19 @@
 triple:          'x86_64-apple-darwin'
 binary-path:     'build/v142_render_test'
 relocations:
-  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x100000B20, symSize: 0x110 }
-  - { offset: 0x4D, size: 0x8, addend: 0x0, symName: _gConnection, symObjAddr: 0x3F10, symBinAddr: 0x100003000, symSize: 0x0 }
-  - { offset: 0xAB, size: 0x8, addend: 0x0, symName: _gRingAddr, symObjAddr: 0x3F18, symBinAddr: 0x100003008, symSize: 0x0 }
-  - { offset: 0xDD, size: 0x8, addend: 0x0, symName: _gRingHdr, symObjAddr: 0x3F20, symBinAddr: 0x100003010, symSize: 0x0 }
-  - { offset: 0x15F, size: 0x8, addend: 0x0, symName: _gRingCmds, symObjAddr: 0x3F28, symBinAddr: 0x100003018, symSize: 0x0 }
-  - { offset: 0x1F6, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x100000B20, symSize: 0x110 }
-  - { offset: 0x23A, size: 0x8, addend: 0x0, symName: _mapSharedRing, symObjAddr: 0x110, symBinAddr: 0x100000C30, symSize: 0x140 }
-  - { offset: 0x270, size: 0x8, addend: 0x0, symName: _unmapSharedRing, symObjAddr: 0x250, symBinAddr: 0x100000D70, symSize: 0x60 }
-  - { offset: 0x285, size: 0x8, addend: 0x0, symName: _submitCommand, symObjAddr: 0x2B0, symBinAddr: 0x100000DD0, symSize: 0x120 }
-  - { offset: 0x339, size: 0x8, addend: 0x0, symName: _testRenderingPipeline, symObjAddr: 0x3D0, symBinAddr: 0x100000EF0, symSize: 0x6E0 }
-  - { offset: 0x55C, size: 0x8, addend: 0x0, symName: _closeConnection, symObjAddr: 0xAB0, symBinAddr: 0x1000015D0, symSize: 0x30 }
-  - { offset: 0x572, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0xAE0, symBinAddr: 0x100001600, symSize: 0x106 }
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x1000009E0, symSize: 0x110 }
+  - { offset: 0x4D, size: 0x8, addend: 0x0, symName: _gConnection, symObjAddr: 0x4478, symBinAddr: 0x100003000, symSize: 0x0 }
+  - { offset: 0xAB, size: 0x8, addend: 0x0, symName: _gRingAddr, symObjAddr: 0x4480, symBinAddr: 0x100003008, symSize: 0x0 }
+  - { offset: 0xDD, size: 0x8, addend: 0x0, symName: _gRingHdr, symObjAddr: 0x4488, symBinAddr: 0x100003010, symSize: 0x0 }
+  - { offset: 0x16B, size: 0x8, addend: 0x0, symName: _gRingBase, symObjAddr: 0x4490, symBinAddr: 0x100003018, symSize: 0x0 }
+  - { offset: 0x1AC, size: 0x8, addend: 0x0, symName: _openConnection, symObjAddr: 0x0, symBinAddr: 0x1000009E0, symSize: 0x110 }
+  - { offset: 0x1F0, size: 0x8, addend: 0x0, symName: _mapSharedRing, symObjAddr: 0x110, symBinAddr: 0x100000AF0, symSize: 0x130 }
+  - { offset: 0x226, size: 0x8, addend: 0x0, symName: _unmapSharedRing, symObjAddr: 0x240, symBinAddr: 0x100000C20, symSize: 0x60 }
+  - { offset: 0x23B, size: 0x8, addend: 0x0, symName: _submitCommand, symObjAddr: 0x2A0, symBinAddr: 0x100000C80, symSize: 0x70 }
+  - { offset: 0x271, size: 0x8, addend: 0x0, symName: _xe_ring_submit_cmd, symObjAddr: 0x310, symBinAddr: 0x100000CF0, symSize: 0x170 }
+  - { offset: 0x351, size: 0x8, addend: 0x0, symName: _testRenderingPipeline, symObjAddr: 0x480, symBinAddr: 0x100000E60, symSize: 0x6C0 }
+  - { offset: 0x564, size: 0x8, addend: 0x0, symName: _closeConnection, symObjAddr: 0xB40, symBinAddr: 0x100001520, symSize: 0x30 }
+  - { offset: 0x57A, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0xB70, symBinAddr: 0x100001550, symSize: 0x110 }
+  - { offset: 0x5C2, size: 0x8, addend: 0x0, symName: _xe_align_u32, symObjAddr: 0xC80, symBinAddr: 0x100001660, symSize: 0x20 }
+  - { offset: 0x5EA, size: 0x8, addend: 0x0, symName: _xe_ring_copy_wrap, symObjAddr: 0xCA0, symBinAddr: 0x100001680, symSize: 0x9F }
 ...
