@@ -1,0 +1,6 @@
+bundle_dir=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720
+environment=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720/environment.txt
+test_stdout=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720/compliance_test_stdout.jsonl
+test_stderr=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720/compliance_test_stderr.txt
+boot_log=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720/boot_fakeirisxe.log
+phase_and_guc=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/evidence/compliance_20260221_050720/phase_and_guc_proof.log

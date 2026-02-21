@@ -1,0 +1,358 @@
+Timestamp               Ty Process[PID:TID]
+2026-02-21 04:40:53.175 Df kernel[0:772] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 04:40:53.175 Df kernel[0:77a] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 04:40:53.175 Df kernel[0:783] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 04:40:53.968 Df kernelmanager_helper[295:7d1] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:40:56.053 Df kernel[0:876] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 04:41:07.025 Df kernel[0:e72] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 04:41:08.871 E  kernel[0:fb2] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE copy.kext
+2026-02-21 04:41:08.873 E  kernel[0:fb2] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE.kext
+2026-02-21 04:41:08.874 E  kernel[0:fb2] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE copy 2.kext
+2026-02-21 04:41:45.378 E  kernel[0:197b] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE.xcodeproj
+2026-02-21 04:41:46.874 E  kernel[0:197a] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE_v154.kext
+2026-02-21 04:41:46.939 E  kernel[0:197a] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/Debug/FakeIrisXE.kext
+2026-02-21 04:45:19.789 E  kernel[0:282c] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Downloads/FakeIrisXE.kext
+2026-02-21 04:45:19.798 E  kernel[0:282e] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Downloads/FakeIrisXEFramebuffer.kext
+2026-02-21 04:46:11.564 E  kernel[0:2bbb] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE copy 2.kext
+2026-02-21 04:46:11.564 E  kernel[0:2bbb] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE copy.kext
+2026-02-21 04:46:11.567 E  kernel[0:2bbe] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE.kext
+2026-02-21 04:46:15.902 Df log[866:2bf5] [com.apple.log:] log run noninteractively, parent: 674 (opencode-cli), args: '/usr/bin/log' 'show' '--last' 'boot' '--style' 'syslog' '--predicate' 'eventMessage CONTAINS[c] "FakeIrisXE" OR eventMessage CONTAINS[c] "com.anomy.driver.FakeIrisXEFramebuffer" OR eventMessage 
+2026-02-21 04:46:59.368 Df log[879:2de0] [com.apple.log:] log run noninteractively, parent: 674 (opencode-cli), args: '/usr/bin/log' 'show' '--last' 'boot' '--info' '--debug' '--style' 'syslog' '--predicate' 'process == "kernel" AND (eventMessage CONTAINS[c] "com.anomy.driver.FakeIrisXEFramebuffer" OR eventMessa
+2026-02-21 04:48:47.867 Df kmutil[910:3136] finding bundles at additional paths: 
+	/Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:48:47.868 Df kmutil[910:3136] finding bundles at additional paths: 
+	/Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:48:47.884 Df kmutil[910:3136] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:49:01.203 Df kmutil[915:31a2] finding bundles at additional paths: 
+	/Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:49:01.640 Df kmutil[915:31a2] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 04:52:04.315 E  kernel[0:396b] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/DerivedData/Build/Products/Release/FakeIrisXE.kext.dSYM
+2026-02-21 04:56:29.893 E  kernel[0:427d] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/Debug/FakeIrisXE.kext
+2026-02-21 04:56:34.583 E  kernel[0:427e] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE_v154.kext
+2026-02-21 04:58:12.097 E  kernel[0:457e] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/FakeIrisXETest.dSYM
+2026-02-21 04:58:12.098 E  kernel[0:457e] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/test_iosurface_simple.dSYM
+2026-02-21 04:58:12.099 E  kernel[0:457e] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v142_render_test.dSYM
+2026-02-21 04:58:12.100 E  kernel[0:45fa] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v143_status_check.dSYM
+2026-02-21 04:58:12.101 E  kernel[0:45fa] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v144_iosurface_present_test.dSYM
+2026-02-21 04:58:12.102 E  kernel[0:45fa] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v145_shared_memory_test.dSYM
+2026-02-21 04:58:12.114 E  kernel[0:4600] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v144_iosurface_present_test.dSYM
+2026-02-21 04:59:55.239 E  kernel[0:4602] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE.kext
+2026-02-21 05:00:07.368 E  kernel[0:4afd] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:15.565 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext was modified by event 133120
+2026-02-21 05:00:15.762 E  kernelmanager_helper[295:4c38] failed to create bundle from path, unable to include: /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:20.508 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext was modified by event 165120
+2026-02-21 05:00:20.590 Df kernelmanager_helper[295:34d9] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:20.590 Df kernelmanager_helper[295:34d9] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:20.590 E  kernelmanager_helper[295:34d9] failed to realize extension <no identifier> from stashed instructions: Invalid argument: Could not create extension from bundle at file:///Library/Extensions/FakeIrisXE.kext/.
+2026-02-21 05:00:20.594 Df kernelmanager_helper[295:34d9] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:21.008 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext was modified by event 165120
+2026-02-21 05:00:21.072 Df kernelmanager_helper[295:4c38] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:21.072 Df kernelmanager_helper[295:4c38] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:21.072 E  kernelmanager_helper[295:4c38] failed to realize extension <no identifier> from stashed instructions: Invalid argument: Could not create extension from bundle at file:///Library/Extensions/FakeIrisXE.kext/.
+2026-02-21 05:00:21.083 Df kernelmanager_helper[295:4c38] unable to create extension from '/Library/Extensions/FakeIrisXE.kext', unrecognised package type '<not a string>'
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature was modified by event 188672
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/MacOS was modified by event 188672
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_69.0.3.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_69.0.3.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_62.0.0.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_62.0.0.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_06.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_06.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_04.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_04.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_08.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_08.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.3.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.3.bin was modified by event 4317440
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 4259840
+2026-02-21 05:00:22.671 Df kernelmanagerd[126:34c1] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 4317440
+2026-02-21 05:00:22.698 Df kernelmanager_helper[295:34d9] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:22.700 E  kernelmanager_helper[295:34d9] Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be <…>
+2026-02-21 05:00:22.701 E  kernelmanager_helper[295:34d9] failed to realize extension com.anomy.driver.FakeIrisXEFramebuffer from stashed instructions: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Exte<…>
+2026-02-21 05:00:22.782 Df kernelmanager_helper[295:34d9] [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: []
+bundledExts: []
+repositoryExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+appleInternalCandidateExts: [Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext]
+optionalDependencyTable: [:]
+2026-02-21 05:00:22.797 Df kernelmanager_helper[295:34d9] [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+2026-02-21 05:00:22.820 Df kernelmanager_helper[295:34d9] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:22.821 E  kernelmanager_helper[295:34d9] Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be <…>
+2026-02-21 05:00:22.822 E  kernelmanager_helper[295:34d9] [com.apple.kernelmanagerd.logging:LoadRequestResolution] Unable to consider Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_69.0.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_62.0.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_06.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_04.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_08.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_49.0.1.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.12.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/apple_guc.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.5.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist
+2026-02-21 05:00:22.835 E  kernel[0:4ca1] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(522) deny(1) file-read-xattr /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:22.953 E  kernelmanagerd[126:34c1] library rebuild request failed: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Fil<…>
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_49.0.1.bin was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_49.0.1.bin was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.12.bin was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.12.bin was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/apple_guc.bin was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/apple_guc.bin was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.5.0.bin was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.5.0.bin was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources was modified by event 188672
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 4259840
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 4317440
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents was modified by event 188672
+2026-02-21 05:00:22.955 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext was modified by event 189696
+2026-02-21 05:00:22.996 Df kernelmanager_helper[295:4c38] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:22.998 E  kernelmanager_helper[295:4c38] Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be <…>
+2026-02-21 05:00:22.998 E  kernelmanager_helper[295:4c38] failed to realize extension com.anomy.driver.FakeIrisXEFramebuffer from stashed instructions: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Exte<…>
+2026-02-21 05:00:23.057 Df kernelmanager_helper[295:4c38] [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: []
+bundledExts: []
+repositoryExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+appleInternalCandidateExts: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext]
+optionalDependencyTable: [:]
+2026-02-21 05:00:23.072 Df kernelmanager_helper[295:4c38] [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:23.167 Df kernelmanager_helper[295:4c38] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:23.169 E  kernelmanager_helper[295:4c38] Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be <…>
+2026-02-21 05:00:23.169 E  kernelmanager_helper[295:4c38] [com.apple.kernelmanagerd.logging:LoadRequestResolution] Unable to consider Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_69.0.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_62.0.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_06.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_04.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_08.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_49.0.1.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.12.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/apple_guc.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.5.0.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist
+2026-02-21 05:00:23.228 E  kernelmanagerd[126:4ca4] library rebuild request failed: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Fil<…>
+2026-02-21 05:00:41.633 Df sudo[1156:4e01] becoolio : TTY=ttys000 ; PWD=/Users/becoolio ; USER=root ; COMMAND=/usr/sbin/chown -R root:wheel /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:41.654 Df sudo[1158:4e30] becoolio : TTY=ttys000 ; PWD=/Users/becoolio ; USER=root ; COMMAND=/bin/chmod -R 755 /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature was modified by event 188672
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/MacOS was modified by event 188672
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources was modified by event 188672
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents was modified by event 188672
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext was modified by event 189696
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_35.2.0.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_69.0.3.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_62.0.0.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_06.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_04.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_08.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.3.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_49.0.1.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.0.12.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/apple_guc.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.5.0.bin was modified by event 4317440
+2026-02-21 05:00:42.287 Df kernelmanagerd[126:4ca4] /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 4317440
+2026-02-21 05:00:42.315 Df kernelmanager_helper[295:4e49] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.386 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.386 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking unstaged bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.388 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: []
+bundledExts: []
+repositoryExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+appleInternalCandidateExts: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext]
+optionalDependencyTable: [:]
+2026-02-21 05:00:42.402 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+2026-02-21 05:00:42.455 Df kernelmanager_helper[295:4e49] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.500 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] requesting latest approval status and kext history from system policy for: 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext 
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.546 Df syspolicyd[255:4c39] [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:00:42.550 Df syspolicyd[255:4c39] [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:00:42.554 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] kexts for dependency resolution: 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext 
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:00:42.560 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] new auxiliary kext collection candidates: 
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext (new)
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext (new)
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext (new)
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext (new)
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext (new)
+2026-02-21 05:00:42.561 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Resolved request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-21 05:00:42.561 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:CollectionBuild] trying to build:
+	bundlePaths: 
+		/Library/Apple/System/Library/Extensions/AppleMobileDevice.kext
+		/Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+		/Library/Extensions/EnergyDriver.kext
+		/Library/Extensions/FakeIrisXE.kext
+		/Library/Extensions/HighPointIOP.kext
+		/Library/Extensions/HighPointRR.kext
+2026-02-21 05:00:44.447 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] gathering approvals for: 
+	/Library/Extensions/HighPointIOP.kext
+	/Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+	/Library/Extensions/FakeIrisXE.kext
+	/Library/Extensions/HighPointRR.kext
+	/Library/Extensions/EnergyDriver.kext
+2026-02-21 05:00:44.492 Df syspolicyd[255:4e4b] [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:00:44.494 Df syspolicyd[255:4e4b] [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:00:44.502 Df syspolicyd[255:4e4b] [com.apple.syspolicy.kext:default] Triggered kext upgrade: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:00:44.505 Df kernelmanager_helper[295:4e49] [com.apple.kernelmanagerd.logging:LoadRequestResolution] Serviced request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-21 05:00:44.505 E  kernelmanagerd[126:4ca4] library rebuild request failed: Extension with identifiers com.highpoint-tech.kext.HighPointRR,com.apple.nke.rvi,com.intel.driver.EnergyDriver,com.anomy.driver.FakeIrisXEFramebuffer,com.highpoint-tech.kext.HighPointIOP not approved to load. Please approve using System Preferences.
+2026-02-21 05:02:04.875 Df log[1203:5381] [com.apple.log:] log run noninteractively, parent: 1187 (bash), args: 'log' 'show' '--last' 'boot' '--style' 'compact' '--predicate' 'eventMessage CONTAINS[c] "FakeIrisXE"'

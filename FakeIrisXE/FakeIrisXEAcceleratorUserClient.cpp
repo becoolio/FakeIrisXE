@@ -4,15 +4,11 @@
 #include "FakeIrisXEAccelerator.hpp"
 #include "FakeIrisXEExeclist.hpp"
 #include "FakeIrisXEFramebuffer.hpp"
-#include "FakeIrisXEGEM.hpp"
 #include "FakeIrisXEIosurfaceCompat.hpp"
 #include "FakeIrisXETrace.hpp"
 
 #include <IOKit/IOLib.h>
 #include <IOKit/IOMemoryDescriptor.h>
-#include <libkern/c++/OSData.h>
-#include <libkern/c++/OSString.h>
-#include <libkern/c++/OSSymbol.h>
 #include <string.h>
 
 volatile int32_t gFakeIrisXEGlobalPhase = 0;
@@ -41,93 +37,6 @@ static IOBufferMemoryDescriptor* AllocateSharedRingPage() {
     return md;
 }
 
-#define super OSObject
-class GEMHandleTable : public OSObject {
-    OSDeclareDefaultStructors(GEMHandleTable);
-
-public:
-    OSDictionary* dict;
-    IOLock* lock;
-    uint32_t nextHandle;
-
-    static GEMHandleTable* create() {
-        GEMHandleTable* t = OSTypeAlloc(GEMHandleTable);
-        if (!t || !t->init()) {
-            if (t) t->release();
-            return nullptr;
-        }
-        t->dict = OSDictionary::withCapacity(256);
-        t->lock = IOLockAlloc();
-        t->nextHandle = 1;
-        return t;
-    }
-
-    bool init() override {
-        if (!OSObject::init()) return false;
-        dict = nullptr;
-        lock = nullptr;
-        nextHandle = 1;
-        return true;
-    }
-
-    void free() override {
-        if (dict) dict->release();
-        if (lock) IOLockFree(lock);
-        super::free();
-    }
-
-    uint32_t add(FakeIrisXEGEM* gem) {
-        IOLockLock(lock);
-        char keybuf[32];
-        snprintf(keybuf, sizeof(keybuf), "%u", nextHandle);
-
-        const OSSymbol* key = OSSymbol::withCString(keybuf);
-        dict->setObject(key, gem);
-        key->release();
-
-        gem->retain();
-        const uint32_t handle = nextHandle++;
-        IOLockUnlock(lock);
-        return handle;
-    }
-
-    FakeIrisXEGEM* lookup(uint32_t h) {
-        IOLockLock(lock);
-        char keybuf[32];
-        snprintf(keybuf, sizeof(keybuf), "%u", h);
-
-        const OSSymbol* key = OSSymbol::withCString(keybuf);
-        OSObject* o = dict->getObject(key);
-        key->release();
-
-        FakeIrisXEGEM* gem = OSDynamicCast(FakeIrisXEGEM, o);
-        if (gem) gem->retain();
-
-        IOLockUnlock(lock);
-        return gem;
-    }
-
-    bool remove(uint32_t h) {
-        IOLockLock(lock);
-        char keybuf[32];
-        snprintf(keybuf, sizeof(keybuf), "%u", h);
-
-        const OSSymbol* key = OSSymbol::withCString(keybuf);
-        bool exists = dict->getObject(key) != nullptr;
-
-        if (exists) {
-            FakeIrisXEGEM* gem = OSDynamicCast(FakeIrisXEGEM, dict->getObject(key));
-            if (gem) gem->release();
-            dict->removeObject(key);
-        }
-
-        key->release();
-        IOLockUnlock(lock);
-        return exists;
-    }
-};
-OSDefineMetaClassAndStructors(GEMHandleTable, OSObject)
-
 static bool IsRangeReady(const FakeIrisXEAccelerator* owner) {
     return owner && owner->fExeclistFromFB && owner->fRcsRingFromFB;
 }
@@ -139,7 +48,7 @@ OSDefineMetaClassAndStructors(FakeIrisXEAcceleratorUserClient, IOUserClient)
 const IOExternalMethodDispatch FakeIrisXEAcceleratorUserClient::sDispatchTable[8] = {
     {&FakeIrisXEAcceleratorUserClient::sGetCaps, 0, 0, 0, sizeof(FXE_VersionInfo)},
     {&FakeIrisXEAcceleratorUserClient::sCreateContext, 0, sizeof(FXE_CreateCtx_In), 0, sizeof(FXE_CreateCtx_Out)},
-    {&FakeIrisXEAcceleratorUserClient::sDestroyContext, 0, sizeof(FXE_AttachShared_In), 0, sizeof(FXE_AttachShared_Out)},
+    {&FakeIrisXEAcceleratorUserClient::sAttachShared, 0, sizeof(FXE_AttachShared_In), 0, sizeof(FXE_AttachShared_Out)},
     {&FakeIrisXEAcceleratorUserClient::sBindSurface, 0, sizeof(FXE_BindSurface_In), 0, sizeof(FXE_BindSurface_Out)},
     {&FakeIrisXEAcceleratorUserClient::sPresent, 0, sizeof(FXE_Present_In), 0, sizeof(FXE_Present_Out)},
     {nullptr, 0, 0, 0, 0},
@@ -164,15 +73,12 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider) {
         return false;
     }
 
-    fHandleTable = GEMHandleTable::create();
     mCompletionCounter = 0;
     mNextCtxId = 1;
     mIOSurfaceEnabled = InitIOSurfaceSymbols();
 
-    if (!fHandleTable || !fSurfaceStore.init()) {
-        FXE_LOG("[UC] allocation failure handleTable=%p storeReady=%u",
-                fHandleTable,
-                fSurfaceStore.isReady() ? 1u : 0u);
+    if (!fSurfaceStore.init()) {
+        FXE_LOG("[UC] allocation failure storeReady=%u", fSurfaceStore.isReady() ? 1u : 0u);
         return false;
     }
 
@@ -201,11 +107,6 @@ void FakeIrisXEAcceleratorUserClient::stop(IOService* provider) {
     fSurfaceStore.clearAll();
     fSurfaceStore.free();
 
-    if (fHandleTable) {
-        fHandleTable->release();
-        fHandleTable = nullptr;
-    }
-
     if (fOwner) {
         fOwner->setProperty("FakeIrisXEUCReady", kOSBooleanFalse);
     }
@@ -219,73 +120,6 @@ IOReturn FakeIrisXEAcceleratorUserClient::clientClose() {
     FXE_PHASE("UC", 910, "clientClose");
     fSurfaceStore.clearAll();
     terminate();
-    return kIOReturnSuccess;
-}
-
-uint32_t FakeIrisXEAcceleratorUserClient::createGemAndRegister(uint64_t size, uint32_t flags) {
-    FakeIrisXEGEM* gem = FakeIrisXEGEM::withSize((size_t)size, flags);
-    if (!gem) return 0;
-
-    uint32_t handle = fHandleTable->add(gem);
-    gem->release();
-    return handle;
-}
-
-bool FakeIrisXEAcceleratorUserClient::destroyGemHandle(uint32_t h) {
-    return fHandleTable->remove(h);
-}
-
-IOReturn FakeIrisXEAcceleratorUserClient::pinGemHandle(uint32_t handle, uint64_t* outGpuAddr) {
-    FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
-    if (!gem) return kIOReturnNotFound;
-
-    gem->pin();
-
-    uint64_t gpuVA = fOwner->fFramebuffer->ggttMap(gem);
-    gem->setGpuAddress(gpuVA);
-    *outGpuAddr = gpuVA;
-
-    gem->release();
-    return kIOReturnSuccess;
-}
-
-bool FakeIrisXEAcceleratorUserClient::unpinGemHandle(uint32_t handle) {
-    FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
-    if (!gem) return false;
-
-    uint64_t gpuVA = gem->gpuAddress();
-    uint32_t pages = gem->pageCount();
-
-    fOwner->fFramebuffer->ggttUnmap(gpuVA, pages);
-    gem->unpin();
-
-    gem->release();
-    return true;
-}
-
-IOReturn FakeIrisXEAcceleratorUserClient::getPhysPagesForHandle(uint32_t h, void* outBuf, size_t* outSize) {
-    FakeIrisXEGEM* gem = fHandleTable->lookup(h);
-    if (!gem) return kIOReturnNotFound;
-
-    uint32_t pages = gem->pageCount();
-    size_t need = pages * sizeof(uint64_t);
-
-    if (!outBuf || *outSize < need) {
-        *outSize = need;
-        gem->release();
-        return kIOReturnNoSpace;
-    }
-
-    uint64_t offset = 0;
-    uint64_t* arr = (uint64_t*)outBuf;
-    for (uint32_t i = 0; i < pages; i++) {
-        uint64_t len = 0;
-        arr[i] = gem->getPhysicalSegment(offset, &len);
-        offset += len ? len : 4096;
-    }
-
-    *outSize = need;
-    gem->release();
     return kIOReturnSuccess;
 }
 
@@ -337,22 +171,7 @@ IOReturn FakeIrisXEAcceleratorUserClient::clientMemoryForType(UInt32 type, UInt3
         return kIOReturnSuccess;
     }
 
-    uint32_t handle = fLastRequestedGemHandle;
-    FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
-    if (!gem) return kIOReturnNotFound;
-
-    IOBufferMemoryDescriptor* desc = gem->memoryDescriptor();
-    if (!desc) {
-        gem->release();
-        return kIOReturnNoMemory;
-    }
-
-    desc->retain();
-    *mem = desc;
-    if (flags) *flags = 0;
-
-    gem->release();
-    return kIOReturnSuccess;
+    return kIOReturnUnsupported;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::sGetCaps(OSObject* target, void*, IOExternalMethodArguments* args) {
@@ -365,9 +184,9 @@ IOReturn FakeIrisXEAcceleratorUserClient::sCreateContext(OSObject* target, void*
     return uc ? uc->methodCreateContext(args) : kIOReturnBadArgument;
 }
 
-IOReturn FakeIrisXEAcceleratorUserClient::sDestroyContext(OSObject* target, void*, IOExternalMethodArguments* args) {
+IOReturn FakeIrisXEAcceleratorUserClient::sAttachShared(OSObject* target, void*, IOExternalMethodArguments* args) {
     FakeIrisXEAcceleratorUserClient* uc = OSDynamicCast(FakeIrisXEAcceleratorUserClient, target);
-    return uc ? uc->methodDestroyContext(args) : kIOReturnBadArgument;
+    return uc ? uc->methodAttachShared(args) : kIOReturnBadArgument;
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::sBindSurface(OSObject* target, void*, IOExternalMethodArguments* args) {
@@ -424,7 +243,7 @@ IOReturn FakeIrisXEAcceleratorUserClient::methodCreateContext(IOExternalMethodAr
     return out.rc == FXE_OK ? kIOReturnSuccess : kIOReturnNoMemory;
 }
 
-IOReturn FakeIrisXEAcceleratorUserClient::methodDestroyContext(IOExternalMethodArguments* args) {
+IOReturn FakeIrisXEAcceleratorUserClient::methodAttachShared(IOExternalMethodArguments* args) {
     if (!args || !args->structureInput || !args->structureOutput ||
         args->structureInputSize != sizeof(FXE_AttachShared_In) ||
         args->structureOutputSize != sizeof(FXE_AttachShared_Out)) {

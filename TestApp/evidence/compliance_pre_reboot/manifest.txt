@@ -1,0 +1,6 @@
+bundle_dir=evidence/compliance_pre_reboot
+environment=evidence/compliance_pre_reboot/environment.txt
+test_stdout=evidence/compliance_pre_reboot/compliance_test_stdout.jsonl
+test_stderr=evidence/compliance_pre_reboot/compliance_test_stderr.txt
+boot_log=evidence/compliance_pre_reboot/boot_fakeirisxe.log
+phase_and_guc=evidence/compliance_pre_reboot/phase_and_guc_proof.log

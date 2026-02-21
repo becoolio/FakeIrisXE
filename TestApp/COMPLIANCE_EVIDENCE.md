@@ -4,8 +4,8 @@ This captures a reproducible evidence bundle for the compliance stage without un
 
 ## Prerequisites
 
-- Build kext: `xcodebuild -project FakeIrisXE.xcodeproj -scheme FakeIrisXE -configuration Debug build`
-- Build compliance test: `clang -framework IOKit -framework IOSurface -framework CoreFoundation -o TestApp/build/fxe_compliance_test TestApp/fxe_compliance_test.c`
+- Build kext: `xcodebuild -project FakeIrisXE.xcodeproj -scheme FakeIrisXE -configuration Debug build CODE_SIGNING_ALLOWED=NO`
+- Build tests: `bash TestApp/build.sh`
 
 ## Capture
 

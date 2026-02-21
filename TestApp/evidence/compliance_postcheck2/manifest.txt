@@ -1,0 +1,7 @@
+bundle_dir=evidence/compliance_postcheck2
+environment=evidence/compliance_postcheck2/environment.txt
+test_stdout=evidence/compliance_postcheck2/compliance_test_stdout.jsonl
+test_stderr=evidence/compliance_postcheck2/compliance_test_stderr.txt
+boot_log=evidence/compliance_postcheck2/boot_fakeirisxe.log
+phase_and_guc=evidence/compliance_postcheck2/phase_and_guc_proof.log
+binary_provenance=evidence/compliance_postcheck2/binary_provenance.txt

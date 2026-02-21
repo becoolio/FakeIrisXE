@@ -2,10 +2,7 @@
 #define FAKE_IRIS_XE_ACCEL_SHARED_H
 
 #include <IOKit/IOService.h>
-
 #include <IOKit/IOTypes.h>     // basic IOKit typedefs
-
-#include <IOKit/IOService.h>
 
 #include "FXE_ABI.hpp"
 
@@ -24,22 +21,6 @@ enum {
     kFakeIrisXE_ABI_Minor = FXE_ABI_MINOR,
     kFakeIrisXE_KextVersion_u32 = FXE_KEXT_VERSION_PACKED
 };
-
-
-
-//
-// ===== ACCEL Selec
-enum {
-    kAccelSel_Ping = 0,
-    kAccelSel_GetCaps = 1,
-    kAccelSel_CreateContext = 2,
-    kAccelSel_Submit = 3,
-    kAccelSel_Flush = 4,
-    kAccelSel_DestroyContext = 5,
-    kAccelSel_BindSurface = 6,
-    kAccelSel_InjectTest = 10,      // debug
-};
-
 
 struct XECtx {
     uint32_t ctxId;
@@ -101,16 +82,6 @@ struct XEBindSurfaceIn {
   uint32_t pixelFormat;
   bool valid;
 };
-
-
-struct XEPresentPayload {
-    uint32_t ioSurfaceID;   // IOSurface ID created in userspace
-    uint32_t x;             // dest x in fb
-    uint32_t y;             // dest y in fb
-    uint32_t w;             // width
-    uint32_t h;             // height
-};
-
 
 
 struct XEBindSurfaceOut {

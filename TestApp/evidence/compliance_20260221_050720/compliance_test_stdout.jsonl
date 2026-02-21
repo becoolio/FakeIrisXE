@@ -1,0 +1,5 @@
+{"step":"Connect","ok":true}
+{"step":"GetVersion","kr":-536870175,"abiMajor":0,"abiMinor":0,"kextVersion":0}
+{"step":"BindSurface","kr":-536870206,"rc":0,"surfaceId":170,"handle":"0x0","w":0,"h":0,"fmt":0,"stride":0}
+{"step":"Present","kr":-536870206,"rc":0,"completion":0}
+{"step":"FenceTest","kr":-536870212,"rc":0,"pass":0,"reason":0}

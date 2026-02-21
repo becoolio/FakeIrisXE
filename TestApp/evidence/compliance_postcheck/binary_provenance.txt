@@ -1,0 +1,13 @@
+path=/Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+exists=1
+size=1439456
+sha256=0790998dcf71e601cf0ab2120ca18cb7cacfdd9a19dc027db4f1cc1716fd88f7
+mtime=2026-02-21 04:56:33
+legacy_submit_log=1
+new_fence_not_wired_log=0
+new_iosurface_disabled_log=0
+---
+path=$ROOT_DIR/build/Debug/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+exists=0
+---
+hash_match=0

@@ -72,7 +72,7 @@ int main(void) {
     FXE_VersionInfo ver = {0};
     size_t verOutSize = sizeof(ver);
     kern_return_t kr = IOConnectCallStructMethod(conn,
-                                                 kFakeIris_Method_GetCaps,
+                                                 FXE_SEL_GET_VERSION,
                                                  NULL,
                                                  0,
                                                  &ver,
@@ -95,7 +95,7 @@ int main(void) {
         FXE_BindSurface_Out out = {0};
         size_t outSize = sizeof(out);
         kr = IOConnectCallStructMethod(conn,
-                                       kFakeIris_Method_BindSurfaceUserMapped,
+                                       FXE_SEL_BIND_SURFACE,
                                        &in,
                                        sizeof(in),
                                        &out,
@@ -123,7 +123,7 @@ int main(void) {
     FXE_Present_Out pOut = {0};
     size_t pOutSize = sizeof(pOut);
     kr = IOConnectCallStructMethod(conn,
-                                   kFakeIris_Method_PresentContext,
+                                   FXE_SEL_PRESENT,
                                    &pIn,
                                    sizeof(pIn),
                                    &pOut,
@@ -140,7 +140,7 @@ int main(void) {
     FXE_FenceTest_Out fOut = {0};
     size_t fOutSize = sizeof(fOut);
     kr = IOConnectCallStructMethod(conn,
-                                   kFakeIris_Method_SubmitExeclistFenceTest,
+                                   FXE_SEL_FENCE_TEST,
                                    &fIn,
                                    sizeof(fIn),
                                    &fOut,

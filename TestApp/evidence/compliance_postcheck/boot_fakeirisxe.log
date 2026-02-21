@@ -1,0 +1,149 @@
+Timestamp               Ty Process[PID:TID]
+2026-02-21 05:04:35.594 Df syspolicyd[255:5ea] [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:04:35.598 Df syspolicyd[255:5ea] [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: f3f7bf918e137811c4a2d6cd394a3b14c58330c9
+2026-02-21 05:04:35.602 Df kernelmanagerd[126:312] Validate approval for /Library/Extensions/FakeIrisXE.kext in auxKC: approved
+2026-02-21 05:04:35.602 Df kernelmanagerd[126:312] installation check: bundle for com.anomy.driver.FakeIrisXEFramebuffer is at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:04:35.842 Df kernelmanagerd[126:312] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:04:35.844 E  kernelmanagerd[126:312] error: tried to insert an invalid codeful kernel extension in the restricted lookup table: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.154 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) ║         FAKEIRISXE V134 - Tiger Lake GPU Driver          ║
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) ║         FakeIrisXEFramebuffer::probe()                   ║
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) \-'\^E [V83] FAILSAFE PASSED: -fakeirisxe detected
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer::probe(): Found matching GPU (8086:9A49)
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) ║  FAKEIRISXE V131 - start() - WindowServer Integration         ║
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: [V154] GuC bring-up DISABLED by default (add '-fakeirisxe-guc' to enable)
+2026-02-21 05:04:36.339 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: [V153] Runtime GPU submission DISABLED by default (add '-fakeirisxe-submit' to enable)
+2026-02-21 05:04:41.713 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] init
+2026-02-21 05:04:41.713 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] probe()
+2026-02-21 05:04:41.714 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] start() attaching to framebuffer
+2026-02-21 05:04:41.714 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] IOSurface symbol initialization - using safe mode (no IOSurface)
+2026-02-21 05:04:41.714 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] createAndArmTimer: created and armed 16 ms
+2026-02-21 05:04:41.714 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] start(): timer created successfully
+2026-02-21 05:04:41.714 Df kernel[0:69f] (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] started; waiting for user client attachShared()
+2026-02-21 05:04:41.948 Df kernel[0:773] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 05:04:41.948 Df kernel[0:765] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 05:04:41.948 Df kernel[0:76a] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 05:04:41.948 Df kernel[0:762] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 05:04:42.581 Df kernelmanager_helper[294:7ba] validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-21 05:04:42.751 Df kernelmanagerd[126:75c] Received kext load notification: com.anomy.driver.FakeIrisXEFramebuffer
+2026-02-21 05:04:46.954 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V151] IOSurface experimental mode DISABLED (safe profile)
+2026-02-21 05:04:50.850 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFB::flushDisplay(): schedule work
+2026-02-21 05:04:50.862 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFB::performFlushNow(): running
+2026-02-21 05:04:50.874 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFB::performFlushNow(): done
+2026-02-21 05:04:51.071 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V48] Initializing GGTT aperture...
+2026-02-21 05:04:51.081 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: GGTT mapped at <private>
+2026-02-21 05:04:51.101 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) RING CTL = 0x00000001
+2026-02-21 05:04:51.120 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) createRcsRing() size=262144
+2026-02-21 05:04:51.130 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) createRcsRing() — ring already exists @ <private>
+2026-02-21 05:04:51.140 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: createRcsRing Succes
+2026-02-21 05:04:51.150 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V45] Loading firmware (Intel PRM compliant)...
+2026-02-21 05:04:51.161 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V45] Programming MOCS...
+2026-02-21 05:04:51.171 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V45] programMOCS(): Programming MOCS for Tiger Lake
+2026-02-21 05:04:51.181 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V45] programMOCS(): Completed 62 MOCS entries
+2026-02-21 05:04:51.192 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [V154] GuC init skipped (service-first startup mode)
+2026-02-21 05:04:51.203 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: created own workloop
+2026-02-21 05:04:51.212 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: interrupt source created (not yet enabled)
+2026-02-21 05:04:51.222 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: commandGate added
+2026-02-21 05:04:51.231 Df kernel[0:671] (FakeIrisXE) FakeIrisXE: starting SAFE IRQ enable sequence
+2026-02-21 05:04:51.243 Df kernel[0:671] (FakeIrisXE) FakeIrisXE: IRQ snapshot before enabling:
+2026-02-21 05:04:51.252 Df kernel[0:671] (FakeIrisXE) === FakeIrisXE: IRQ & Ring registers snapshot ===
+2026-02-21 05:04:51.358 Df kernel[0:671] (FakeIrisXE) FakeIrisXE: IRQ enable completed (RCS0_IER=0x00000008)
+2026-02-21 05:04:51.366 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: Initializing EXECLIST engine...
+2026-02-21 05:04:51.375 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] Alloc LRC
+2026-02-21 05:04:51.382 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] Alloc LRC (enter pre-reset checks)
+2026-02-21 05:04:51.407 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] pre-reset FORCEWAKE_ACK=0x0000000f
+2026-02-21 05:04:51.416 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] resetting RCS ring (base/head/tail/ctl)
+2026-02-21 05:04:51.430 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] re-requesting forcewake (conservative)
+2026-02-21 05:04:51.441 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] forcewake ack poll -> 0x0000000f
+2026-02-21 05:04:51.463 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x100000 pages=1 (TGL PTEs)
+2026-02-21 05:04:51.472 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] LRC @ GGTT=0x100000
+2026-02-21 05:04:51.480 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] Alloc CSB
+2026-02-21 05:04:51.488 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x101000 pages=1 (TGL PTEs)
+2026-02-21 05:04:51.497 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: EXECLIST HW context OK
+2026-02-21 05:04:51.505 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) forcewakeRenderHold(): TigerLake RENDER-domain wake
+2026-02-21 05:04:51.515 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) Render forcewake OK (ACK=0x0000000F)
+2026-02-21 05:04:51.524 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) ensureEngineInterrupts(): setting IER=0x00011000
+2026-02-21 05:04:51.543 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] ELSP readback LO=0x00100000 HI=0x00000000 (expected LO=0x00100000 HI=0x00000000)
+2026-02-21 05:04:51.554 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] CSB readback LO=0x00000000 HI=0x00000000
+2026-02-21 05:04:51.564 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) [Exec] setupExeclistPorts SUCCESS (no kick) - FUZZ: leaving forcewake held for submit path
+2026-02-21 05:04:51.576 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: EXECLIST engine READY
+2026-02-21 05:04:51.585 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: [V151] Skipping diagnostics (add '-fakeirisxe-diag' to boot-args to enable)
+2026-02-21 05:04:51.597 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) createRcsRing() size=262144
+2026-02-21 05:04:51.606 Df kernel[0:671] (FakeIrisXE) (FakeIrisXE) createRcsRing() — ring already exists @ <private>
+2026-02-21 05:04:51.617 Df kernel[0:671] (FakeIrisXE) FakeIrisXEFramebuffer: RCS ring initialization complete. fRcsRing=<private>
+2026-02-21 05:04:51.690 Df kernel[0:671] (FakeIrisXE) [V151] Skipping heavy startup tests (add '-fakeirisxe-heavy' to enable)
+2026-02-21 05:04:53.458 Df kernel[0:671] (FakeIrisXE) FB scanning IOServicePlane children for FakeIrisXEAccelerator...
+2026-02-21 05:04:53.467 Df kernel[0:671] (FakeIrisXE) Found existing FakeIrisXEAccelerator child <private>
+2026-02-21 05:04:53.931 Df kernel[0:671] (FakeIrisXE) 🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V134)
+2026-02-21 05:04:54.001 Df displaypolicyd[144:316] [com.apple.GPUWrangler:default] gpu 0xf909 flags 0xb2000010 (IG,published,quiet,pubSched,pubArmed) vid.did=8086.9a49 b:d:f=0:2:0 
+gpu 0xf909        pci 0x1000002f3 IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2
+gpu 0xf909       agdc 0x000000000 
+gpu 0xf909       gpuc 0x000000000 
+gpu 0xf909 agdpclient 0x000000000 
+gpu 0xf909      accel 0x000000000 
+gpu 0xf909      fb0:0 0x100000506     /FakeIrisXEFramebuffer
+gpu 0xf909     fb1:-1 0x100000507     /IONDRVFramebuffer
+2026-02-21 05:04:54.339 Df WindowServer[163:344] [com.apple.GPUWrangler:default] (reg) gpu 0xf909 flags 0x10 (IG) vid.did=8086.9a49 b:d:f=0:2:0 
+gpu 0xf909        pci 0x1000002f3 IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2
+gpu 0xf909       agdc 0x000000000 
+gpu 0xf909       gpuc 0x000000000 
+gpu 0xf909 agdpclient 0x000000000 
+gpu 0xf909      accel 0x000000000 
+gpu 0xf909      fb0:0 0x100000506     /FakeIrisXEFramebuffer
+gpu 0xf909     fb1:-1 0x100000507     /IONDRVFramebuffer
+2026-02-21 05:04:54.339 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] newUserClient(type=0)
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) FakeIrisXEFB::flushDisplay(): schedule work
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) FakeIrisXEFB::performFlushNow(): running
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) FakeIrisXEFB::performFlushNow(): done
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] getAttributeForConnection(conn=0, attr=0x6c646463)
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] getAttributeForConnection(conn=0, attr=0x63656e61)
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] getAttributeForConnection(conn=0, attr=0x70636e74)
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] getAttributeForConnection(conn=0, attr=0x656e6162)
+2026-02-21 05:04:56.950 Df kernel[0:344] (FakeIrisXE) [FakeIrisXEFramebuffer] returned REAL IOFramebufferUserClient OK
+2026-02-21 05:05:04.686 Df kernel[0:b60] Boot args: -v keepsyms=1 debug=0x100 IGLogLevel=8 -liludbg itlwm_cc=US -lilubetaall -fakeirisxe
+2026-02-21 05:05:07.090 E  kernel[0:d8b] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE.kext
+2026-02-21 05:05:19.317 Df SafeEjectGPUService[648:1566] [com.apple.GPUWrangler:default] (reg) gpu 0xf909 flags 0x10 (IG) vid.did=8086.9a49 b:d:f=0:2:0 
+gpu 0xf909        pci 0x1000002f3 IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2
+gpu 0xf909       agdc 0x000000000 
+gpu 0xf909       gpuc 0x000000000 
+gpu 0xf909 agdpclient 0x000000000 
+gpu 0xf909      accel 0x000000000 
+gpu 0xf909      fb0:0 0x100000506     /FakeIrisXEFramebuffer
+gpu 0xf909     fb1:-1 0x100000507     /.Display_boot
+2026-02-21 05:06:36.911 E  kernel[0:1efa] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE.xcodeproj
+2026-02-21 05:06:36.952 E  kernel[0:1efa] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE.kext
+2026-02-21 05:06:36.984 E  kernel[0:1ef9] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/Debug/FakeIrisXE.kext
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/FakeIrisXETest.dSYM
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/test_iosurface_simple.dSYM
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v142_render_test.dSYM
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v143_status_check.dSYM
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v144_iosurface_present_test.dSYM
+2026-02-21 05:06:44.295 E  kernel[0:1fb7] (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/TestApp/build/v145_shared_memory_test.dSYM
+2026-02-21 05:07:23.744 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=0
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=3
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=4
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=7
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXE) forcewakeRenderHold(): TigerLake RENDER-domain wake
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXE) Render forcewake OK (ACK=0x0000000F)
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x102000 pages=1 (TGL PTEs)
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x103000 pages=16 (TGL PTEs)
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x113000 pages=1 (TGL PTEs)
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x114000 pages=1 (TGL PTEs)
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXE) forcewakeRenderHold(): TigerLake RENDER-domain wake
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXE) Render forcewake OK (ACK=0x0000000F)
+2026-02-21 05:07:26.236 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=0
+2026-02-21 05:12:20.910 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=0
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=3
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=4
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=7
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXE) forcewakeRenderHold(): TigerLake RENDER-domain wake
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXE) Render forcewake OK (ACK=0x0000000F)
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x115000 pages=1 (TGL PTEs)
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x116000 pages=16 (TGL PTEs)
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x126000 pages=1 (TGL PTEs)
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x127000 pages=1 (TGL PTEs)
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXE) forcewakeRenderHold(): TigerLake RENDER-domain wake
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXE) Render forcewake OK (ACK=0x0000000F)
+2026-02-21 05:12:23.092 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=0
+2026-02-21 05:12:23.099 Df log[934:2f06] [com.apple.log:] log run noninteractively, parent: 917 (bash), args: 'log' 'show' '--last' 'boot' '--style' 'compact' '--predicate' 'eventMessage CONTAINS[c] "FakeIrisXE"'

@@ -1,0 +1,19 @@
+path=/Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+exists=1
+size=1439456
+sha256=0790998dcf71e601cf0ab2120ca18cb7cacfdd9a19dc027db4f1cc1716fd88f7
+mtime=2026-02-21 04:56:33
+legacy_submit_log=1
+new_fence_not_wired_log=0
+new_iosurface_disabled_log=0
+---
+path=/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/Debug/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+exists=1
+size=1422296
+sha256=a2a13d25043b4f6601f109b91177a7b683a8e86458ce4219a3bd903380a7f9db
+mtime=2026-02-21 04:56:33
+legacy_submit_log=0
+new_fence_not_wired_log=1
+new_iosurface_disabled_log=1
+---
+hash_match=0

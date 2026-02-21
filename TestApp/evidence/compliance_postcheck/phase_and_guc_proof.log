@@ -1,0 +1,12 @@
+2026-02-21 05:07:23.744 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=0
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=3
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=4
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=7
+2026-02-21 05:07:23.749 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called
+2026-02-21 05:07:26.236 Df kernel[0:21ba] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=0
+2026-02-21 05:12:20.910 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=0
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=3
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=4
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] externalMethod selector=7
+2026-02-21 05:12:20.915 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called
+2026-02-21 05:12:23.092 Df kernel[0:2eed] (FakeIrisXE) (FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=0
