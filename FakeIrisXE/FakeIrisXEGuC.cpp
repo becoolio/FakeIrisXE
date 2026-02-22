@@ -8,6 +8,7 @@
 // FakeIrisXEGuC.cpp
 #include "FakeIrisXEGuC.hpp"
 #include "i915_reg.h"
+#include <libkern/c++/OSBoolean.h>
 
 extern "C" void OSSynchronizeIO(void);
 
@@ -15,6 +16,33 @@ extern "C" void OSSynchronizeIO(void);
 // V135: Added PPGTT, GART, additional power management, GT workarounds
 #ifndef GEN11_GUC_RESET
 #define GEN11_GUC_RESET              0x1C0C0
+#endif
+
+// V146: Add GUC_CTL and GUC_MISC_CONTROL registers
+#ifndef GUC_CTL
+#define GUC_CTL                     0xC05C  // GuC Control register
+#endif
+
+#ifndef GUC_MISC_CONTROL
+#define GUC_MISC_CONTROL            0xC068  // GuC Misc Control (V143 added)
+#endif
+
+// V146: Try GUC_ACTION_INIT
+#ifndef GUC_ACTION_INIT
+#define GUC_ACTION_INIT             0x3000  // Init action
+#endif
+
+// V147: Additional pre-initialization registers
+#ifndef GUC_H2G_MSG
+#define GUC_H2G_MSG                0xC300  // Host-to-GuC message
+#endif
+
+#ifndef GUC_STATUS_SecureBoot
+#define GUC_STATUS_SecureBoot      0x80000000  // Secure boot bit
+#endif
+
+#ifndef GUC_STATUS_WOPCMERR
+#define GUC_STATUS_WOPCMERR        0x40000000  // WOPCM error
 #endif
 
 // V135: Additional Gen12/Tiger Lake registers from Linux i915
@@ -111,8 +139,15 @@ extern "C" void OSSynchronizeIO(void);
 #endif
 
 // V134: Additional GT and power management registers
+// V141: Fix - Tiger Lake uses 0xa188 for GT_PM_CONFIG (from Apple driver)
 #ifndef GT_PM_CONFIG
-#define GT_PM_CONFIG                0xA290
+#define GT_PM_CONFIG                0xA188  // Tiger Lake offset (was 0xA290)
+#endif
+#ifndef TGL_GT_PM_CONFIG
+#define TGL_GT_PM_CONFIG            0xA188  // Explicit Tiger Lake register
+#endif
+#ifndef GUC_DOORBELL_CTRL
+#define GUC_DOORBELL_CTRL           0xC510
 #endif
 #ifndef PWR_WELL_CTL2
 #define PWR_WELL_CTL2              0x45404
@@ -134,6 +169,11 @@ extern "C" void OSSynchronizeIO(void);
 #endif
 #ifndef GUC_SHIM_CONTROL2
 #define GUC_SHIM_CONTROL2         0xC068
+
+// V143: GUC_MISC_CONTROL - Apple driver writes 3 to this before DMA
+#ifndef GUC_MISC_CONTROL
+#define GUC_MISC_CONTROL            0xC068  // Same as SHIM_CONTROL2?
+#endif
 #endif
 // GuC status at 0xC000
 #ifndef GUC_STATUS
@@ -205,7 +245,10 @@ extern "C" void OSSynchronizeIO(void);
 
 // Address space encoding (in HIGH registers)
 #ifndef DMA_ADDRESS_SPACE_WOPCM_V137
-#define DMA_ADDRESS_SPACE_WOPCM_V137 (7u << 16)  // 0x70000
+// V142: Fixed - Linux uses 0x10000, not 0x70000!
+// The address space bits tell DMA where to write:
+// Bit 16 = WOPCM space (0x10000)
+#define DMA_ADDRESS_SPACE_WOPCM_V137 (0x00010000U)  // Was 0x70000 - WRONG!
 #endif
 #ifndef DMA_ADDRESS_SPACE_GTT_V137
 #define DMA_ADDRESS_SPACE_GTT_V137   (8u << 16)  // 0x80000
@@ -394,6 +437,12 @@ extern "C" void OSSynchronizeIO(void);
 #define GUC_ENABLE_DEBUG_REG                (1 << 6)
 #endif
 
+// V145: FIX GT_PM_CONFIG to 0xA188 for Tiger Lake
+// This is the correct value that enables doorbell and other GT features
+#ifndef TGL_GT_PM_CONFIG_VALUE
+#define TGL_GT_PM_CONFIG_VALUE     0x0000A188  // Tiger Lake specific value (not just doorbell bit)
+#endif
+
 // GT doorbell
 #ifndef GT_DOORBELL_ENABLE
 #define GT_DOORBELL_ENABLE    0x1
@@ -513,6 +562,185 @@ bool FakeIrisXEGuC::isImpossibleStatusDecode(uint32_t rawStatus,
     return false;
 }
 
+bool FakeIrisXEGuC::ownerBooleanPropertyEnabled(const char* key) const
+{
+    if (!fOwner || !key) {
+        return false;
+    }
+
+    OSBoolean* value = OSDynamicCast(OSBoolean, fOwner->getProperty(key));
+    return value && value->isTrue();
+}
+
+void FakeIrisXEGuC::logDoorbellSnapshot(const char* label) const
+{
+    uint32_t fwReq = fOwner->safeMMIORead(FORCEWAKE_REQ);
+    uint32_t fwAck = fOwner->safeMMIORead(FORCEWAKE_ACK);
+    uint32_t gtPm = fOwner->safeMMIORead(GT_PM_CONFIG);
+    uint32_t doorbellCtrl = fOwner->safeMMIORead(GUC_DOORBELL_CTRL);
+    uint32_t shim = fOwner->safeMMIORead(GUC_SHIM_CONTROL_V137);
+    uint32_t shim2 = fOwner->safeMMIORead(GUC_SHIM_CONTROL2);
+    uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
+    uint32_t wopcmSize = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t wopcmOffset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+
+    IOLog("(FakeIrisXE) [GuC][Doorbell] %s req=0x%08X ack=0x%08X gt_pm=0x%08X doorbell_ctrl=0x%08X shim=0x%08X shim2=0x%08X status=0x%08X wopcm_size=0x%08X wopcm_off=0x%08X\n",
+          label ? label : "snapshot",
+          fwReq,
+          fwAck,
+          gtPm,
+          doorbellCtrl,
+          shim,
+          shim2,
+          status,
+          wopcmSize,
+          wopcmOffset);
+}
+
+bool FakeIrisXEGuC::programDoorbellEnable(GuCStage stage)
+{
+    const bool pmExperiment = ownerBooleanPropertyEnabled("FakeIrisXEGuCPMExperiment");
+    const bool probeEnabled = ownerBooleanPropertyEnabled("FakeIrisXEGuCDoorbellProbe");
+    const bool aggressive = ownerBooleanPropertyEnabled("FakeIrisXEGuCDoorbellAggressive");
+
+    struct DoorbellTarget {
+        const char* regName;
+        uint32_t reg;
+        bool enabled;
+    };
+
+    const DoorbellTarget targets[] = {
+        {"GT_PM_CONFIG", GT_PM_CONFIG, true},
+        {"DOORBELL_CTRL", GUC_DOORBELL_CTRL, pmExperiment || probeEnabled},
+    };
+
+    // V145: Use Tiger Lake specific value 0xA188 instead of just doorbell bit
+    const uint32_t baseMasks[] = {
+        TGL_GT_PM_CONFIG_VALUE,  // 0xA188 - full Tiger Lake config
+        GT_DOORBELL_ENABLE | 0x2U,
+    };
+    const uint32_t probeMasks[] = {
+        GT_DOORBELL_ENABLE | 0x100U,
+        GT_DOORBELL_ENABLE | 0x00010000U,
+    };
+
+    if (probeEnabled) {
+        logDoorbellSnapshot("probe-entry");
+    }
+
+    uint32_t attemptIndex = 0;
+    for (size_t t = 0; t < sizeof(targets) / sizeof(targets[0]); ++t) {
+        const DoorbellTarget& target = targets[t];
+        if (!target.enabled) {
+            continue;
+        }
+
+        for (size_t m = 0; m < sizeof(baseMasks) / sizeof(baseMasks[0]); ++m) {
+            uint32_t mask = baseMasks[m];
+            uint32_t before = fOwner->safeMMIORead(target.reg);
+            uint32_t writeValue = before | mask;
+            uint32_t readback = 0;
+
+            IOLog("(FakeIrisXE) [GuC][Doorbell] attempt=%u style=rmw reg=%s mask=0x%08X old=0x%08X write=0x%08X\n",
+                  attemptIndex++,
+                  target.regName,
+                  mask,
+                  before,
+                  writeValue);
+
+            writeRegWithReadback(stage, target.regName, target.reg, writeValue, &readback);
+            if ((readback & mask) == mask) {
+                IOLog("(FakeIrisXE) [GuC] Doorbell enabled via %s mask=0x%08X read=0x%08X\n",
+                      target.regName,
+                      mask,
+                      readback);
+                if (probeEnabled) {
+                    logDoorbellSnapshot("probe-success");
+                }
+                return true;
+            }
+
+            if (!probeEnabled) {
+                IOLog("(FakeIrisXE) [GuC] Doorbell attempt failed via %s old=0x%08X read=0x%08X\n",
+                      target.regName,
+                      before,
+                      readback);
+                continue;
+            }
+
+            IOLog("(FakeIrisXE) [GuC][Doorbell] attempt=%u style=direct reg=%s mask=0x%08X\n",
+                  attemptIndex++,
+                  target.regName,
+                  mask);
+            writeRegWithReadback(stage, target.regName, target.reg, mask, &readback);
+            if ((readback & mask) == mask) {
+                IOLog("(FakeIrisXE) [GuC] Doorbell enabled via %s direct mask=0x%08X read=0x%08X\n",
+                      target.regName,
+                      mask,
+                      readback);
+                logDoorbellSnapshot("probe-success-direct");
+                return true;
+            }
+
+            if (aggressive) {
+                IOLog("(FakeIrisXE) [GuC][Doorbell] attempt=%u style=clear-set reg=%s mask=0x%08X\n",
+                      attemptIndex++,
+                      target.regName,
+                      mask);
+                writeRegWithReadback(stage, target.regName, target.reg, 0, &readback);
+                writeRegWithReadback(stage, target.regName, target.reg, writeValue, &readback);
+                if ((readback & mask) == mask) {
+                    IOLog("(FakeIrisXE) [GuC] Doorbell enabled via %s clear-set mask=0x%08X read=0x%08X\n",
+                          target.regName,
+                          mask,
+                          readback);
+                    logDoorbellSnapshot("probe-success-clear-set");
+                    return true;
+                }
+            }
+
+            IOLog("(FakeIrisXE) [GuC] Doorbell attempt failed via %s mask=0x%08X read=0x%08X\n",
+                  target.regName,
+                  mask,
+                  readback);
+        }
+
+        if (!probeEnabled) {
+            continue;
+        }
+
+        for (size_t m = 0; m < sizeof(probeMasks) / sizeof(probeMasks[0]); ++m) {
+            uint32_t mask = probeMasks[m];
+            uint32_t before = fOwner->safeMMIORead(target.reg);
+            uint32_t writeValue = before | mask;
+            uint32_t readback = 0;
+
+            IOLog("(FakeIrisXE) [GuC][Doorbell] attempt=%u style=probe reg=%s mask=0x%08X old=0x%08X write=0x%08X\n",
+                  attemptIndex++,
+                  target.regName,
+                  mask,
+                  before,
+                  writeValue);
+            writeRegWithReadback(stage, target.regName, target.reg, writeValue, &readback);
+
+            if ((readback & GT_DOORBELL_ENABLE) == GT_DOORBELL_ENABLE) {
+                IOLog("(FakeIrisXE) [GuC] Doorbell probe latched via %s mask=0x%08X read=0x%08X\n",
+                      target.regName,
+                      mask,
+                      readback);
+                logDoorbellSnapshot("probe-success-mask");
+                return true;
+            }
+        }
+    }
+
+    if (probeEnabled) {
+        logDoorbellSnapshot("probe-exit-fail");
+    }
+
+    return false;
+}
+
 void FakeIrisXEGuC::producerCoherencyBarrier(const char* reason)
 {
     __sync_synchronize();
@@ -579,20 +807,24 @@ void FakeIrisXEGuC::logLinuxBaselineCorrelation(bool bootSuccess)
 {
     uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
     uint32_t gtPmConfig = fOwner->safeMMIORead(GT_PM_CONFIG);
+    uint32_t doorbellCtrl = fOwner->safeMMIORead(GUC_DOORBELL_CTRL);
     uint32_t rcCtl = fOwner->safeMMIORead(GEN12_RC_CTL);
 
     GuCStatusDecoded decoded = decodeStatus(status);
-    bool submissionEnabled = bootSuccess && ((gtPmConfig & GT_DOORBELL_ENABLE) != 0);
+    bool submissionEnabled = bootSuccess &&
+                             (((gtPmConfig & GT_DOORBELL_ENABLE) != 0) ||
+                              ((doorbellCtrl & GT_DOORBELL_ENABLE) != 0));
     bool slpcEnabled = bootSuccess && (decoded.ukernel == 0xFFU || decoded.appleStatus == 0xF0U);
     bool rcEnabled = ((rcCtl & 0x1U) != 0);
 
     IOLog("(FakeIrisXE) [GuC][Baseline] expected: submission=enabled slpc=enabled rc=enabled\n");
-    IOLog("(FakeIrisXE) [GuC][Baseline] actual: submission=%s slpc=%s rc=%s status=0x%08X gt_pm=0x%08X rc_ctl=0x%08X\n",
+    IOLog("(FakeIrisXE) [GuC][Baseline] actual: submission=%s slpc=%s rc=%s status=0x%08X gt_pm=0x%08X doorbell_ctrl=0x%08X rc_ctl=0x%08X\n",
           submissionEnabled ? "enabled" : "disabled",
           slpcEnabled ? "enabled" : "disabled",
           rcEnabled ? "enabled" : "disabled",
           status,
           gtPmConfig,
+          doorbellCtrl,
           rcCtl);
 }
 
@@ -604,15 +836,21 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
     uint64_t timeoutNs = (uint64_t)timeoutMs * 1000000ULL;
     uint32_t lastStatus = 0xFFFFFFFFU;
     uint32_t stableCount = 0;
+    uint32_t pollCount = 0;
+    
+    IOLog("(FakeIrisXE) [GuC][BootPoll] Starting poll with timeout=%ums\n", timeoutMs);
 
     while (mach_absolute_time() - start < timeoutNs) {
         consumerCoherencyBarrier("GUC_STATUS poll");
         uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
         GuCStatusDecoded decoded = decodeStatus(status);
+        pollCount++;
 
         if (status == lastStatus) {
             stableCount++;
         } else {
+            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u raw=0x%08X status changed bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X\n",
+                  pollCount, status, decoded.bootrom, decoded.ukernel, decoded.mia, decoded.appleStatus);
             stableCount = 0;
             lastStatus = status;
         }
@@ -623,35 +861,41 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
         }
 
         if (decoded.failure) {
-            IOLog("(FakeIrisXE) [GuC] GuC reported failure raw=0x%08X bootrom=0x%02X apple=0x%02X\n",
+            IOLog("(FakeIrisXE) [GuC] GuC reported FAILURE raw=0x%08X bootrom=0x%02X apple=0x%02X valid=%u\n",
                   status,
                   decoded.bootrom,
-                  decoded.appleStatus);
+                  decoded.appleStatus,
+                  decoded.valid);
+            IOLog("(FakeIrisXE) [GuC]   >>> FAILURE DETECTED AT POLL %u <<<\n", pollCount);
             return false;
         }
 
         if (status == 0x00000001U && stableCount >= 20U) {
-            IOLog("(FakeIrisXE) [GuC] Hard stop: status stuck at 0x00000001\n");
+            IOLog("(FakeIrisXE) [GuC] Hard stop: status stuck at 0x00000001 for 20 polls\n");
             return false;
         }
 
         if (decoded.success) {
+            IOLog("(FakeIrisXE) [GuC][BootPoll] SUCCESS! poll=%u raw=0x%08X bootrom=0x%02X ukernel=0x%02X\n",
+                  pollCount, status, decoded.bootrom, decoded.ukernel);
             emitStageReport(kGuCStageBootSuccess, startNs, retryIndex, status);
             return true;
         }
 
         if ((stableCount % 64U) == 0U) {
-            IOLog("(FakeIrisXE) [GuC][BootPoll] raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X\n",
-                  status,
+            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u stable=%u raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X\n",
+                  pollCount, stableCount, status,
                   decoded.bootrom,
                   decoded.ukernel,
-                  decoded.mia);
+                  decoded.mia,
+                  decoded.appleStatus);
         }
 
         IOSleep(1);
     }
 
-    IOLog("(FakeIrisXE) [GuC] Timeout waiting for GuC boot\n");
+    IOLog("(FakeIrisXE) [GuC] TIMEOUT after %u polls (timeout=%ums)\n", pollCount, timeoutMs);
+    IOLog("(FakeIrisXE) [GuC] Final status: raw=0x%08X\n", lastStatus);
     return false;
 }
 
@@ -664,11 +908,62 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return false;
     }
 
+    // V147: COMPREHENSIVE PRE-INIT DIAGNOSTICS
+    IOLog("(FakeIrisXE) [GuC][V147] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V147] PRE-INIT DIAGNOSTICS - Tiger Lake GuC Status\n");
+    IOLog("(FakeIrisXE) [GuC][V147] ============================================\n");
+    
+    // Read all critical pre-init registers
+    uint32_t preStatus = fOwner->safeMMIORead(GUC_STATUS_V137);
+    uint32_t preGucCtl = fOwner->safeMMIORead(GUC_CTL);
+    uint32_t preGucMisc = fOwner->safeMMIORead(GUC_MISC_CONTROL);
+    uint32_t preShim = fOwner->safeMMIORead(GUC_SHIM_CONTROL_V137);
+    uint32_t preWopcmSize = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
+    uint32_t preWopcmOffset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    uint32_t preGtPm = fOwner->safeMMIORead(GT_PM_CONFIG);
+    uint32_t preDoorbell = fOwner->safeMMIORead(GUC_DOORBELL_CTRL);
+    uint32_t preGucReset = fOwner->safeMMIORead(GEN11_GUC_RESET);
+    
+    IOLog("(FakeIrisXE) [GuC][V147] Pre-init Register State:\n");
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_STATUS:         0x%08X\n", preStatus);
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_CTL:           0x%08X\n", preGucCtl);
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_MISC_CONTROL:  0x%08X\n", preGucMisc);
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_SHIM_CONTROL:  0x%08X\n", preShim);
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_WOPCM_SIZE:    0x%08X\n", preWopcmSize);
+    IOLog("(FakeIrisXE) [GuC][V147]   DMA_GUC_WOPCM_OFF: 0x%08X\n", preWopcmOffset);
+    IOLog("(FakeIrisXE) [GuC][V147]   GT_PM_CONFIG:      0x%08X\n", preGtPm);
+    IOLog("(FakeIrisXE) [GuC][V147]   GUC_DOORBELL:      0x%08X\n", preDoorbell);
+    IOLog("(FakeIrisXE) [GuC][V147]   GEN11_GUC_RESET:   0x%08X\n", preGucReset);
+    
+    // Analyze WOPCM state
+    bool wopcmLocked = (preWopcmSize & 0x80000000U) || (preWopcmOffset & 0x80000000U);
+    IOLog("(FakeIrisXE) [GuC][V147]   WOPCM Locked:      %s\n", wopcmLocked ? "YES" : "NO");
+    
+    // Check for errors
+    if (preStatus & GUC_STATUS_WOPCMERR) {
+        IOLog("(FakeIrisXE) [GuC][V147] ⚠️  WOPCM ERROR DETECTED!\n");
+    }
+    if (preStatus & GUC_STATUS_SecureBoot) {
+        IOLog("(FakeIrisXE) [GuC][V147] ⚠️  SECURE BOOT - GuC may be locked!\n");
+    }
+    
+    // Decode status
+    IOLog("(FakeIrisXE) [GuC][V147] Status decode:\n");
+    IOLog("(FakeIrisXE) [GuC][V147]   bootrom: 0x%02X (expect 0x76 for success)\n", (preStatus >> 8) & 0xFF);
+    IOLog("(FakeIrisXE) [GuC][V147]   ukernel: 0x%02X (expect 0x30 for success)\n", (preStatus >> 16) & 0xFF);
+    IOLog("(FakeIrisXE) [GuC][V147]   mia_core: 0x%02X (expect 0x03 for success)\n", (preStatus >> 24) & 0xFF);
+    
+    IOLog("(FakeIrisXE) [GuC][V147] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V147] NOTE: Linux i915 DISABLES GuC on Tiger Lake by default!\n");
+    IOLog("(FakeIrisXE) [GuC][V147]      enable_guc=0 is default for TGL per Linux source\n");
+    IOLog("(FakeIrisXE) [GuC][V147] ============================================\n");
+
     const uint32_t kLinuxShimControl = 0x00000017U;
     const uint32_t kWopcmSizeBytes = 0x00100000U;
+    // V146: Try offset 0x2000 since offset 0 didn't work with locked WOPCM
     const uint32_t kWopcmOffsetBytes = 0x00002000U;
     const uint32_t kWopcmSizeValue = ((kWopcmSizeBytes >> 12) << 12) | 0x80000000U;
-    const uint32_t kWopcmOffsetValue = (((kWopcmOffsetBytes >> 14) & 0x3FFFFU) << 14) | 0x80000000U;
+    const uint32_t kWopcmOffsetValue = (((kWopcmOffsetBytes >> 14) & 0x3FFFFU) << 14) | 0x80000001U;  // V145: Added VALID bit
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
@@ -677,25 +972,90 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return false;
     }
 
+    // V145: Enhanced GT reset/sanitize before GuC load (Linux __uc_sanitize sequence)
+    IOLog("(FakeIrisXE) [GuC][V145] Performing comprehensive GT reset/sanitize...\n");
+    
+    // First, clear WOPCM registers to ensure clean state
+    IOLog("(FakeIrisXE) [GuC][V145] Clearing WOPCM registers...\n");
+    fOwner->safeMMIOWrite(GUC_WOPCM_SIZE_V137, 0);
+    fOwner->safeMMIOWrite(DMA_GUC_WOPCM_OFFSET_V137, 0);
+    IOSleep(10);
+    
+    // Read initial state
+    uint32_t gucResetBefore = fOwner->safeMMIORead(GEN11_GUC_RESET);
+    uint32_t gucStatusBefore = fOwner->safeMMIORead(GUC_STATUS_V137);
+    IOLog("(FakeIrisXE) [GuC][V145] Before reset: GUC_RESET=0x%08X STATUS=0x%08X\n", 
+          gucResetBefore, gucStatusBefore);
+    
+    // V145: More comprehensive GT reset sequence
+    // Step 1: Request GT reset
+    fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x1000);  // Request GT reset
+    IOSleep(10);
+    
+    // Step 2: Assert reset
+    fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x1001);  // Assert GT reset
+    IOSleep(10);
+    
+    // Step 3: Release reset but keep request
+    fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x0001);  // Release reset, keep request bit
+    IOSleep(20);
+    
+    // Step 4: Clear GUC_STATUS to ensure clean state
+    IOLog("(FakeIrisXE) [GuC][V145] Clearing GuC status registers...\n");
+    fOwner->safeMMIOWrite(GUC_STATUS_V137, 0);
+    IOSleep(5);
+    
+    // Step 5: Clear SOFT_SCRATCH registers (Linux does this)
+    for (int i = 0; i < 16; i++) {
+        fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(i), 0);
+    }
+    IOSleep(5);
+    
+    // Step 6: Verify reset completed
+    uint32_t gucResetAfter = fOwner->safeMMIORead(GEN11_GUC_RESET);
+    uint32_t gucStatusAfter = fOwner->safeMMIORead(GUC_STATUS_V137);
+    IOLog("(FakeIrisXE) [GuC][V145] After reset: GUC_RESET=0x%08X STATUS=0x%08X\n", 
+          gucResetAfter, gucStatusAfter);
+
     emitStageReport(kGuCStageWopcm, startNs, retryIndex);
+    
+    // V139: Dump WOPCM pre-config state
+    dumpWopcmRegs("pre-WOPCM-config");
+    
+    // V138: Make WOPCM lock optional - some hardware doesn't need locked WOPCM
+    // V139: Default to optional since Linux doesn't strictly require lock
+    const bool wopcmLockOptional = true;
+    
     uint32_t wopcmSizeBefore = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
     uint32_t wopcmOffsetBefore = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
-    if ((wopcmSizeBefore & 0x80000000U) && wopcmSizeBefore != kWopcmSizeValue) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM size locked mismatch old=0x%08X expected=0x%08X\n",
-              wopcmSizeBefore,
-              kWopcmSizeValue);
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
+    IOLog("(FakeIrisXE) [GuC] WOPCM pre-config: SIZE=0x%08X OFFSET=0x%08X lock_optional=%u\n",
+          wopcmSizeBefore, wopcmOffsetBefore, wopcmLockOptional ? 1 : 0);
+    
+    if (!wopcmLockOptional) {
+        if ((wopcmSizeBefore & 0x80000000U) && wopcmSizeBefore != kWopcmSizeValue) {
+            IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM size locked mismatch old=0x%08X expected=0x%08X\n",
+                  wopcmSizeBefore,
+                  kWopcmSizeValue);
+            releaseForceWake();
+            emitStageReport(kGuCStageFailure, startNs, retryIndex);
+            return false;
+        }
+        if ((wopcmOffsetBefore & 0x80000000U) && wopcmOffsetBefore != kWopcmOffsetValue) {
+            IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM offset valid mismatch old=0x%08X expected=0x%08X\n",
+                  wopcmOffsetBefore,
+                  kWopcmOffsetValue);
+            releaseForceWake();
+            emitStageReport(kGuCStageFailure, startNs, retryIndex);
+            return false;
+        }
     }
-    if ((wopcmOffsetBefore & 0x80000000U) && wopcmOffsetBefore != kWopcmOffsetValue) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM offset valid mismatch old=0x%08X expected=0x%08X\n",
-              wopcmOffsetBefore,
-              kWopcmOffsetValue);
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
-    }
+    
+    // V145: Set GT_PM_CONFIG to Tiger Lake value BEFORE WOPCM config
+    IOLog("(FakeIrisXE) [GuC][V145] Setting GT_PM_CONFIG to 0xA188 before WOPCM...\n");
+    fOwner->safeMMIOWrite(GT_PM_CONFIG, TGL_GT_PM_CONFIG_VALUE);  // 0xA188
+    IOSleep(5);
+    uint32_t gtPmReadback = fOwner->safeMMIORead(GT_PM_CONFIG);
+    IOLog("(FakeIrisXE) [GuC][V145] GT_PM_CONFIG readback: 0x%08X\n", gtPmReadback);
 
     uint32_t wopcmSizeReadback = 0;
     uint32_t wopcmOffsetReadback = 0;
@@ -704,14 +1064,23 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     writeRegWithReadback(kGuCStageWopcm, "DMA_GUC_WOPCM_OFFSET", DMA_GUC_WOPCM_OFFSET_V137,
                          kWopcmOffsetValue, &wopcmOffsetReadback);
 
-    if ((wopcmSizeReadback & 0x80000000U) == 0U ||
-        (wopcmOffsetReadback & 0x80000000U) == 0U) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM registers not locked/valid SIZE=0x%08X OFFSET=0x%08X\n",
-              wopcmSizeReadback,
-              wopcmOffsetReadback);
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
+    // V139: Dump WOPCM post-config state
+    dumpWopcmRegs("post-WOPCM-config");
+
+    // V138: Make lock check optional
+    if (!wopcmLockOptional) {
+        if ((wopcmSizeReadback & 0x80000000U) == 0U ||
+            (wopcmOffsetReadback & 0x80000000U) == 0U) {
+            IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM registers not locked/valid SIZE=0x%08X OFFSET=0x%08X\n",
+                  wopcmSizeReadback,
+                  wopcmOffsetReadback);
+            releaseForceWake();
+            emitStageReport(kGuCStageFailure, startNs, retryIndex);
+            return false;
+        }
+    } else {
+        IOLog("(FakeIrisXE) [GuC] WOPCM lock optional: SIZE=0x%08X OFFSET=0x%08X (continuing anyway)\n",
+              wopcmSizeReadback, wopcmOffsetReadback);
     }
 
     emitStageReport(kGuCStageShim, startNs, retryIndex);
@@ -725,17 +1094,39 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return false;
     }
 
-    uint32_t pmReadback = 0;
-    writeRegWithReadback(kGuCStageShim, "GT_PM_CONFIG", GT_PM_CONFIG,
-                         GT_DOORBELL_ENABLE, &pmReadback);
-    if (pmReadback != GT_DOORBELL_ENABLE) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: GT_PM_CONFIG mismatch wrote=0x%08X read=0x%08X\n",
-              GT_DOORBELL_ENABLE,
-              pmReadback);
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
+    // V141: Enable doorbell bypass by default - continue even if doorbell fails
+    const bool doorbellBypass = true;  // V141: Default to bypass since doorbell is optional for GuC
+    
+    if (!programDoorbellEnable(kGuCStageShim)) {
+        uint32_t pmReadback = fOwner->safeMMIORead(GT_PM_CONFIG);
+        uint32_t doorbellReadback = fOwner->safeMMIORead(GUC_DOORBELL_CTRL);
+        if (doorbellBypass) {
+            IOLog("(FakeIrisXE) [GuC][V140] ⚠️ Doorbell enable failed (gt_pm=0x%08X doorbell_ctrl=0x%08X), BYPASSING\n",
+                  pmReadback, doorbellReadback);
+        } else {
+            IOLog("(FakeIrisXE) [GuC] Hard stop: doorbell enable mismatch gt_pm=0x%08X doorbell_ctrl=0x%08X\n",
+                  pmReadback,
+                  doorbellReadback);
+            releaseForceWake();
+            emitStageReport(kGuCStageFailure, startNs, retryIndex);
+            return false;
+        }
     }
+
+    // V146: Add GUC_CTL and GUC_MISC_CONTROL before DMA
+    IOLog("(FakeIrisXE) [GuC][V146] Setting GUC_CTL and GUC_MISC_CONTROL...\n");
+    
+    // GUC_CTL: Enable GuC (bit 0 = enable)
+    fOwner->safeMMIOWrite(GUC_CTL, 0x00000001);
+    IOSleep(5);
+    uint32_t gucCtlRead = fOwner->safeMMIORead(GUC_CTL);
+    IOLog("(FakeIrisXE) [GuC][V146] GUC_CTL: wrote 0x00000001, read 0x%08X\n", gucCtlRead);
+    
+    // GUC_MISC_CONTROL: Set to 3 (from Apple decompilation V143)
+    fOwner->safeMMIOWrite(GUC_MISC_CONTROL, 0x00000003);
+    IOSleep(5);
+    uint32_t gucMiscRead = fOwner->safeMMIORead(GUC_MISC_CONTROL);
+    IOLog("(FakeIrisXE) [GuC][V146] GUC_MISC_CONTROL: wrote 0x00000003, read 0x%08X\n", gucMiscRead);
 
     if (!writeRsaScratchV139(fwData, layout)) {
         IOLog("(FakeIrisXE) [GuC] Linux path RSA programming failed\n");
@@ -762,33 +1153,88 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_COPY_SIZE", DMA_COPY_SIZE_V137,
                          layout.dma_copy_size, 0);
 
+    // V143: Write GUC params to SOFT_SCRATCH before DMA!
+    writeGuCParams();
+
     producerCoherencyBarrier("firmware DMA programmed");
 
     emitStageReport(kGuCStageDmaTrigger, startNs, retryIndex);
-    writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
-                         START_DMA_V137 | UOS_MOVE_V137, 0);
+    
+    // V138: Try multiple DMA trigger methods
+    // V139: Default to true - Linux i915 uses START_DMA only without UOS_MOVE
+    const bool trySimpleDma = true;
+    uint32_t dmaTriggers[] = {
+        START_DMA_V137 | UOS_MOVE_V137,        // Complex: UOS_MOVE + START_DMA
+        START_DMA_V137,                        // Simple: START_DMA only (Linux style)
+        0x00000001,                            // Minimal: just bit 0
+    };
+    const char* dmaNames[] = {"UOS_MOVE", "SIMPLE", "MINIMAL"};
+    
+    bool dmaSuccess = false;
+    for (int attempt = 0; attempt < 3 && !dmaSuccess; attempt++) {
+        // V139: Try simpler DMA methods first (Linux i915 uses START_DMA only)
+        if (attempt > 0 && !trySimpleDma) {
+            IOLog("(FakeIrisXE) [GuC] Skipping DMA attempt %d (simple DMA not enabled)\n", attempt);
+            continue;
+        }
+        
+        uint32_t triggerVal = dmaTriggers[attempt];
+        IOLog("(FakeIrisXE) [GuC] DMA trigger attempt %d: %s value=0x%08X\n",
+              attempt + 1, dmaNames[attempt], triggerVal);
+        
+        // V139: Dump pre-DMA state
+        dumpDmaRegs("pre-DMA");
+        dumpGuCStatusEx("pre-DMA");
+        
+        // Clear DMA ctrl first
+        fOwner->safeMMIOWrite(DMA_CTRL_V137, 0);
+        IOSleep(5);
+        
+        writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
+                             triggerVal, 0);
+        
+        uint64_t dmaStart = mach_absolute_time();
+        bool dmaDone = false;
+        int pollCount = 0;
+        while (mach_absolute_time() - dmaStart < (100ULL * 1000000ULL)) {
+            uint32_t dmaCtrl = fOwner->safeMMIORead(DMA_CTRL_V137);
+            pollCount++;
+            if ((dmaCtrl & START_DMA_V137) == 0U) {
+                dmaDone = true;
+                IOLog("(FakeIrisXE) [GuC] DMA %s completed! ctrl=0x%08X polls=%d\n", 
+                      dmaNames[attempt], dmaCtrl, pollCount);
+                break;
+            }
+            IOSleep(1);
+        }
+        
+        // V139: Dump post-DMA state
+        dumpDmaRegs("post-DMA");
+        
+        if (!dmaDone) {
+            IOLog("(FakeIrisXE) [GuC] DMA %s failed to complete after %d polls, trying next...\n", 
+                  dmaNames[attempt], pollCount);
+            continue;
+        }
 
-    uint64_t dmaStart = mach_absolute_time();
-    bool dmaDone = false;
-    while (mach_absolute_time() - dmaStart < (100ULL * 1000000ULL)) {
-        uint32_t dmaCtrl = fOwner->safeMMIORead(DMA_CTRL_V137);
-        if ((dmaCtrl & START_DMA_V137) == 0U) {
-            dmaDone = true;
+        writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137, 0, 0);
+        
+        // V139: Poll for boot status with enhanced logging
+        dumpGuCStatusEx("post-DMA, pre-boot-poll");
+        
+        if (pollForBootFastFail(3000, startNs, retryIndex)) {
+            dmaSuccess = true;
+            dumpGuCStatusEx("post-boot-success");
             break;
         }
-        IOSleep(1);
+        
+        // V139: Dump failure state
+        dumpGuCStatusEx("post-boot-fail");
+        IOLog("(FakeIrisXE) [GuC] GuC did not boot with DMA %s, trying next...\n", dmaNames[attempt]);
     }
 
-    if (!dmaDone) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: DMA start bit did not clear\n");
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
-    }
-
-    writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137, 0, 0);
-
-    if (!pollForBootFastFail(5000, startNs, retryIndex)) {
+    if (!dmaSuccess) {
+        IOLog("(FakeIrisXE) [GuC] Hard stop: All DMA trigger methods failed\n");
         releaseForceWake();
         emitStageReport(kGuCStageFailure, startNs, retryIndex);
         return false;
@@ -809,9 +1255,15 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
 
     const uint32_t kAppleShimControl = 0x00008617U;
     const uint32_t kWopcmSizeBytes = 0x00100000U;
+    // V146: Use offset 0x2000
     const uint32_t kWopcmOffsetBytes = 0x00002000U;
     const uint32_t kWopcmSizeValue = ((kWopcmSizeBytes >> 12) << 12) | 0x80000000U;
-    const uint32_t kWopcmOffsetValue = (((kWopcmOffsetBytes >> 14) & 0x3FFFFU) << 14) | 0x80000000U;
+    const uint32_t kWopcmOffsetValue = (((kWopcmOffsetBytes >> 14) & 0x3FFFFU) << 14) | 0x80000001U;  // V145: Added VALID bit
+    const bool appleLabMode = ownerBooleanPropertyEnabled("FakeIrisXEGuCAppleLab");
+
+    if (appleLabMode) {
+        IOLog("(FakeIrisXE) [GuC][AppleLab] Enabled: shim2/debug mirror extension active\n");
+    }
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
@@ -824,14 +1276,36 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     writeRegWithReadback(kGuCStageShim, "GUC_SHIM_CONTROL", GUC_SHIM_CONTROL_V137,
                          kAppleShimControl, 0);
 
-    uint32_t pmReadback = 0;
-    writeRegWithReadback(kGuCStageShim, "GT_PM_CONFIG", GT_PM_CONFIG,
-                         GT_DOORBELL_ENABLE, &pmReadback);
-    if (pmReadback != GT_DOORBELL_ENABLE) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: GT_PM_CONFIG mismatch on Apple path\n");
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
+    if (appleLabMode) {
+        uint32_t shim2Before = fOwner->safeMMIORead(GUC_SHIM_CONTROL2);
+        uint32_t shim2Readback = 0;
+        uint32_t shim2Target = shim2Before | 0x00000001U;
+        writeRegWithReadback(kGuCStageShim, "GUC_SHIM_CONTROL2", GUC_SHIM_CONTROL2,
+                             shim2Target, &shim2Readback);
+
+        uint32_t doorbellLabReadback = 0;
+        writeRegWithReadback(kGuCStageShim, "DOORBELL_CTRL", GUC_DOORBELL_CTRL,
+                             GT_DOORBELL_ENABLE, &doorbellLabReadback);
+
+        IOLog("(FakeIrisXE) [GuC][AppleLab] shim2 old=0x%08X target=0x%08X read=0x%08X doorbell_ctrl=0x%08X\n",
+              shim2Before,
+              shim2Target,
+              shim2Readback,
+              doorbellLabReadback);
+    }
+
+    // V141: Enable doorbell bypass by default - continue even if doorbell fails
+    const bool doorbellBypass = true;  // V141: Default to bypass since doorbell is optional for GuC
+    
+    if (!programDoorbellEnable(kGuCStageShim)) {
+        if (doorbellBypass) {
+            IOLog("(FakeIrisXE) [GuC][V140] ⚠️ Doorbell enable failed, but BYPASSING (testing mode)\n");
+        } else {
+            IOLog("(FakeIrisXE) [GuC] Hard stop: GT_PM_CONFIG mismatch on Apple path\n");
+            releaseForceWake();
+            emitStageReport(kGuCStageFailure, startNs, retryIndex);
+            return false;
+        }
     }
 
     if (!writeRsaScratchV139(fwData, layout)) {
@@ -849,12 +1323,15 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
 
     uint32_t wopcmSizeReadback = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
     uint32_t wopcmOffsetReadback = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
+    // V146: Make WOPCM check lenient - just warn if locked differently
     if ((wopcmSizeReadback & 0x80000000U) == 0U ||
         (wopcmOffsetReadback & 0x80000000U) == 0U) {
-        IOLog("(FakeIrisXE) [GuC] Hard stop: WOPCM inconsistency on Apple path\n");
-        releaseForceWake();
-        emitStageReport(kGuCStageFailure, startNs, retryIndex);
-        return false;
+        IOLog("(FakeIrisXE) [GuC][V146] ⚠️ WOPCM not fully configured (SIZE=0x%08X OFFSET=0x%08X), continuing anyway\n",
+              wopcmSizeReadback, wopcmOffsetReadback);
+        // Don't fail - continue with DMA using existing WOPCM config
+    } else {
+        IOLog("(FakeIrisXE) [GuC][V146] ✅ WOPCM configured: SIZE=0x%08X OFFSET=0x%08X\n",
+              wopcmSizeReadback, wopcmOffsetReadback);
     }
 
     emitStageReport(kGuCStageDmaProgram, startNs, retryIndex);
@@ -874,6 +1351,14 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
                          dstHigh, 0);
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_COPY_SIZE", DMA_COPY_SIZE_V137,
                          layout.dma_copy_size, 0);
+
+    // V143: Write GUC params before DMA (Apple path)
+    writeGuCParams();
+
+    // V143: Write GUC_MISC_CONTROL = 3 (from Apple driver decompilation)
+    // This is written to 0xC068 before DMA trigger
+    fOwner->safeMMIOWrite(GUC_SHIM_CONTROL2, 0x00000003);
+    IOLog("(FakeIrisXE) [GuC][V143] Wrote GUC_MISC_CONTROL=3 to 0xC068\n");
 
     producerCoherencyBarrier("apple firmware DMA programmed");
 
@@ -895,10 +1380,15 @@ bool FakeIrisXEGuC::runFastFailBringUp(const uint8_t* fwData, size_t fwSize, uin
 {
     uint64_t startNs = mach_absolute_time();
     fLastReportedStage = kGuCStageIdle;
-    fUseAppleBringUpPath = (FAKEIRISXE_ENABLE_APPLE_GUC_PATH != 0);
+    const bool applePathRuntime = ownerBooleanPropertyEnabled("FakeIrisXEGuCApplePath");
+    const bool pmExperiment = ownerBooleanPropertyEnabled("FakeIrisXEGuCPMExperiment");
+    const bool appleLab = ownerBooleanPropertyEnabled("FakeIrisXEGuCAppleLab");
+    fUseAppleBringUpPath = (FAKEIRISXE_ENABLE_APPLE_GUC_PATH != 0) || applePathRuntime;
 
-    IOLog("(FakeIrisXE) [GuC] Fast-fail bring-up start: linux_first=1 apple_flag=%u\n",
-          fUseAppleBringUpPath ? 1U : 0U);
+    IOLog("(FakeIrisXE) [GuC] Fast-fail bring-up start: linux_first=1 apple_flag=%u pm_experiment=%u apple_lab=%u\n",
+          fUseAppleBringUpPath ? 1U : 0U,
+          pmExperiment ? 1U : 0U,
+          appleLab ? 1U : 0U);
 
     if (runLinuxBringUpPath(fwData, fwSize, gpuAddr, 0, startNs)) {
         logLinuxBaselineCorrelation(true);
@@ -1769,6 +2259,84 @@ bool FakeIrisXEGuC::waitGuCReady(uint32_t timeoutMs)
     return false;
 }
 
+// V143: Write GUC params to SOFT_SCRATCH registers before DMA
+// This is critical! Without these, the firmware doesn't know how to initialize
+void FakeIrisXEGuC::writeGuCParams()
+{
+    IOLog("(FakeIrisXE) [GuC][V143] Writing GUC params to SOFT_SCRATCH...\n");
+    
+    // Clear SOFT_SCRATCH(0) first (Linux does this)
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(0), 0);
+    
+    // GUC_CTL_FEATURE - disable scheduler, no SLPC for initial load
+    // Bit 0: GUC_CTL_DISABLE_SCHEDULER - don't use GuC scheduler yet
+    // This is minimal - just tells firmware basic config
+    uint32_t ctl_feature = 0x00000001;  // GUC_CTL_DISABLE_SCHEDULER
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(1), ctl_feature);
+    
+    // GUC_CTL_DEBUG - logging disabled initially
+    uint32_t ctl_debug = 0;
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(2), ctl_debug);
+    
+    // GUC_CTL_ADS - address of Advanced Data Structure (can be 0 for now)
+    uint32_t ctl_ads = 0;
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(3), ctl_ads);
+    
+    // GUC_CTL_WA - workarounds (can be 0 for now)
+    uint32_t ctl_wa = 0;
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(4), ctl_wa);
+    
+    // GUC_CTL_DEVID - device info (can be 0 for now)
+    uint32_t ctl_devid = 0;
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(5), ctl_devid);
+    
+    // GUC_CTL_LOG_PARAMS - logging params (can be 0 for now)
+    uint32_t ctl_log = 0;
+    fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(6), ctl_log);
+    
+    IOLog("(FakeIrisXE) [GuC][V143] GUC params written: FEATURE=0x%08X DEBUG=0x%08X ADS=0x%08X\n",
+          ctl_feature, ctl_debug, ctl_ads);
+}
+
+// V139: Enhanced DMA diagnostics - dumps all DMA-related registers
+void FakeIrisXEGuC::dumpDmaRegs(const char* label) const
+{
+    IOLog("(FakeIrisXE) [GuC] DMA Registers at %s:\n", label);
+    IOLog("  DMA_ADDR_0_LOW:    0x%08X\n", fOwner->safeMMIORead(DMA_ADDR_0_LOW_V137));
+    IOLog("  DMA_ADDR_0_HIGH:   0x%08X\n", fOwner->safeMMIORead(DMA_ADDR_0_HIGH_V137));
+    IOLog("  DMA_ADDR_1_LOW:    0x%08X\n", fOwner->safeMMIORead(DMA_ADDR_1_LOW_V137));
+    IOLog("  DMA_ADDR_1_HIGH:   0x%08X\n", fOwner->safeMMIORead(DMA_ADDR_1_HIGH_V137));
+    IOLog("  DMA_COPY_SIZE:     0x%08X\n", fOwner->safeMMIORead(DMA_COPY_SIZE_V137));
+    IOLog("  DMA_CTRL:          0x%08X\n", fOwner->safeMMIORead(DMA_CTRL_V137));
+}
+
+// V139: Enhanced WOPCM diagnostics
+void FakeIrisXEGuC::dumpWopcmRegs(const char* label) const
+{
+    IOLog("(FakeIrisXE) [GuC] WOPCM Registers at %s:\n", label);
+    IOLog("  GUC_WOPCM_SIZE:    0x%08X\n", fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137));
+    IOLog("  DMA_GUC_WOPCM_OFFSET: 0x%08X\n", fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137));
+}
+
+// V139: Enhanced GuC status diagnostics
+void FakeIrisXEGuC::dumpGuCStatusEx(const char* label) const
+{
+    IOLog("(FakeIrisXE) [GuC] GuC Status at %s:\n", label);
+    uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
+    IOLog("  GUC_STATUS:        0x%08X\n", status);
+    
+    GuCStatusDecoded dec = decodeStatus(status);
+    IOLog("    bootrom: 0x%02X ukernel: 0x%02X mia: 0x%X apple: 0x%02X\n",
+          dec.bootrom, dec.ukernel, dec.mia, dec.appleStatus);
+    IOLog("    valid: %u success: %u failure: %u\n", dec.valid, dec.success ? 1 : 0, dec.failure ? 1 : 0);
+    
+    uint32_t ctl = fOwner->safeMMIORead(GUC_CTL_V137);
+    IOLog("  GUC_CTL:           0x%08X\n", ctl);
+    
+    uint32_t shim = fOwner->safeMMIORead(GUC_SHIM_CONTROL_V137);
+    IOLog("  GUC_SHIM_CONTROL:  0x%08X\n", shim);
+}
+
 void FakeIrisXEGuC::dumpGuCStatus()
 {
     uint32_t status = fOwner->safeMMIORead(GEN11_GUC_STATUS);
@@ -2060,15 +2628,16 @@ void FakeIrisXEGuC::programShimControl()
     }
     
     // Enable GT doorbell with verification
-    IOLog("(FakeIrisXE) [V136] Programming GT_PM_CONFIG...\n");
-    fOwner->safeMMIOWrite(GT_PM_CONFIG, GT_DOORBELL_ENABLE);
+    // V145: Use Tiger Lake specific value 0xA188 instead of just 0x1
+    IOLog("(FakeIrisXE) [V145] Programming GT_PM_CONFIG with Tiger Lake value...\n");
+    fOwner->safeMMIOWrite(GT_PM_CONFIG, TGL_GT_PM_CONFIG_VALUE);  // 0xA188
     IOSleep(5);
     
     uint32_t pmRead = fOwner->safeMMIORead(GT_PM_CONFIG);
-    if (pmRead == GT_DOORBELL_ENABLE) {
-        IOLog("(FakeIrisXE) [V56] ✅ GT_PM_CONFIG verified: 0x%08X (doorbell enabled)\n", pmRead);
+    if (pmRead == TGL_GT_PM_CONFIG_VALUE) {
+        IOLog("(FakeIrisXE) [V145] ✅ GT_PM_CONFIG verified: 0x%08X\n", pmRead);
     } else {
-        IOLog("(FakeIrisXE) [V56] ⚠️ GT_PM_CONFIG: wrote 0x%08X, read 0x%08X\n", GT_DOORBELL_ENABLE, pmRead);
+        IOLog("(FakeIrisXE) [V145] ⚠️ GT_PM_CONFIG: wrote 0x%08X, read 0x%08X\n", TGL_GT_PM_CONFIG_VALUE, pmRead);
     }
 }
 

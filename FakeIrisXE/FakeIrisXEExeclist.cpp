@@ -197,6 +197,12 @@ void FakeIrisXEExeclist::processCsbEntriesV57() {
     
     IOLog("[V57] === Processing CSB Entries ===\n");
     
+    // V139: Dump CSB registers first
+    uint32_t csb_ctrl = mmioRead32(RCS0_CSB_CTRL);
+    uint32_t csb_lo = mmioRead32(RCS0_CSB_ADDR_LO);
+    uint32_t csb_hi = mmioRead32(RCS0_CSB_ADDR_HI);
+    IOLog("[V139] CSB registers: CTRL=0x%08X ADDR=0x%08X%08X\n", csb_ctrl, csb_hi, csb_lo);
+    
     // Get CSB memory
     IOBufferMemoryDescriptor* md = fCsbGem->memoryDescriptor();
     if (!md) {
@@ -688,19 +694,20 @@ bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
 
     IOLog("(FakeIrisXE) [Exec] ExecList kicked\n");
 
-    // Poll status
+    bool completed = false;
     uint64_t start = mach_absolute_time();
-    const uint64_t limit_ns = 2000ULL * 1000000ULL;
+    const uint64_t limit_ns = 250ULL * 1000000ULL;
 
     while (true) {
         uint32_t status = mmioRead32(RCS0_EXECLIST_STATUS_LO);
         if (status != 0) {
             IOLog("(FakeIrisXE) [Exec] STATUS=0x%08x\n", status);
+            completed = true;
             break;
         }
 
         if (mach_absolute_time() - start > limit_ns) {
-            IOLog("(FakeIrisXE) [Exec] TIMEOUT waiting execlist\n");
+            IOLog("(FakeIrisXE) [Exec] submitBatchExeclist timed out waiting for status\n");
             break;
         }
 
@@ -710,7 +717,7 @@ bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
     listGem->unpin();
     listGem->release();
 
-    return true;
+    return completed;
 }
 
 
@@ -2153,3 +2160,102 @@ bool FakeIrisXEExeclist::testHWContextManagement()
     return true;
 }
 
+// ============================================================================
+// V139: Enhanced completion checking and diagnostics
+// ============================================================================
+
+bool FakeIrisXEExeclist::waitForCommandCompletion(uint32_t timeoutMs)
+{
+    IOLog("[V139] Waiting for command completion (timeout=%ums)...\n", timeoutMs);
+    
+    uint64_t start = mach_absolute_time();
+    uint64_t timeoutNs = (uint64_t)timeoutMs * 1000000ULL;
+    uint32_t lastStatus = 0;
+    uint32_t stableCount = 0;
+    
+    while (mach_absolute_time() - start < timeoutNs) {
+        // Check EXECLIST_STATUS
+        uint32_t status_lo = mmioRead32(RCS0_EXECLIST_STATUS_LO);
+        uint32_t status_hi = mmioRead32(RCS0_EXECLIST_STATUS_HI);
+        
+        // Check if both slots are empty (no active context)
+        bool slot0_active = (status_lo >> 2) & 1;
+        bool slot1_active = (status_lo >> 3) & 1;
+        
+        if (status_lo == lastStatus) {
+            stableCount++;
+        } else {
+            IOLog("[V139] Status change: STATUS=0x%08X slot0=%d slot1=%d\n",
+                  status_lo, slot0_active, slot1_active);
+            stableCount = 0;
+            lastStatus = status_lo;
+        }
+        
+        // If both slots are idle, command completed
+        if (!slot0_active && !slot1_active) {
+            // Check CSB for completion
+            if (fCsbGem) {
+                IOBufferMemoryDescriptor* md = fCsbGem->memoryDescriptor();
+                if (md) {
+                    volatile uint64_t* csb = (volatile uint64_t*)md->getBytesNoCopy();
+                    if (csb && fCsbReadIndex != fCsbWriteIndex) {
+                        uint64_t entry = csb[fCsbReadIndex % fCsbEntryCount];
+                        uint32_t csb_status = (uint32_t)(entry & 0xFFFFFFFF);
+                        IOLog("[V139] CSB entry: status=0x%08X\n", csb_status);
+                        
+                        if (csb_status & CSB_STATUS_COMPLETE) {
+                            IOLog("[V139] ✅ Command completed successfully!\n");
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            // Slots idle, assume completed
+            IOLog("[V139] ✅ Execlist slots idle - command completed\n");
+            return true;
+        }
+        
+        // Check for errors
+        if (status_lo & 0xFF000000) {
+            IOLog("[V139] ❌ Error detected in status: 0x%08X\n", status_lo);
+            return false;
+        }
+        
+        if (stableCount > 100) {
+            IOLog("[V139] ⚠️ Status stable for 100 polls but still active\n");
+        }
+        
+        IOSleep(1);
+    }
+    
+    IOLog("[V139] ❌ Timeout waiting for completion\n");
+    return false;
+}
+
+void FakeIrisXEExeclist::dumpRcsRingStatus(const char* label)
+{
+    IOLog("[V139] === RCS Ring Status: %s ===\n", label);
+    
+    uint32_t ring_head = mmioRead32(RING_HEAD);
+    uint32_t ring_tail = mmioRead32(RING_TAIL);
+    uint32_t ring_ctl = mmioRead32(RING_CTL);
+    uint32_t ring_base_lo = mmioRead32(RING_BASE_LO);
+    uint32_t ring_base_hi = mmioRead32(RING_BASE_HI);
+    
+    IOLog("[V139] RING_BASE: 0x%08X%08X\n", ring_base_hi, ring_base_lo);
+    IOLog("[V139] RING_HEAD: 0x%04X\n", ring_head & 0xFFFF);
+    IOLog("[V139] RING_TAIL: 0x%04X\n", ring_tail & 0xFFFF);
+    IOLog("[V139] RING_CTL:  0x%08X (size=%dKB, %s)\n",
+          ring_ctl,
+          ((ring_ctl >> 12) + 1) * 4,
+          (ring_ctl & 1) ? "ENABLED" : "DISABLED");
+    
+    // Calculate ring usage
+    uint32_t head = ring_head & 0xFFFF;
+    uint32_t tail = ring_tail & 0xFFFF;
+    uint32_t ring_size = ((ring_ctl >> 12) + 1) * 4096;
+    uint32_t used = (tail >= head) ? (tail - head) : (ring_size - head + tail);
+    
+    IOLog("[V139] Ring usage: %d bytes used, %d bytes free\n", used, ring_size - used);
+}

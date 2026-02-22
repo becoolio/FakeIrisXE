@@ -105,6 +105,9 @@ private:
                          uint32_t rawStatusOverride = 0xFFFFFFFFU);
     GuCStatusDecoded decodeStatus(uint32_t rawStatus) const;
     bool isImpossibleStatusDecode(uint32_t rawStatus, const GuCStatusDecoded& decoded) const;
+    bool ownerBooleanPropertyEnabled(const char* key) const;
+    void logDoorbellSnapshot(const char* label) const;
+    bool programDoorbellEnable(GuCStage stage);
     void producerCoherencyBarrier(const char* reason);
     void consumerCoherencyBarrier(const char* reason);
     void logLinuxBaselineCorrelation(bool bootSuccess);
@@ -173,6 +176,11 @@ private:
     bool programWopcmForTglV138(uint32_t wopcmSize, uint32_t wopcmOffset);
     bool loadGuCWithV138Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
     
+    // V139: Enhanced diagnostics
+    void dumpDmaRegs(const char* label) const;
+    void dumpWopcmRegs(const char* label) const;
+    void dumpGuCStatusEx(const char* label) const;
+    
     // V139: Strict i915 method
     struct GuCFwLayout {
         uint32_t header_offset;
@@ -187,4 +195,7 @@ private:
     bool writeRsaScratchV139(const uint8_t* fwData, const GuCFwLayout& layout);
     bool dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuCFwLayout& layout);
     bool loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    
+    // V143: GUC params
+    void writeGuCParams();
 };

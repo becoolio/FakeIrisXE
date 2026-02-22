@@ -1,0 +1,346 @@
+Password:Timestamp                       Thread     Type        Activity             PID    TTL  
+2026-02-22 05:10:37.412827-0500 0x697      Default     0x0                  0      0    kernel: (FakeIrisXE) [FakeIrisXEFramebuffer] setAttributeForConnection(conn=0, attr=0x70726f62, value=0x1)
+2026-02-22 05:11:32.814418-0500 0x3cb9     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(467) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE.kext
+2026-02-22 05:11:59.416214-0500 0x697      Default     0x0                  0      0    kernel: (FakeIrisXE) [FakeIrisXEFramebuffer] setAttributeForConnection(conn=0, attr=0x70726f62, value=0x1)
+2026-02-22 05:12:47.413882-0500 0x457a     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(1377) deny(1) file-read-xattr /Users/becoolio/Desktop/FakeIrisXE.kext
+2026-02-22 05:12:48.087360-0500 0x134c     Default     0x0                  599    0    SafeEjectGPUService: (GPUWrangler) [com.apple.GPUWrangler:default] (reg) gpu 0xf909 flags 0x10 (IG) vid.did=8086.9a49 b:d:f=0:2:0 
+gpu 0xf909        pci 0x1000002f3 IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2
+gpu 0xf909       agdc 0x000000000 
+gpu 0xf909       gpuc 0x000000000 
+gpu 0xf909 agdpclient 0x000000000 
+gpu 0xf909      accel 0x000000000 
+gpu 0xf909      fb0:0 0x1000004ee     /FakeIrisXEFramebuffer
+gpu 0xf909     fb1:-1 0x1000004ef     /.Display_boot
+2026-02-22 05:12:50.544672-0500 0x459c     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(1377) deny(1) file-read-xattr /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:12:50.890554-0500 0x459c     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(1377) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE.xcodeproj
+2026-02-22 05:12:51.523170-0500 0x4583     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(1377) deny(1) file-read-xattr /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE.kext
+2026-02-22 05:13:14.381778-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: com.anomy.driver.FakeIrisXEFramebuffer not in Optional(file:///Library/Extensions/FakeIrisXE.kext/), telling kernel to mark as not available
+2026-02-22 05:13:14.382032-0500 0x43c4     Default     0x0                  0      0    kernel: KextLog: AuxKC bundle com.anomy.driver.FakeIrisXEFramebuffer marked as NOT loadable
+2026-02-22 05:13:14.382518-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext was modified by event 133120
+2026-02-22 05:13:14.524703-0500 0x43da     Error       0x0                  294    0    kernelmanager_helper: failed to create bundle from path, unable to include: /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:13:20.902504-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: com.anomy.driver.FakeIrisXEFramebuffer exists in Optional(file:///Library/Extensions/FakeIrisXE.kext/), telling kernel to mark as available
+2026-02-22 05:13:20.902687-0500 0x43c4     Default     0x0                  0      0    kernel: KextLog: AuxKC bundle com.anomy.driver.FakeIrisXEFramebuffer marked as loadable
+2026-02-22 05:13:20.903004-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 4259840
+2026-02-22 05:13:20.903018-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 4317440
+2026-02-22 05:13:20.903030-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature was modified by event 188672
+2026-02-22 05:13:20.903043-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 4259840
+2026-02-22 05:13:20.903054-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 4317440
+2026-02-22 05:13:20.903066-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/MacOS was modified by event 188672
+2026-02-22 05:13:20.903091-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 4259840
+2026-02-22 05:13:20.903103-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 4317440
+2026-02-22 05:13:20.903115-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 4259840
+2026-02-22 05:13:20.903127-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 4317440
+2026-02-22 05:13:20.903139-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 4259840
+2026-02-22 05:13:20.903150-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 4317440
+2026-02-22 05:13:20.903163-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 4259840
+2026-02-22 05:13:20.903175-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 4317440
+2026-02-22 05:13:20.903187-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 4259840
+2026-02-22 05:13:20.903199-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 4317440
+2026-02-22 05:13:20.903211-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 4259840
+2026-02-22 05:13:20.903223-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 4317440
+2026-02-22 05:13:20.903235-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 4259840
+2026-02-22 05:13:20.903246-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 4317440
+2026-02-22 05:13:20.903258-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources was modified by event 188672
+2026-02-22 05:13:20.903270-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 4259840
+2026-02-22 05:13:20.903282-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 4317440
+2026-02-22 05:13:20.903293-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents was modified by event 188672
+2026-02-22 05:13:20.903305-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext was modified by event 189696
+2026-02-22 05:13:20.996697-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:13:20.998310-0500 0x4f2b     Error       0x0                  294    0    kernelmanager_helper: Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin
+Filesystem error: Invalid ownership (501:0) should be (<…>
+2026-02-22 05:13:20.998527-0500 0x4f2b     Error       0x0                  294    0    kernelmanager_helper: failed to realize extension com.anomy.driver.FakeIrisXEFramebuffer from stashed instructions: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Exten<…>
+2026-02-22 05:13:21.020746-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: []
+bundledExts: []
+repositoryExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+appleInternalCandidateExts: [Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext]
+optionalDependencyTable: [:]
+2026-02-22 05:13:21.034833-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+2026-02-22 05:13:21.098780-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:13:21.100067-0500 0x4f2b     Error       0x0                  294    0    kernelmanager_helper: Validation Error: Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin
+Filesystem error: Invalid ownership (501:0) should be (<…>
+2026-02-22 05:13:21.100332-0500 0x4f2b     Error       0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] Unable to consider Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist
+2026-02-22 05:13:21.191284-0500 0x43c4     Error       0x0                  126    0    kernelmanagerd: library rebuild request failed: Validating extension failed: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext:
+
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE
+Filesystem error: Invalid ownership (501:0) should be (0:0) on /Library/Extensions/FakeIrisXE.kext/Contents/Resources
+File<…>
+2026-02-22 05:13:21.451761-0500 0x4d95     Error       0x0                  0      0    kernel: (Sandbox) Sandbox: com.apple.quicklook.ThumbnailsAg(1377) deny(1) file-read-xattr /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:18.787217-0500 0x5435     Default     0x0                  1630   0    sudo: becoolio : TTY=ttys000 ; PWD=/Users/becoolio ; USER=root ; COMMAND=/usr/sbin/chown -R root:wheel /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:18.808942-0500 0x5484     Default     0x0                  1634   0    sudo: becoolio : TTY=ttys000 ; PWD=/Users/becoolio ; USER=root ; COMMAND=/bin/chmod -R 755 /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:19.300607-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature was modified by event 147456
+2026-02-22 05:14:19.300639-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE was modified by event 81920
+2026-02-22 05:14:19.300668-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/MacOS was modified by event 147456
+2026-02-22 05:14:19.300697-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources was modified by event 147456
+2026-02-22 05:14:19.300725-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents was modified by event 147456
+2026-02-22 05:14:19.300753-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext was modified by event 147456
+2026-02-22 05:14:19.300782-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/_CodeSignature/CodeResources was modified by event 81920
+2026-02-22 05:14:19.300810-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_huc_7.9.3.bin was modified by event 81920
+2026-02-22 05:14:19.300838-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_dmc_ver2_12.bin was modified by event 81920
+2026-02-22 05:14:19.300866-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.1.1.bin was modified by event 81920
+2026-02-22 05:14:19.300895-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/README.md was modified by event 81920
+2026-02-22 05:14:19.300923-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/regs.txt was modified by event 81920
+2026-02-22 05:14:19.300951-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/tgl_guc_70.bin was modified by event 81920
+2026-02-22 05:14:19.300980-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Resources/Info.plist was modified by event 81920
+2026-02-22 05:14:19.301008-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: /Library/Extensions/FakeIrisXE.kext/Contents/Info.plist was modified by event 81920
+2026-02-22 05:14:19.413992-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:19.415959-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:19.415985-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking unstaged bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:19.417715-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: []
+bundledExts: []
+repositoryExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+appleInternalCandidateExts: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext]
+optionalDependencyTable: [:]
+2026-02-22 05:14:19.432591-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+2026-02-22 05:14:19.463607-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:19.522806-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] requesting latest approval status and kext history from system policy for: 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+2026-02-22 05:14:19.562962-0500 0x5493     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:19.568900-0500 0x5493     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:19.573541-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] kexts for dependency resolution: 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+2026-02-22 05:14:19.578995-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] new auxiliary kext collection candidates: 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext (new)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext (new)
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext (new)
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext (new)
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext (new)
+2026-02-22 05:14:19.579474-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Resolved request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-22 05:14:19.579926-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:CollectionBuild] trying to build:
+	bundlePaths: 
+		/Library/Apple/System/Library/Extensions/AppleMobileDevice.kext
+		/Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+		/Library/Extensions/EnergyDriver.kext
+		/Library/Extensions/FakeIrisXE.kext
+		/Library/Extensions/HighPointIOP.kext
+		/Library/Extensions/HighPointRR.kext
+2026-02-22 05:14:21.568412-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] gathering approvals for: 
+	/Library/Extensions/EnergyDriver.kext
+	/Library/Extensions/HighPointIOP.kext
+	/Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+	/Library/Extensions/FakeIrisXE.kext
+	/Library/Extensions/HighPointRR.kext
+2026-02-22 05:14:21.606096-0500 0x53a7     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:21.607587-0500 0x53a7     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:21.613248-0500 0x53a7     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Triggered kext upgrade: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:21.615533-0500 0x4f2b     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] Serviced request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-22 05:14:21.616260-0500 0x43c4     Error       0x0                  126    0    kernelmanagerd: library rebuild request failed: Extension with identifiers com.anomy.driver.FakeIrisXEFramebuffer,com.apple.nke.rvi,com.intel.driver.EnergyDriver,com.highpoint-tech.kext.HighPointIOP,com.highpoint-tech.kext.HighPointRR not approved to load. Please approve using System Preferences.
+2026-02-22 05:14:32.207427-0500 0x5493     Error       0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Unable to produce cdhash for kext: KHE - (null), com.anomy.driver.FakeIrisXEFramebuffer, c0f7d26a7642ae89c034c17de9dca20e6489b2b1, 2026-02-22 10:14:21 +0000, 0x10
+2026-02-22 05:14:32.207480-0500 0x5493     Error       0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Unable to produce cdhash for kext: KHE - (null), com.anomy.driver.FakeIrisXEFramebuffer, 27f477a5856832623458328f49003dc60fb4983e, 2026-02-08 01:20:36 +0000, 0x10
+2026-02-22 05:14:32.208812-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: [com.apple.kernelmanagerd.logging:LoadRequestResolution] loadExtensions(withPaths:withIdentifiers:withPersonalityNames:withDependencyAndFolderPaths:options:withReply:): Loading paths: [], identifiers: ["com.anomy.driver.FakeIrisXEFramebuffer", "com.apple.nke.rvi", "com.highpoint-tech.kext.HighPointRR", "com.highpoint-tech.kext.HighPointIOP", "com.intel.driver.EnergyDriver"], personalityNames: []
+2026-02-22 05:14:32.208927-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [LimitedRequestProcessor] Processed request: 
+requestedExts: []
+followupRequest: 
+paths: [],
+identifiers: ["com.anomy.driver.FakeIrisXEFramebuffer", "com.apple.nke.rvi", "com.highpoint-tech.kext.HighPointRR", "com.highpoint-tech.kext.HighPointIOP", "com.intel.driver.EnergyDriver"],
+personalityNames: [],
+extraRepositories: [],
+dependencyKextsAndRepositories: [],
+flags: [disallowAuth, clientPrivileged, ]
+2026-02-22 05:14:32.208948-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [LimitedLoadRequestHandler] Resolved request: 
+directLoadPlatformExtensions: []
+followupRequest: 
+paths: [],
+identifiers: ["com.anomy.driver.FakeIrisXEFramebuffer", "com.apple.nke.rvi", "com.highpoint-tech.kext.HighPointRR", "com.highpoint-tech.kext.HighPointIOP", "com.intel.driver.EnergyDriver"],
+personalityNames: [],
+extraRepositories: [],
+dependencyKextsAndRepositories: [],
+flags: [disallowAuth, clientPrivileged, ]
+2026-02-22 05:14:32.208966-0500 0x43c4     Default     0x0                  126    0    kernelmanagerd: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [LimitedLoadRequestHandler] Serviced request: requestCompleted: false
+followupRequest: 
+paths: [],
+identifiers: ["com.anomy.driver.FakeIrisXEFramebuffer", "com.apple.nke.rvi", "com.highpoint-tech.kext.HighPointRR", "com.highpoint-tech.kext.HighPointIOP", "com.intel.driver.EnergyDriver"],
+personalityNames: [],
+extraRepositories: [],
+dependencyKextsAndRepositories: [],
+flags: [disallowAuth, clientPrivileged, ]
+2026-02-22 05:14:32.209318-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: Handling loadOrRebuildRequest: 
+paths: [],
+identifiers: ["com.anomy.driver.FakeIrisXEFramebuffer", "com.apple.nke.rvi", "com.highpoint-tech.kext.HighPointRR", "com.highpoint-tech.kext.HighPointIOP", "com.intel.driver.EnergyDriver"],
+personalityNames: [],
+extraRepositories: [],
+dependencyKextsAndRepositories: [],
+flags: [disallowAuth, clientPrivileged, ]
+2026-02-22 05:14:32.224291-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.293633-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.293658-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] checking unstaged bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.368500-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.381464-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: Looking for latest used extensions with bundle ID com.anomy.driver.FakeIrisXEFramebuffer
+2026-02-22 05:14:32.381540-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] Checking unstaged bundle path /Library/Extensions/FakeIrisXE.kext for Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.540871-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Processed request: 
+requestedExts: [Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext]
+bundledExts: [Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext]
+repositoryExts: []
+appleInternalCandidateExts: [Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext]
+optionalDependencyTable: [:]
+2026-02-22 05:14:32.557875-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] other kext requests: 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+2026-02-22 05:14:32.631499-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:14:32.651293-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] requesting latest approval status and kext history from system policy for: 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+2026-02-22 05:14:32.691410-0500 0x5574     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:32.693086-0500 0x5574     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:32.693095-0500 0x5574     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:32.694354-0500 0x5574     Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:14:32.701502-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] kexts for dependency resolution: 
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext 
+	Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext (codeless)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext 
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+2026-02-22 05:14:32.707162-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] new auxiliary kext collection candidates: 
+	Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext (new)
+	Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext (new)
+	Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext (new)
+	Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext (new)
+	Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext (new)
+2026-02-22 05:14:32.707590-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] [FullLoadOrRebuildRequestHandler] Resolved request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-22 05:14:32.708927-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: will continue to service this request without asking for approvals with the following list:
+ Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext
+Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext
+Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext
+Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext
+2026-02-22 05:14:32.796677-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:CollectionBuild] trying to build:
+	bundlePaths: 
+		/Library/Apple/System/Library/Extensions/AppleMobileDevice.kext
+		/Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext
+		/Library/Extensions/EnergyDriver.kext
+		/Library/Extensions/FakeIrisXE.kext
+		/Library/Extensions/HighPointIOP.kext
+		/Library/Extensions/HighPointRR.kext
+2026-02-22 05:14:33.756114-0500 0x549c     Default     0x0                  294    0    kernelmanager_helper: [com.apple.kernelmanagerd.logging:LoadRequestResolution] Serviced request: 
+approvalsRequiredFromSyspolicyd: true
+newAuxiliaryContents: [Kext com.apple.driver.AppleMobileDevice v4.0 in codeless kext bundle com.apple.driver.AppleMobileDevice at /Library/Apple/System/Library/Extensions/AppleMobileDevice.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext]
+directLoadPlatformExtensions: []
+directLoadAuxiliaryExtensions: []
+extensionsNeedingApproval: []
+approvedUnbuiltExtensions: [Kext com.highpoint-tech.kext.HighPointRR v4.22.1 in executable kext bundle com.highpoint-tech.kext.HighPointRR at /Library/Extensions/HighPointRR.kext, Kext com.apple.nke.rvi v2.1.0 in executable kext bundle com.apple.nke.rvi at /Library/Apple/System/Library/Extensions/RemoteVirtualInterface.kext, Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext, Kext com.intel.driver.EnergyDriver v3.7.0 in executable kext bundle com.intel.driver.EnergyDriver at /Library/Extensions/EnergyDriver.kext, Kext com.highpoint-tech.kext.HighPointIOP v4.4.5 in executable kext bundle com.highpoint-tech.kext.HighPointIOP at /Library/Extensions/HighPointIOP.kext]
+safebootBlockedExtensions: []
+unsupportedExtensions: []
+2026-02-22 05:14:33.756831-0500 0x43c4     Error       0x0                  126    0    kernelmanagerd: failed to load/rebuild extensions: Loading extension(s): com.anomy.driver.FakeIrisXEFramebuffer,com.intel.driver.EnergyDriver,com.apple.nke.rvi,com.highpoint-tech.kext.HighPointIOP,com.highpoint-tech.kext.HighPointRR requires a reboot
+2026-02-22 05:14:33.757054-0500 0x5493     Error       0x0                  241    0    syspolicyd: (KernelManagement) Remote encountered error: Error Domain=KMErrorDomain Code=28 "Loading extension(s): com.anomy.driver.FakeIrisXEFramebuffer,com.intel.driver.EnergyDriver,com.apple.nke.rvi,com.highpoint-tech.kext.HighPointIOP,com.highpoint-tech.kext.HighPointRR requires a reboot" UserInfo={NSLocalizedDescription=Loading extension(s): com.anomy.driver.FakeIrisXEFramebuffer,com.intel.driver.EnergyDriver,com.apple.nke.rvi,com.highpoint-tech.kext.HighPointIOP,com.highpoint-tech.kext.HighPointRR requires a reboot}
+2026-02-22 05:15:42.656420-0500 0x5b0      Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:15:42.661249-0500 0x5b0      Default     0x0                  241    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:15:42.667245-0500 0x30c      Default     0x0                  126    0    kernelmanagerd: Validate approval for /Library/Extensions/FakeIrisXE.kext in auxKC: approved
+2026-02-22 05:15:42.667336-0500 0x30c      Default     0x0                  126    0    kernelmanagerd: installation check: bundle for com.anomy.driver.FakeIrisXEFramebuffer is at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:15:42.847282-0500 0x30c      Default     0x0                  126    0    kernelmanagerd: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:15:42.848575-0500 0x30c      Error       0x0                  126    0    kernelmanagerd: error: tried to insert an invalid codeful kernel extension in the restricted lookup table: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:15:43.954832-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) ║         FakeIrisXEFramebuffer::probe()                   ║
+2026-02-22 05:15:43.954851-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) FakeIrisXEFramebuffer::probe(): Found matching GPU (8086:9A49)
+2026-02-22 05:15:43.954970-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXE) [STAGE 1] BEGIN Core PCI/MMIO bring-up
+2026-02-22 05:15:49.333668-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXE) [STAGE 1] END Core PCI/MMIO bring-up (5378698 us)
+2026-02-22 05:15:49.333677-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXE) [STAGE 2] BEGIN Framebuffer allocation + IORegistry model
+2026-02-22 05:15:49.341382-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXE) [STAGE 2] END Framebuffer allocation + IORegistry model (7713 us)
+2026-02-22 05:15:49.341389-0500 0x678      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXE) [STAGE 3] BEGIN Display/controller activation
+2026-02-22 05:15:50.828351-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] init
+2026-02-22 05:15:50.828357-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] probe()
+2026-02-22 05:15:50.828385-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] start() attaching to framebuffer
+2026-02-22 05:15:50.828400-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] link debug: Exec=0x0 Ring=0x0
+2026-02-22 05:15:50.828402-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] link pending: missing RING or EXECLIST
+2026-02-22 05:15:50.829974-0500 0x6b5      Default     0x0                  0      0    kernel: (FakeIrisXE) (FakeIrisXEFramebuffer) [Accel] started; waiting for user client attachShared()
+2026-02-22 05:17:54.749896-0500 0x5bb      Default     0x0                  253    0    syspolicyd: [com.apple.syspolicy.kext:default] canLoadKernelExtension - direct, evaluate, Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:17:54.757228-0500 0x5bb      Default     0x0                  253    0    syspolicyd: [com.apple.syspolicy.kext:default] Kernel Extension ALLOWED: Kext ((null), com.anomy.driver.FakeIrisXEFramebuffer) version: c0f7d26a7642ae89c034c17de9dca20e6489b2b1
+2026-02-22 05:17:54.760281-0500 0x2e7      Default     0x0                  126    0    kernelmanagerd: Validate approval for /Library/Extensions/FakeIrisXE.kext in auxKC: approved
+2026-02-22 05:17:54.760425-0500 0x2e7      Default     0x0                  126    0    kernelmanagerd: installation check: bundle for com.anomy.driver.FakeIrisXEFramebuffer is at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:17:55.300622-0500 0x2e7      Default     0x0                  126    0    kernelmanagerd: validating extension at /Library/Extensions/FakeIrisXE.kext
+2026-02-22 05:17:55.303657-0500 0x2e7      Error       0x0                  126    0    kernelmanagerd: error: tried to insert an invalid codeful kernel extension in the restricted lookup table: Kext com.anomy.driver.FakeIrisXEFramebuffer v1.0.93 in executable kext bundle com.anomy.driver.FakeIrisXEFramebuffer at /Library/Extensions/FakeIrisXE

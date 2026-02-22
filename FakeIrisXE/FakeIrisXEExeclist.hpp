@@ -144,6 +144,10 @@ public:
         void processCsbEntriesV57();
         void handleCsbEntry(uint64_t entry, uint32_t ctx_id, uint32_t status);
         
+        // V139: Enhanced completion checking
+        bool waitForCommandCompletion(uint32_t timeoutMs);
+        void dumpRcsRingStatus(const char* label);
+        
         // V57: CSB status tracking
         uint32_t fCsbWriteIndex;
         

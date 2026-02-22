@@ -92,18 +92,43 @@ IOService* FakeIrisXEAccelerator::probe(IOService* provider, SInt32* score) {
 bool FakeIrisXEAccelerator::start(IOService* provider) {
     LOG("start() attaching to framebuffer");
 
+    if (!IOService::start(provider)) {
+        LOG("IOService::start failed");
+        return false;
+    }
+
     fFB = OSDynamicCast(FakeIrisXEFramebuffer, provider);
     if (!fFB) {
         LOG("provider is not FakeIrisXEFramebuffer");
         return false;
     }
 
+    // V148: Comprehensive startup diagnostics
+    IOLog("(FakeIrisXEAccelerator)[V148] ============================================\n");
+    IOLog("(FakeIrisXEAccelerator)[V148] FAKEIRISXE METAL ACCELERATOR STARTING\n");
+    IOLog("(FakeIrisXEAccelerator)[V148] ============================================\n");
+    
     // advertise ourselves to IOAccelFamily / OS
     setProperty("MetalSupported", true);
     setProperty("IOAccelFamily", true);
     setProperty("IOGVA", true);
     setProperty("MetalPlugin", true);
     setProperty("MetalDriver", "FakeIrisXe");
+    setProperty("IOAccelerator", kOSBooleanTrue);
+    setProperty("IOMatchCategory", "IOAccelerator");
+    setProperty("IOAccelReady", kOSBooleanTrue);
+    setProperty("IOGPU", kOSBooleanTrue);
+    setProperty("FakeIrisXEAcceleratorAttached", kOSBooleanTrue);
+
+    IOLog("(FakeIrisXEAccelerator)[V148] Properties set:\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   MetalSupported = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelFamily = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOGVA = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   MetalPlugin = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   MetalDriver = FakeIrisXe\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelerator = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelReady = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOGPU = true\n");
 
     // framebuffer basics
     fW      = fFB->getWidth();
@@ -111,9 +136,10 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     fStride = fFB->getStride();
     fPixels = fFB->getFramebufferKernelPtr();
 
-    
-    
-
+    IOLog("(FakeIrisXEAccelerator)[V148] Framebuffer info:\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   Resolution: %ux%u\n", fW, fH);
+    IOLog("(FakeIrisXEAccelerator)[V148]   Stride: %u bytes\n", fStride);
+    IOLog("(FakeIrisXEAccelerator)[V148] ============================================\n");
 
     /*
     // timer (inside start)
@@ -132,10 +158,12 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     
     
 
-    registerService();
+    linkFromFramebuffer(fFB);
+
+    registerService(kIOServiceSynchronous);
     LOG("started; waiting for user client attachShared()");
 
-    return IOService::start(provider);
+    return true;
 }
 
 #pragma mark - Stop
@@ -844,6 +872,10 @@ bool FakeIrisXEAccelerator::submitGpuBatchForCtx(uint32_t ctxId,
                                                  FakeIrisXEGEM* batchGem,
                                                  uint32_t priority)
 {
+    // V148: Add Metal submission diagnostics
+    static uint64_t submitCount = 0;
+    submitCount++;
+    
     if (!fFB || !fFB->fExeclist || !batchGem)
         return false;
 
@@ -853,28 +885,79 @@ bool FakeIrisXEAccelerator::submitGpuBatchForCtx(uint32_t ctxId,
     if (!hw) {
         hw = ex->createHwContextFor(ctxId, priority);
         if (!hw) {
-            IOLog("(FakeIrisXEFramebuffer) [Accel] submitGpuBatchForCtx: createHwContextFor FAILED\n");
+            IOLog("(FakeIrisXEFramebuffer) [Accel][V148] submitGpuBatchForCtx: createHwContextFor FAILED ctx=%u\n", ctxId);
             return false;
         }
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] Created new HW context ctx=%u prio=%u\n", ctxId, priority);
     }
 
-    return ex->submitForContext(hw, batchGem);
+    // V148: Log first few submissions for diagnostics
+    if (submitCount <= 5) {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] submitGpuBatch ctx=%u batch=%p seq=%llu\n", 
+              ctxId, batchGem, submitCount);
+    }
+    
+    bool result = ex->submitForContext(hw, batchGem);
+    
+    if (submitCount <= 5 && !result) {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] submitForContext FAILED ctx=%u\n", ctxId);
+    }
+    
+    return result;
 }
 
 
 void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
 {
-    fFB = fb;
-    fExeclistFromFB = fb->getExeclist();
-    fRcsRingFromFB  = fb->getRcsRing();
-
-    IOLog("🧩 LINK DEBUG: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
-
-    if (!fExeclistFromFB || !fRcsRingFromFB)
-    {
-        IOLog("❌ Accelerator link FAILED — missing RING or EXECLIST\n");
+    if (!fb) {
+        IOLog("(FakeIrisXEFramebuffer) [Accel] linkFromFramebuffer: null framebuffer\n");
         return;
     }
 
-    IOLog("🟢 Accelerator LINK COMPLETE\n");
+    fFB = fb;
+    uint64_t accelRegistryID = getRegistryEntryID();
+    fExeclistFromFB = fb->getExeclist();
+    fRcsRingFromFB  = fb->getRcsRing();
+    
+    // V148: Comprehensive Metal Diagnostics
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] ============================================\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] METAL DIAGNOSTICS - Execlist Status\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] ============================================\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] RegistryID: 0x%llx\n", accelRegistryID);
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] Execlist ptr: %p\n", fExeclistFromFB);
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] RCS Ring ptr: %p\n", fRcsRingFromFB);
+    
+    if (fExeclistFromFB) {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] Execlist: AVAILABLE ✅\n");
+    } else {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] Execlist: NOT AVAILABLE ❌\n");
+    }
+    
+    if (fRcsRingFromFB) {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] RCS Ring: AVAILABLE ✅\n");
+    } else {
+        IOLog("(FakeIrisXEFramebuffer) [Accel][V148] RCS Ring: NOT AVAILABLE ❌\n");
+    }
+    
+    // Check framebuffer state
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] FB Dimensions: %ux%u\n", fb->getWidth(), fb->getHeight());
+    
+    IOLog("(FakeIrisXEFramebuffer) [Accel][V148] ============================================\n");
+    
+    setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
+    setProperty("IOAcceleratorRegistryID", accelRegistryID, 64);
+    fFB->setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
+    fFB->setProperty("IOFBAccelerator", kOSBooleanTrue);
+    fFB->setProperty("IOFBAcceleratorRegistryID", accelRegistryID, 64);
+    fFB->setProperty("IOAccelServiceRegistryID", accelRegistryID, 64);
+
+    IOLog("(FakeIrisXEFramebuffer) [Accel] link debug: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
+
+    if (!fExeclistFromFB || !fRcsRingFromFB)
+    {
+        IOLog("(FakeIrisXEFramebuffer) [Accel] link pending: missing RING or EXECLIST\n");
+        return;
+    }
+
+    IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - METAL READY ✅\n");
 }

@@ -383,6 +383,9 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     fV93DisplayVerified = false;
     fV93WindowServerConnected = false;
     
+    // V138: Initialize BLT ring pointer
+    fBltRing = nullptr;
+    
     return true;
 }
 
@@ -760,6 +763,34 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     IOLog("✅ [V131] super::start() succeeded\n");
 
+    // V149: Add GEM/GTT Diagnostics
+    IOLog("(FakeIrisXE)[V149] ============================================\n");
+    IOLog("(FakeIrisXE)[V149] GEM/GTT DIAGNOSTICS\n");
+    IOLog("(FakeIrisXE)[V149] ============================================\n");
+    
+    // Check key GGTT registers
+    if (fBar0) {
+        // PGTBL_CTL - Page Table Control (0x02020)
+        uint32_t pgtblCtl = safeMMIORead(0x02020);
+        
+        IOLog("(FakeIrisXE)[V149] GTT Page Table:\n");
+        IOLog("(FakeIrisXE)[V149]   PGTBL_CTL (0x02020): 0x%08X\n", pgtblCtl);
+        
+        // Check if GTT is enabled
+        bool gttEnabled = (pgtblCtl & 0x1) != 0;
+        IOLog("(FakeIrisXE)[V149]   GTT Enabled: %s\n", gttEnabled ? "YES ✅" : "NO ❌");
+        
+        // Get GTT base address
+        uint32_t pgtblAddr = pgtblCtl & 0xFFFFF000;
+        IOLog("(FakeIrisXE)[V149]   GTT Base: 0x%08X\n", pgtblAddr);
+    }
+    
+    // Check if we have GEM objects mapped
+    IOLog("(FakeIrisXE)[V149] GEM Status:\n");
+    IOLog("(FakeIrisXE)[V149]   GEM system: %s\n", "Initializing...");
+    
+    IOLog("(FakeIrisXE)[V149] ============================================\n");
+
     const uint64_t startTotalAbs = mach_absolute_time();
     uint64_t stageStartAbs = startTotalAbs;
     uint32_t currentStage = 0;
@@ -1049,7 +1080,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     const uint32_t width  = 1920;
     const uint32_t height = 1080;
     const uint32_t bpp    = 4;
-    const uint64_t kReportedVramBytes = 128ULL * 1024ULL * 1024ULL;
+    const uint64_t kReportedVramBytes = 1536ULL * 1024ULL * 1024ULL;  // Tiger Lake 1.5GB
 
     uint32_t rawSize     = width * height * bpp;
     uint32_t alignedSize = (rawSize + 0xFFFF) & ~0xFFFF; // 64KB aligned
@@ -1712,6 +1743,65 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     logStage(5, "Firmware + execution submission mode");
     IOLog("(FakeIrisXE) [V45] Loading firmware (Intel PRM compliant)...\n");
 
+    char runtimeArgBuf[16] = {0};
+    bool runBootDiagFull = PE_parse_boot_argn("-fakeirisxe-diag", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool runBootDiagQuick = PE_parse_boot_argn("-fakeirisxe-quickdiag", runtimeArgBuf, sizeof(runtimeArgBuf));
+
+    bool gucApplePath = true;
+    bool gucPmExperiment = true;
+    bool gucDoorbellProbe = true;
+    bool gucDoorbellAggressive = false;
+    bool gucDoorbellBypass = false;  // V140: Bypass doorbell failure
+    bool gucAppleLab = false;
+
+    if (PE_parse_boot_argn("-fakeirisxe-guc-no-apple", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucApplePath = false;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-no-pmexp", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucPmExperiment = false;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-no-doorbell-probe", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucDoorbellProbe = false;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-apple", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucApplePath = true;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-pm-experiment", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucPmExperiment = true;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-probe", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucDoorbellProbe = true;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-aggressive", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucDoorbellProbe = true;
+        gucDoorbellAggressive = true;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-bypass", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucDoorbellBypass = true;
+    }
+    if (PE_parse_boot_argn("-fakeirisxe-guc-apple-lab", runtimeArgBuf, sizeof(runtimeArgBuf))) {
+        gucAppleLab = true;
+    }
+
+    setProperty("FakeIrisXEGuCApplePath", gucApplePath ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEGuCPMExperiment", gucPmExperiment ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEGuCDoorbellProbe", gucDoorbellProbe ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEGuCDoorbellAggressive", gucDoorbellAggressive ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEGuCDoorbellBypass", gucDoorbellBypass ? kOSBooleanTrue : kOSBooleanFalse);  // V140
+    setProperty("FakeIrisXEGuCAppleLab", gucAppleLab ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
+
+    IOLog("(FakeIrisXE) [V45] Runtime toggles: diag_full=%u diag_quick=%u guc_apple=%u guc_pm_experiment=%u doorbell_probe=%u doorbell_aggressive=%u apple_lab=%u\n",
+          runBootDiagFull ? 1U : 0U,
+          runBootDiagQuick ? 1U : 0U,
+          gucApplePath ? 1U : 0U,
+          gucPmExperiment ? 1U : 0U,
+          gucDoorbellProbe ? 1U : 0U,
+          gucDoorbellAggressive ? 1U : 0U,
+          gucDoorbellBypass ? 1U : 0U,
+          gucAppleLab ? 1U : 0U);
+
     // V45: Program MOCS before GuC init
     IOLog("(FakeIrisXE) [V45] Programming MOCS...\n");
     if (!programMOCS()) {
@@ -1820,30 +1910,30 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             } else {
                 IOLog("FakeIrisXEFramebuffer: EXECLIST engine READY\n");
                 
-                // V60: Run diagnostic test only if -fakeirisxe boot flag is set
-                // (Already checked in probe(), but double-check here for safety)
-                char bootArg[32] = {0};
-                bool hasBootArg = PE_parse_boot_argn("-fakeirisxe", bootArg, sizeof(bootArg));
-                
-                if (hasBootArg) {
-                    IOLog("FakeIrisXEFramebuffer: [V70] Boot flag '-fakeirisxe' detected - running COMPREHENSIVE diagnostic test...\n");
-                    
-                    // V70: Run comprehensive diagnostic suite
+                if (runBootDiagFull) {
+                    IOLog("FakeIrisXEFramebuffer: [V70] '-fakeirisxe-diag' detected - running comprehensive diagnostics...\n");
+
                     if (fExeclist->runComprehensiveDiagnosticTest()) {
                         IOLog("FakeIrisXEFramebuffer: [V70] ✅ ALL COMPREHENSIVE TESTS PASSED\n");
                     } else {
                         IOLog("FakeIrisXEFramebuffer: [V70] ⚠️ Some comprehensive tests failed (see logs above)\n");
                     }
-                    
-                    // Also run simple test for comparison
+
                     IOLog("FakeIrisXEFramebuffer: [V70] Running simple diagnostic test...\n");
                     if (fExeclist->runSimpleDiagnosticTest()) {
                         IOLog("FakeIrisXEFramebuffer: [V62] Simple diagnostic test PASSED\n");
                     } else {
                         IOLog("FakeIrisXEFramebuffer: [V62] Simple diagnostic test FAILED\n");
                     }
+                } else if (runBootDiagQuick) {
+                    IOLog("FakeIrisXEFramebuffer: [V70] '-fakeirisxe-quickdiag' detected - running simple diagnostic test only...\n");
+                    if (fExeclist->runSimpleDiagnosticTest()) {
+                        IOLog("FakeIrisXEFramebuffer: [V62] Simple diagnostic test PASSED\n");
+                    } else {
+                        IOLog("FakeIrisXEFramebuffer: [V62] Simple diagnostic test FAILED\n");
+                    }
                 } else {
-                    IOLog("FakeIrisXEFramebuffer: [V70] Skipping diagnostic test (add '-fakeirisxe' to boot-args to enable)\n");
+                    IOLog("FakeIrisXEFramebuffer: [V70] Skipping boot diagnostics (use -fakeirisxe-quickdiag or -fakeirisxe-diag)\n");
                 }
             }
         
@@ -1855,55 +1945,61 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                 IOLog("FakeIrisXEFramebuffer: FAILED creating RCS ring\n");
             }
 
-            // V88: Simple execlist command submission test
-            IOLog("\n");
-            IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-            IOLog("║  V88: EXECLIST COMMAND SUBMISSION TEST                       ║\n");
-            IOLog("╚══════════════════════════════════════════════════════════════╝\n");
-            IOLog("\n");
-            
-            if (fExeclist && fRcsRing) {
-                IOLog("[V88] Attempting simple MI_NOOP submission via execlist...\n");
-                
-                // Create a simple batch buffer with MI_NOOP
-                FakeIrisXEGEM* testBatch = createSimpleUserBatch();
-                if (testBatch) {
-                    testBatch->pin();
-                    uint64_t batchGpu = ggttMap(testBatch);
-                    
-                    IOLog("[V88] Test batch created: GPU addr=0x%llx\n", batchGpu);
-                    
-                    // Try to submit via execlist
-                    bool submitOk = fExeclist->submitBatchExeclist(testBatch);
-                    if (submitOk) {
-                        IOLog("[V88] ✅ MI_NOOP command submitted successfully!\n");
-                    } else {
-                        IOLog("[V88] ❌ MI_NOOP submission failed - checking with full submit...\n");
-                        
-                        // Try the full submit path with fence
-                        bool fullSubmitOk = fExeclist->submitBatchWithExeclist(
-                            this, 
-                            testBatch, 
-                            4096, 
-                            fRcsRing, 
-                            5000
-                        );
-                        if (fullSubmitOk) {
-                            IOLog("[V88] ✅ Full submit path (with fence) succeeded!\n");
+            // V138: Create BLT ring for 2D operations
+            fBltRing = createBltRing(256 * 1024);
+            if (fBltRing) {
+                IOLog("FakeIrisXEFramebuffer: BLT ring initialization complete. fBltRing=%p\n", fBltRing);
+            } else {
+                IOLog("FakeIrisXEFramebuffer: FAILED creating BLT ring\n");
+            }
+
+            if (runBootDiagFull) {
+                IOLog("\n");
+                IOLog("[V88] EXECLIST command submission test (diag mode)\n");
+                IOLog("\n");
+
+                if (fExeclist && fRcsRing) {
+                    IOLog("[V88] Attempting simple MI_NOOP submission via execlist...\n");
+
+                    FakeIrisXEGEM* testBatch = createSimpleUserBatch();
+                    if (testBatch) {
+                        testBatch->pin();
+                        uint64_t batchGpu = ggttMap(testBatch);
+
+                        IOLog("[V88] Test batch created: GPU addr=0x%llx\n", batchGpu);
+
+                        bool submitOk = fExeclist->submitBatchExeclist(testBatch);
+                        if (submitOk) {
+                            IOLog("[V88] ✅ MI_NOOP command submitted successfully!\n");
                         } else {
-                            IOLog("[V88] ❌ Full submit path also failed\n");
+                            IOLog("[V88] ❌ MI_NOOP submission failed - checking with full submit...\n");
+
+                            bool fullSubmitOk = fExeclist->submitBatchWithExeclist(
+                                this,
+                                testBatch,
+                                4096,
+                                fRcsRing,
+                                5000
+                            );
+                            if (fullSubmitOk) {
+                                IOLog("[V88] ✅ Full submit path (with fence) succeeded!\n");
+                            } else {
+                                IOLog("[V88] ❌ Full submit path also failed\n");
+                            }
                         }
+
+                        testBatch->unpin();
+                        testBatch->release();
+                    } else {
+                        IOLog("[V88] ❌ Failed to create test batch buffer\n");
                     }
-                    
-                    testBatch->unpin();
-                    testBatch->release();
                 } else {
-                    IOLog("[V88] ❌ Failed to create test batch buffer\n");
+                    IOLog("[V88] ⚠️ Cannot run test - execlist or RCS ring not ready\n");
+                    IOLog("   fExeclist: %p\n", fExeclist);
+                    IOLog("   fRcsRing: %p\n", fRcsRing);
                 }
             } else {
-                IOLog("[V88] ⚠️ Cannot run test - execlist or RCS ring not ready\n");
-                IOLog("   fExeclist: %p\n", fExeclist);
-                IOLog("   fRcsRing: %p\n", fRcsRing);
+                IOLog("[V88] Skipping boot-time submission test (use -fakeirisxe-diag)\n");
             }
 
             // V89: WindowServer Integration Setup
@@ -2027,6 +2123,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             {
                 IOLog("🔗 Found Accelerator child %p — linking…\n", accel);
                 accel->linkFromFramebuffer(this);
+                setProperty("IOFBAccelerator", kOSBooleanTrue);
+                setProperty("IOFBAcceleratorLinked", kOSBooleanTrue);
+                setProperty("IOAccelServiceRegistryID", accel->getRegistryEntryID(), 64);
                 IOLog("🟢 LINK SUCCESS — FB → Accelerator\n");
                 break;  // Important — only 1 accelerator
             }
@@ -4576,16 +4675,90 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     fRingRCS->attachRingGPUAddress(ringGpuVA);
     fRingSize = ringBytes;
     fRingGpuVA = ringGpuVA;
-    fRingGem = ringGem;      // store GEM (so it doesn’t get freed)
+    fRingGem = ringGem;      // store GEM (so it doesn't get freed)
 
     // Program registers
     fRingRCS->programRingBaseToHW();
     fRingRCS->enableRing();            // RING_CTL = EN | size
 
+    // V149: Add ring buffer status diagnostics
+    IOLog("(FakeIrisXE)[V149] RCS Ring Status After Enable:\n");
+    // Correct ring register offsets from FakeIrisXERing.cpp:
+    // RENDER_RING_BASE = 0x2000
+    // RENDER_RING_HEAD = 0x2010
+    // RENDER_RING_TAIL = 0x2020
+    // RENDER_RING_CTL = 0x2030
+    uint32_t ringHead = safeMMIORead(0x2010);  // RING_HEAD
+    uint32_t ringTail = safeMMIORead(0x2020);  // RING_TAIL
+    uint32_t ringCtl = safeMMIORead(0x2030);   // RING_CTL
+    // RING_STATUS is at 0x2038 (not 0x2028)
+    uint32_t ringStatus = safeMMIORead(0x2038); // RING_STATUS
+    
+    IOLog("(FakeIrisXE)[V149]   RING_HEAD:  0x%08X\n", ringHead);
+    IOLog("(FakeIrisXE)[V149]   RING_TAIL:  0x%08X\n", ringTail);
+    IOLog("(FakeIrisXE)[V149]   RING_CTL:   0x%08X\n", ringCtl);
+    IOLog("(FakeIrisXE)[V149]   RING_STATUS: 0x%08X\n", ringStatus);
+    
+    bool ringEmpty = (ringHead & 0xFFFF) == (ringTail & 0xFFFF);
+    bool ringRunning = (ringCtl & 0x1) != 0;
+    IOLog("(FakeIrisXE)[V149]   Ring Empty: %s\n", ringEmpty ? "YES ✅" : "NO");
+    IOLog("(FakeIrisXE)[V149]   Ring Running: %s\n", ringRunning ? "YES ✅" : "NO ❌");
+    
     IOLog("🟢 RCS ring created @ GPUVA=0x%llx size=%zu (ptr %p)\n",
           (unsigned long long) ringGpuVA, ringBytes, fRingRCS);
 
     return fRingRCS;
+}
+
+// V138: Create BLT ring for 2D operations
+FakeIrisXERing* FakeIrisXEFramebuffer::createBltRing(size_t ringBytes)
+{
+    IOLog("(FakeIrisXE) createBltRing() size=%zu\n", ringBytes);
+
+    // If BLT ring already exists — return it
+    if (fBltRing != nullptr) {
+        IOLog("(FakeIrisXE) createBltRing() — ring already exists @ %p\n", fBltRing);
+        return fBltRing;
+    }
+
+    // Allocate GEM buffer for BLT ring
+    FakeIrisXEGEM* ringGem = FakeIrisXEGEM::withSize(ringBytes, 0);
+    if (!ringGem) {
+        IOLog("❌ createBltRing — GEM allocation failed\n");
+        return nullptr;
+    }
+
+    ringGem->pin();
+
+    // Map into GGTT
+    uint64_t ringGpuVA = ggttMap(ringGem);
+    if (ringGpuVA == 0) {
+        IOLog("❌ createBltRing — GGTT mapping failed\n");
+        ringGem->unpin();
+        ringGem->release();
+        return nullptr;
+    }
+
+    // Create BLT ring object with BLT base offset (0x22000)
+    fBltRing = new FakeIrisXERing(fBar0, 0x22000);  // BLT ring base
+    if (!fBltRing) {
+        IOLog("❌ createBltRing — ring object alloc failed\n");
+        ringGem->unpin();
+        ringGem->release();
+        return nullptr;
+    }
+
+    // Save metadata into ring object
+    fBltRing->attachRingGPUAddress(ringGpuVA);
+
+    // Program BLT ring registers
+    fBltRing->programRingBaseToHW();
+    fBltRing->enableRing();
+
+    IOLog("🟢 BLT ring created @ GPUVA=0x%llx size=%zu (ptr %p)\n",
+          (unsigned long long) ringGpuVA, ringBytes, fBltRing);
+
+    return fBltRing;
 }
 
 

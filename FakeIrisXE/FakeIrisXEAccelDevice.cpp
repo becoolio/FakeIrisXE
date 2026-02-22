@@ -42,8 +42,15 @@ bool FakeIrisXEAccelDevice::start(IOService* provider)
     setProperty("IOClass", "FakeIrisXEAccelDevice");
     setProperty("MetalPluginClassName", "FakeIrisXEAccelerator"); // you already expose this elsewhere
     setProperty("IOGVACapabilities", "basic"); // placeholder hint
+    setProperty("IOMatchCategory", "IOAccelerator");
+    setProperty("IOAccelerator", kOSBooleanTrue);
+    setProperty("IOAccelFamily", kOSBooleanTrue);
+    setProperty("FakeIrisXEAccelDevicePublished", kOSBooleanTrue);
+    fFB->setProperty("FakeIrisXEAccelDevicePublished", kOSBooleanTrue);
 
-    registerService(); // make it discoverable to user space
+    IOLog("(FakeIrisXEAccelDevice) publishing accelerator-facing device node\n");
+
+    registerService(kIOServiceSynchronous); // make it discoverable to user space
     return true;
 }
 

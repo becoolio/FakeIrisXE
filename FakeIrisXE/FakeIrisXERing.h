@@ -9,7 +9,7 @@ class FakeIrisXEFramebuffer;
 
 class FakeIrisXERing {
 public:
-    FakeIrisXERing(volatile uint32_t* mmioBase);
+    FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOffset = 0x2000);
     ~FakeIrisXERing();
 
     // Allocate CPU-visible ring memory
@@ -41,6 +41,7 @@ public:
 
 private:
     volatile uint32_t* mMMIO;   // BAR0 base
+    uint32_t           mRingBaseOffset;  // Ring base offset (0x2000 for RCS, 0x22000 for BLT)
     uint32_t*          mRingCPU;
     size_t             mRingSize;
     uint64_t           mRingWriteOffset;

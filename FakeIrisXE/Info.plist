@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.93</string>
+	<string>1.0.149</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.93</string>
+	<string>1.0.149</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V93 - Display Verification and Integration Testing</string>
+	<string>FakeIrisXe V149 - GEM/GTT diagnostics, Ring buffer status, GuC pre-init</string>
 	<key>OSBundleRequired</key>
 	<string>Safe Boot</string>
 	<key>IOKitPersonalities</key>
@@ -28,6 +28,10 @@
 			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 			<key>IOClass</key>
 			<string>FakeIrisXEAccelDevice</string>
+			<key>IOMatchCategory</key>
+			<string>IOAccelerator</string>
+			<key>IOProbeScore</key>
+			<integer>60000</integer>
 			<key>IOGVACapabilities</key>
 			<string>basic</string>
 			<key>IONameMatch</key>
@@ -39,8 +43,12 @@
 		</dict>
 		<key>FakeIrisXEAccelerator</key>
 		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 			<key>IOClass</key>
 			<string>FakeIrisXEAccelerator</string>
+			<key>IOProbeScore</key>
+			<integer>65000</integer>
 			<key>IOGVAGPUSupported</key>
 			<true/>
 			<key>IOGVAHEVCDecode</key>

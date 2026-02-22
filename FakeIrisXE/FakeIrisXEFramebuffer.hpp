@@ -370,6 +370,7 @@ protected:
 
     FakeIrisXEExeclist* getExeclist() const { return fExeclist; }
     FakeIrisXERing* getRcsRing() const { return fRcsRing; }
+    FakeIrisXERing* getBltRing() const { return fBltRing; }
     
     
     
@@ -430,7 +431,9 @@ protected:
     bool waitForExeclistEvent(uint32_t timeoutMs);
     void* fSleepToken = (void*)0x12345678; // any unique pointer
     FakeIrisXERing* fRcsRing;   // render ring
+    FakeIrisXERing* fBltRing;   // BLT ring (for 2D operations)
     FakeIrisXEGEM* createTinyBatchGem();
+    FakeIrisXERing* createBltRing(size_t bytes);
 
     
     // GGTT mapping area (aperture)
