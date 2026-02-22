@@ -23,6 +23,7 @@
 #include <IOKit/IOInterruptEventSource.h>
 #include <libkern/OSAtomic.h>
 #include <pexpert/i386/boot.h>            // PE_Video
+#include <mach/mach_time.h>
 
 #include <IOKit/IOLocks.h>
 
@@ -148,6 +149,93 @@ static const DisplayModeInfo s_displayModes[kNumDisplayModes] = {
     {1024,  768, 5, "1024x768"},
     {2560, 1440, 6, "2560x1440"},
 };
+
+static void setNumberProperty(IORegistryEntry *entry, const char *key, uint64_t value, uint32_t bits)
+{
+    if (!entry || !key) {
+        return;
+    }
+
+    OSNumber *number = OSNumber::withNumber(value, bits);
+    if (!number) {
+        return;
+    }
+
+    entry->setProperty(key, number);
+    number->release();
+}
+
+static void setDataProperty32(IORegistryEntry *entry, const char *key, uint32_t value)
+{
+    if (!entry || !key) {
+        return;
+    }
+
+    OSData *data = OSData::withBytes(&value, sizeof(value));
+    if (!data) {
+        return;
+    }
+
+    entry->setProperty(key, data);
+    data->release();
+}
+
+static void publishNormalizedMemoryModel(FakeIrisXEFramebuffer *fb,
+                                         IOPCIDevice *pci,
+                                         uint64_t reportedBytes)
+{
+    if (!fb) {
+        return;
+    }
+
+    setNumberProperty(fb, "IOFBMemorySize", reportedBytes, 64);
+    setNumberProperty(fb, "IOAccelMemorySize", reportedBytes, 64);
+    setNumberProperty(fb, "IOAccelVRAMSize", reportedBytes, 64);
+    setNumberProperty(fb, "IOAccelVideoMemorySize", reportedBytes, 64);
+    setNumberProperty(fb, "VRAMSize", reportedBytes, 64);
+    setNumberProperty(fb, "VRAM,totalMB", reportedBytes / (1024ULL * 1024ULL), 32);
+    setNumberProperty(fb, "framebuffer-unifiedmem", reportedBytes, 32);
+
+    if (pci) {
+        setDataProperty32(pci, "VRAM,totalsize", static_cast<uint32_t>(reportedBytes));
+        setNumberProperty(pci, "deviceVRAM", reportedBytes, 64);
+    }
+}
+
+static void publishTypedIdentityProperties(FakeIrisXEFramebuffer *fb, IOPCIDevice *pci)
+{
+    if (!fb) {
+        return;
+    }
+
+    const uint32_t vendor = 0x8086;
+    uint32_t device = 0x9A49;
+    if (pci) {
+        device = pci->configRead16(kIOPCIConfigDeviceID);
+    }
+
+    setDataProperty32(fb, "vendor-id", vendor);
+    setDataProperty32(fb, "product-id", device);
+    setDataProperty32(fb, "serial-number", 0x12345678);
+    setDataProperty32(fb, "display-serial-number", 0x12345678);
+
+    if (pci) {
+        setDataProperty32(pci, "vendor-id", vendor);
+        setDataProperty32(pci, "device-id", device);
+    }
+}
+
+static uint64_t absDeltaToNs(uint64_t startAbs, uint64_t endAbs)
+{
+    if (endAbs <= startAbs) {
+        return 0;
+    }
+
+    const uint64_t delta = endAbs - startAbs;
+    uint64_t deltaNs = 0;
+    absolutetime_to_nanoseconds(delta, &deltaNs);
+    return deltaNs;
+}
 
 
 
@@ -672,6 +760,16 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     IOLog("✅ [V131] super::start() succeeded\n");
 
+    auto logStage = [](uint32_t stage, const char *name) {
+        IOLog("(FakeIrisXE) [STAGE %u] %s\n", stage, name);
+    };
+
+    auto logSoftFail = [](uint32_t stage, const char *name) {
+        IOLog("(FakeIrisXE) [STAGE %u] SOFT-FAIL: %s\n", stage, name);
+    };
+
+    logStage(1, "Core PCI/MMIO bring-up");
+
     
 
     
@@ -899,9 +997,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     
+    logStage(2, "Framebuffer allocation + IORegistry model");
+
     const uint32_t width  = 1920;
     const uint32_t height = 1080;
     const uint32_t bpp    = 4;
+    const uint64_t kReportedVramBytes = 128ULL * 1024ULL * 1024ULL;
 
     uint32_t rawSize     = width * height * bpp;
     uint32_t alignedSize = (rawSize + 0xFFFF) & ~0xFFFF; // 64KB aligned
@@ -997,54 +1098,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     
-    // V72: Fixed Dynamic VRAM detection for Tiger Lake
-        if (!pciDevice || !mmioBase) {
-            IOLog("[V72] VRAM detect: No PCI/MMIO — fallback 256MB\n");
-            return 256ULL * 1024ULL * 1024ULL;
-        }
-
-        // Step 1: Read stolen memory from BDSM register (0x5C)
-        // Tiger Lake: bits 31:25 = size in 4MB units
-        uint32_t bdsmReg = pciDevice->configRead32(0x5C);
-        uint64_t stolenSize = ((bdsmReg >> 18) & 0xFFF) * 64ULL * 1024ULL * 1024ULL; // In bytes
-        
-        // Fallback: if 0, assume 128MB stolen
-        if (stolenSize == 0) stolenSize = 128ULL * 1024ULL * 1024ULL;
-        
-        // Step 2: GTT aperture from BAR2 (0x54)
-        uint32_t bar2Lo = pciDevice->configRead32(0x54) & ~0xFULL;
-        uint32_t bar2Hi = pciDevice->configRead32(0x58);
-        uint64_t gttSize = ((uint64_t)bar2Hi << 32) | bar2Lo;
-        if (gttSize == 0) gttSize = 256ULL * 1024ULL * 1024ULL;
-        
-        // Total VRAM = stolen + GTT
-        uint64_t totalVramBytes = stolenSize + gttSize;
-        
-        // For Tiger Lake Xe, ensure minimum 1GB
-        if (totalVramBytes < 1024ULL * 1024ULL * 1024ULL) {
-            totalVramBytes = 1536ULL * 1024ULL * 1024ULL; // 1.5GB minimum for Xe
-        }
-        
-        IOLog("[V72] Dynamic VRAM: stolen=%llu MB, GTT=%llu MB, total=%llu MB\n", 
-              stolenSize / (1024*1024), gttSize / (1024*1024), totalVramBytes / (1024*1024));
-
-         
-        // Use it (after alloc, before props)
-    uint64_t realVramBytes = totalVramBytes;
-    
-    // V72: Set all VRAM properties for proper System Profiler recognition
-    setProperty("IOAccelVRAMSize", realVramBytes, 64);  // Metal/QE full
-    setProperty("IOFBMemorySize", realVramBytes, 64);   // Display
-    setProperty("VRAM,totalMB", (uint32_t)(realVramBytes / (1024*1024)), 32);
-    setProperty("VRAMSize", realVramBytes, 64);
-    
-    // Also set device properties
-    if (pciDevice) {
-        pciDevice->setProperty("deviceVRAM", realVramBytes);
-        pciDevice->setProperty("VRAM,totalsize", realVramBytes);
-    }
-    
-    IOLog("[V72] VRAM props set: %llu bytes (%llu MB)\n", realVramBytes, realVramBytes / (1024ULL * 1024ULL));
+    publishNormalizedMemoryModel(this, pciDevice, kReportedVramBytes);
+    IOLog("[V134] Normalized memory model: %llu MB\n", kReportedVramBytes / (1024ULL * 1024ULL));
     
     // V75: Add HDA audio codec properties for display audio
     // Intel HDA controller properties for audio over HDMI/DisplayPort
@@ -1120,7 +1175,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("framebuffer-con2-alldata", OSData::withBytes(con2_dp, sizeof(con2_dp)));
     
     // Additional framebuffer properties
-    setProperty("framebuffer-unifiedmem", OSNumber::withNumber(0x6000000, 32));  // 1536MB VRAM
+    setProperty("framebuffer-unifiedmem", kReportedVramBytes, 32);
     setProperty("complete-modeset", kOSBooleanTrue);
     setProperty("force-online", kOSBooleanTrue);
     
@@ -1139,12 +1194,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("display-type", OSString::withCString("built-in"));
     setProperty("panel-orientation", OSString::withCString("normal"));
     
-    // V131: Display vendor/product IDs for proper Mac detection
-    // Use Intel vendor (0x8086) and MacBook Pro-like product code
-    setProperty("vendor-id", OSNumber::withNumber(0x8086, 32));
-    setProperty("product-id", OSNumber::withNumber(0x9B00, 32));  // Similar to MacBook Pro
-    setProperty("serial-number", OSNumber::withNumber(0x12345678, 32));
-    setProperty("display-serial-number", OSNumber::withNumber(0x12345678, 32));
+    // Keep reporter-facing identity properties as Data (32-bit LE blobs),
+    // which matches IORegistry expectations used by display tools.
+    publishTypedIdentityProperties(this, pciDevice);
     setProperty("vendor-name", OSString::withCString("Intel"));
     setProperty("product-name", OSString::withCString("Intel Iris Xe Graphics"));
     
@@ -1515,12 +1567,14 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
 */
     
+    logStage(3, "Display/controller activation");
     activatePowerAndController();
     
     
     // ================================================
-    // V46+V47: GGTT INITIALIZATION (MUST BE FIRST)
+    // V46+V47: GGTT INITIALIZATION
     // ================================================
+    logStage(4, "GGTT/ring/command submission bring-up");
     IOLog("(FakeIrisXE) [V48] Initializing GGTT aperture...\n");
     
     // ---- GGTT Aperture Mapping ----
@@ -1539,24 +1593,22 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     );
 
     if (!desc) {
-        IOLog("FakeIrisXEFramebuffer: Failed to create GGTT descriptor\n");
-        return false;
+        logSoftFail(4, "Failed to create GGTT descriptor");
     }
 
-    IOMemoryMap* map = desc->map();
+    IOMemoryMap* map = desc ? desc->map() : nullptr;
     if (!map) {
-        IOLog("FakeIrisXEFramebuffer: Failed to map GGTT\n");
-        desc->release();
-        return false;
+        logSoftFail(4, "Failed to map GGTT");
+        OSSafeReleaseNULL(desc);
     }
 
-    // 3. Save GGTT pointer
-    fGGTT = (volatile uint32_t*)map->getVirtualAddress();
-    fGGTTSize = gttSize2;
-    fGGTTBaseGPU = 0x00000000;
-    fNextGGTTOffset = 0x00100000;   // leave hardware reserved region
-
-    IOLog("FakeIrisXEFramebuffer: GGTT mapped at %p\n", fGGTT);
+    if (map) {
+        fGGTT = (volatile uint32_t*)map->getVirtualAddress();
+        fGGTTSize = gttSize2;
+        fGGTTBaseGPU = 0x00000000;
+        fNextGGTTOffset = 0x00100000;
+        IOLog("FakeIrisXEFramebuffer: GGTT mapped at %p\n", fGGTT);
+    }
 
     
 //ring rcs
@@ -1566,34 +1618,29 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     pci->setMemoryEnable(true);
 
     if (!map) {
-        IOLog("Failed to map BAR0\n");
-        return false;
+        logSoftFail(4, "BAR0/GGTT map missing; skipping ring init");
     }
 
-    fBar0 = (volatile uint32_t*)map->getVirtualAddress();
-    IOLog("BAR0 mapped at %p\n", fBar0);
+    if (map) {
+        fBar0 = (volatile uint32_t*)map->getVirtualAddress();
+        IOLog("BAR0 mapped at %p\n", fBar0);
+    }
 
 
     // 1. Create ring object
-    fRingRCS = new FakeIrisXERing(fBar0);
-
-    // 2. Allocate 64KB ring buffer
-    if (!fRingRCS->allocateRing(64 * 1024)) {
-        IOLog("Failed to allocate RCS ring\n");
-        return false;
+    if (fBar0) {
+        fRingRCS = new FakeIrisXERing(fBar0);
     }
 
-    // 3. Attach GPU address (if you have GGTT mapping)
-    fRingRCS->attachRingGPUAddress(gttAddr);
-        // gttAddr = GPU VA of the ring buffer
-
-    // 4. Program ring registers
-    fRingRCS->programRingBaseToHW();
-
-    // 5. Enable ring
-    fRingRCS->enableRing();
-
-    IOLog("RCS ring initialization complete.\n");
+    // 2. Allocate 64KB ring buffer
+    if (!fRingRCS || !fRingRCS->allocateRing(64 * 1024)) {
+        logSoftFail(4, "Failed to allocate first RCS ring");
+    } else {
+        fRingRCS->attachRingGPUAddress(gttAddr);
+        fRingRCS->programRingBaseToHW();
+        fRingRCS->enableRing();
+        IOLog("RCS ring initialization complete.\n");
+    }
 
 
     
@@ -1603,21 +1650,24 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     // Create ring
     if (!createRcsRing(256 * 1024)) {
-        IOLog("FakeIrisXEFramebuffer: createRcsRing failed\n");
-        return false;
-    }else{
-        
+        logSoftFail(4, "createRcsRing failed; continuing degraded");
+    } else {
         IOLog("FakeIrisXEFramebuffer: createRcsRing Succes\n");
 
     }
 
     // optional: create & map fence early (so submitBatch doesn't do it)
     fFenceGEM = FakeIrisXEGEM::withSize(4096, 0);
-    fFenceGEM->pin();
+    if (fFenceGEM) {
+        fFenceGEM->pin();
+    } else {
+        logSoftFail(4, "Fence GEM allocation failed");
+    }
 
     // ================================================
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
+    logStage(5, "Firmware + execution submission mode");
     IOLog("(FakeIrisXE) [V45] Loading firmware (Intel PRM compliant)...\n");
 
     // V45: Program MOCS before GuC init
@@ -2476,7 +2526,12 @@ IOReturn FakeIrisXEFramebuffer::staticFlushAction(OSObject *owner,
 
 void FakeIrisXEFramebuffer::scheduleFlushFromAccelerator()
 {
-    // Mark request
+    // Coalesce bursts from accelerator submissions.
+    if (fNeedFlush || fFlushInProgress) {
+        fFlushDeferred = true;
+        return;
+    }
+
     fNeedFlush = true;
 
     if (commandGate) {
@@ -3524,16 +3579,32 @@ IOReturn FakeIrisXEFramebuffer::clientMemoryForType(UInt32 type, UInt32* flags, 
 // ==== REAL FLUSH WORK (runs on workloop thread) ====
 IOReturn FakeIrisXEFramebuffer::performFlushNow()
 {
-    IOLog("FakeIrisXEFB::performFlushNow(): running\n");
+    const uint64_t nowAbs = mach_absolute_time();
+
+    if (fFlushInProgress) {
+        fFlushDeferred = true;
+        return kIOReturnSuccess;
+    }
+
+    if (fLastFlushAbsTime != 0) {
+        const uint64_t deltaNs = absDeltaToNs(fLastFlushAbsTime, nowAbs);
+        if (deltaNs < kMinFlushIntervalNs) {
+            fFlushDeferred = true;
+            return kIOReturnSuccess;
+        }
+    }
+
+    fFlushInProgress = true;
+    fNeedFlush = false;
 
     if (!framebufferMemory) {
-        IOLog("FakeIrisXEFB::performFlushNow(): no framebufferMemory\n");
+        fFlushInProgress = false;
         return kIOReturnNotReady;
     }
 
     uint32_t *fb = (uint32_t *) framebufferMemory->getBytesNoCopy();
     if (!fb) {
-        IOLog("FakeIrisXEFB::performFlushNow(): getBytesNoCopy() == nullptr\n");
+        fFlushInProgress = false;
         return kIOReturnError;
     }
 
@@ -3562,7 +3633,18 @@ IOReturn FakeIrisXEFramebuffer::performFlushNow()
     
     
     
-    IOLog("FakeIrisXEFB::performFlushNow(): done\n");
+    (void)fb;
+    fLastFlushAbsTime = mach_absolute_time();
+    fFlushInProgress = false;
+
+    if (fFlushDeferred) {
+        const uint64_t deferNow = mach_absolute_time();
+        if (absDeltaToNs(fLastFlushAbsTime, deferNow) >= kMinFlushIntervalNs) {
+            fFlushDeferred = false;
+            fNeedFlush = true;
+        }
+    }
+
     return kIOReturnSuccess;
 }
 
@@ -3588,18 +3670,17 @@ IOReturn FakeIrisXEFramebuffer::staticPerformFlush(
 // ==== PUBLIC API THAT WINDOWSERVER CALLS ====
 IOReturn FakeIrisXEFramebuffer::flushDisplay(void)
 {
-    
-    IOLog("FakeIrisXEFB::flushDisplay(): schedule work\n");
-
-    
     if (!commandGate || !workLoop)
         return performFlushNow(); // fallback safe
+
+    if (fFlushInProgress) {
+        fFlushDeferred = true;
+        return kIOReturnSuccess;
+    }
 
     IOReturn r = commandGate->runAction(
         &FakeIrisXEFramebuffer::staticPerformFlush
     );
-
-    IOLog("FakeIrisXEFB::flushDisplay(): runAction returned %x\n", r);
     return r;
 
  }

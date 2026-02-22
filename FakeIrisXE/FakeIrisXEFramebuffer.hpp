@@ -168,6 +168,10 @@ protected:
     
     
     bool fNeedFlush = false;   // <-- REQUIRED (you were missing this)
+    bool fFlushInProgress = false;
+    bool fFlushDeferred = false;
+    uint64_t fLastFlushAbsTime = 0;
+    static constexpr uint64_t kMinFlushIntervalNs = 16ULL * 1000ULL * 1000ULL;
 
     
     IOCommandGate* commandGate;
