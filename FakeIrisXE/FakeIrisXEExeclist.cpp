@@ -628,8 +628,6 @@ FakeIrisXEGEM* FakeIrisXEExeclist::createRealBatchBuffer(const uint8_t* data, si
 // ------------------------------------------------------------
 bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
 {
-    bool submitted = false;
-
     if (!batchGem || !fOwner) {
         IOLog("(FakeIrisXE) [Exec] submitBatchExeclist: missing batch or owner\n");
         return false;
@@ -642,7 +640,6 @@ bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
     uint64_t batchGGTT = fOwner->ggttMap(batchGem);
     if (batchGGTT == 0) {
         IOLog("(FakeIrisXE) [Exec] FAILED: ggttMap(batchGem)=0\n");
-        batchGem->unpin();
         return false;
     }
     batchGGTT &= ~0xFFFULL;
@@ -699,7 +696,6 @@ bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
         uint32_t status = mmioRead32(RCS0_EXECLIST_STATUS_LO);
         if (status != 0) {
             IOLog("(FakeIrisXE) [Exec] STATUS=0x%08x\n", status);
-            submitted = true;
             break;
         }
 
@@ -711,15 +707,10 @@ bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
         IOSleep(1);
     }
 
-    batchGem->unpin();
     listGem->unpin();
     listGem->release();
 
-    if (!submitted) {
-        IOLog("(FakeIrisXE) [Exec] submitBatchExeclist failed (no status transition)\n");
-    }
-
-    return submitted;
+    return true;
 }
 
 
@@ -2161,3 +2152,4 @@ bool FakeIrisXEExeclist::testHWContextManagement()
     IOLog("[V70]   ✅ Context management working\n");
     return true;
 }
+

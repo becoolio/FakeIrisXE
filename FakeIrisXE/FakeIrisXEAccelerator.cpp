@@ -1,10 +1,23 @@
 #include "FakeIrisXEAccelerator.hpp"
 #include "FakeIrisXEAccelShared.h"
 #include "FakeIrisXEFramebuffer.hpp"
-#include "FakeIrisXEIosurfaceCompat.hpp"
-#include "FakeIrisXETrace.hpp"
 #include <IOKit/IOLib.h>
 #include <IOKit/IOTimerEventSource.h>
+#include <IOKit/IOLib.h>
+#include <IOKit/IOLib.h>
+
+
+
+// cheap forward-declare (only if header isn't available)
+typedef struct __IOSurface * IOSurfaceRef;
+extern "C" IOSurfaceRef IOSurfaceLookup(uint32_t);
+extern "C" int IOSurfaceLock(IOSurfaceRef, uint32_t, void *);
+extern "C" int IOSurfaceUnlock(IOSurfaceRef, uint32_t, void *);
+extern "C" void *IOSurfaceGetBaseAddress(IOSurfaceRef);
+extern "C" size_t IOSurfaceGetBytesPerRow(IOSurfaceRef);
+extern "C" size_t IOSurfaceGetWidth(IOSurfaceRef);
+extern "C" size_t IOSurfaceGetHeight(IOSurfaceRef);
+extern "C" void IOSurfaceRelease(IOSurfaceRef);
 
 
 
@@ -77,18 +90,13 @@ IOService* FakeIrisXEAccelerator::probe(IOService* provider, SInt32* score) {
 #pragma mark - Start
 
 bool FakeIrisXEAccelerator::start(IOService* provider) {
-    FXE_PHASE("ACCEL", 100, "start enter provider=%p", provider);
     LOG("start() attaching to framebuffer");
 
     fFB = OSDynamicCast(FakeIrisXEFramebuffer, provider);
     if (!fFB) {
         LOG("provider is not FakeIrisXEFramebuffer");
-        FXE_LOG("[ACCEL] provider cast failed");
         return false;
     }
-
-    // Initialize IOSurface symbols (will fail safely if not available)
-    InitIOSurfaceSymbols();
 
     // advertise ourselves to IOAccelFamily / OS
     setProperty("MetalSupported", true);
@@ -107,7 +115,8 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     
 
 
-    // V145: Start the timer for pollRing
+    /*
+    // timer (inside start)
     if (!fWL) {
         fWL = getWorkLoop();
         if (!fWL) fWL = IOWorkLoop::workLoop();
@@ -117,21 +126,14 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     if (!createAndArmTimer(this, fWL, fTimer, 16)) {
         IOLog("(FakeIrisXEFramebuffer) [Accel] start(): failed to create timer\n");
     } else {
-        IOLog("(FakeIrisXEFramebuffer) [Accel] start(): timer created successfully\n");
+        IOLog("(FakeIrisXEFramebuffer) [Accel] start(): timer created\n");
     }
-
-    setProperty("FakeIrisXEIOSurfaceReady", IOSurfaceKextAvailable() ? kOSBooleanTrue : kOSBooleanFalse);
-    FXE_LOG("[INIT][SUMMARY] GT_READY=%u UC_READY=%u GUC_STATE=%u IOSURF_READY=%u",
-            1u,
-            0u,
-            0u,
-            IOSurfaceKextAvailable() ? 1u : 0u);
+*/
     
     
 
     registerService();
     LOG("started; waiting for user client attachShared()");
-    FXE_PHASE("ACCEL", 101, "start done");
 
     return IOService::start(provider);
 }
@@ -139,7 +141,6 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
 #pragma mark - Stop
 
 void FakeIrisXEAccelerator::stop(IOService* provider) {
-    FXE_PHASE("ACCEL", 900, "stop enter provider=%p", provider);
     LOG("stop");
 
     if (fTimer) {
@@ -166,7 +167,6 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
 
     fFB = nullptr;
     IOService::stop(provider);
-    FXE_PHASE("ACCEL", 901, "stop done");
 }
 
 
@@ -174,7 +174,6 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
 #pragma mark - attachShared (UserClient provides ring)
 
 bool FakeIrisXEAccelerator::attachShared(IOBufferMemoryDescriptor* page) {
-    FXE_PHASE("ACCEL", 200, "attachShared enter page=%p", page);
     if (!page) return false;
 
     if (fSharedMem) { fSharedMem->release(); }
@@ -198,7 +197,6 @@ bool FakeIrisXEAccelerator::attachShared(IOBufferMemoryDescriptor* page) {
     fRingBase = reinterpret_cast<uint8_t*>(base) + sizeof(XEHdr);
 
     LOG("attachShared: OK (magic=0x%08x cap=%u)", hdr->magic, hdr->capacity);
-    FXE_PHASE("ACCEL", 201, "attachShared ready cap=%u", hdr->capacity);
 
     // accelerate polling to 5ms once ring is live
     if (fTimer) fTimer->setTimeoutMS(5);
@@ -227,7 +225,6 @@ FakeIrisXEAccelerator::XEContext* FakeIrisXEAccelerator::lookupContext(uint32_t 
 
 uint32_t FakeIrisXEAccelerator::createContext(uint64_t sharedPtr, uint32_t flags)
 {
-    FXE_PHASE("ACCEL", 300, "createContext enter flags=0x%08x", flags);
     XEContext ctx{};
     ctx.ctxId = fNextCtxId++;
     ctx.active = true;
@@ -241,7 +238,6 @@ uint32_t FakeIrisXEAccelerator::createContext(uint64_t sharedPtr, uint32_t flags
     data->release(); // OSArray retains it
 
     LOG("createContext ctxId=%u", ctx.ctxId);
-    FXE_PHASE("ACCEL", 301, "createContext done ctx=%u", ctx.ctxId);
     return ctx.ctxId;
 }
 
@@ -436,40 +432,45 @@ void FakeIrisXEAccelerator::processCommand(const XECmd &cmd, const void* payload
                 break;
             }
 
-            uint32_t iosID = ctx->surfIOSurfaceID;
-            uint32_t srcW  = ctx->surfWidth;
-            uint32_t srcH  = ctx->surfHeight;
-            uint32_t srcRB = ctx->surfRowBytes;
+            if (!ctx->surfCPU || ctx->surfRowBytes == 0 ||
+                ctx->surfWidth == 0 || ctx->surfHeight == 0)
+            {
+                IOLockUnlock(fCtxLock);
+                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: invalid surface for ctx %u\n", cmd.ctxId);
+                break;
+            }
+
+            uint8_t* srcBase = (uint8_t*)ctx->surfCPU;
+            uint32_t srcRB   = ctx->surfRowBytes;
+            uint32_t srcW    = ctx->surfWidth;
+            uint32_t srcH    = ctx->surfHeight;
+
             IOLockUnlock(fCtxLock);
 
-            // V145: Copy from pixel buffer to framebuffer
-            if (!fPixelBufferPtr) {
-                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: No pixel buffer allocated\n");
-                break;
-            }
-            
             if (!fPixels || !fStride) {
-                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: Framebuffer not available\n");
+                IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: framebuffer pixels missing\n");
                 break;
             }
-            
-            // Copy pixels from shared buffer to framebuffer
-            // Assuming both are BGRA 640x480
+
+            // Clip copy area to framebuffer bounds
             uint32_t copyW = MIN(fW, srcW);
             uint32_t copyH = MIN(fH, srcH);
-            uint32_t copyBytesPerRow = MIN(fStride, srcRB);
-            
-            uint8_t* src = (uint8_t*)fPixelBufferPtr;
-            uint8_t* dst = (uint8_t*)fPixels;
-            
-            for (uint32_t y = 0; y < copyH; y++) {
-                memcpy(dst + y * fStride, src + y * srcRB, copyBytesPerRow);
+
+            uint8_t* dstBase = (uint8_t*)fPixels;
+            uint32_t dstRB   = fStride;
+
+            // ARGB8888 fast memcpy per row
+            for (uint32_t y = 0; y < copyH; ++y) {
+                memcpy(dstBase + y * dstRB,
+                       srcBase + y * srcRB,
+                       copyW * 4 /* bytes per pixel */);
             }
-            
+
+            // Request a flush, but do NOT block in timer thread
             fNeedFlush = true;
-            
-            IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT: Copied %ux%u pixels to framebuffer\n",
-                  copyW, copyH);
+
+            IOLog("(FakeIrisXEFramebuffer) [Accel] PRESENT OK ctx=%u (%ux%u)\n",
+                  cmd.ctxId, copyW, copyH);
             break;
         }
 
@@ -528,7 +529,7 @@ void FakeIrisXEAccelerator::cmdCopy(const XECopyPayload& p) {
 }
 
 
-// Updated bindSurface with IOSurface validation
+// Replace current bindSurface implementation with this (in FakeIrisXEAccelerator.cpp)
 IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceIn& in, XEBindSurfaceOut& out)
 {
     if (!fCtxLock) return kIOReturnNoResources;
@@ -540,27 +541,27 @@ IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceI
         return kIOReturnNotFound;
     }
 
+    // Store metadata reported by user-space
     ctx->hasSurface       = true;
-    ctx->surfPixelFormat  = in.pixelFormat;
-    ctx->surfIOSurfaceID  = in.ioSurfaceID;
-    ctx->surfID           = in.surfaceID;
-    ctx->surfCPU          = nullptr; // no longer used - we lookup each time
     ctx->surfWidth        = in.width;
     ctx->surfHeight       = in.height;
     ctx->surfRowBytes     = in.bytesPerRow;
+    ctx->surfPixelFormat  = in.pixelFormat;
+    ctx->surfIOSurfaceID  = in.ioSurfaceID;
+    ctx->surfID           = in.surfaceID;
+
+    // IMPORTANT: user-space must pass a pointer that's already mapped into the client task
+    // (for testing we accept that pointer value and store it).
+    // We save as void* kernel-side, but it points into the client's address space.
+    ctx->surfCPU = reinterpret_cast<void*>( (uintptr_t) in.cpuPtr );
 
     IOLockUnlock(fCtxLock);
 
-    // Note: IOSurface validation skipped - kernel symbols not available
-    // Trust the values passed from user space (which created the surface)
-    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u %ux%u stride=%u fmt=0x%08x\n",
-          ctxId, in.ioSurfaceID, in.width, in.height, in.bytesPerRow, in.pixelFormat);
-
-    out.gpuAddr = 0;
+    out.gpuAddr = 0; // fake
     out.status  = kIOReturnSuccess;
 
-    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u %ux%u stride=%u fmt=0x%08x\n",
-          ctxId, in.ioSurfaceID, in.width, in.height, in.bytesPerRow, in.pixelFormat);
+    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u cpuPtr=%p %ux%u stride=%u fmt=0x%08x\n",
+          ctxId, in.ioSurfaceID, ctx->surfCPU, in.width, in.height, in.bytesPerRow, in.pixelFormat);
 
     return kIOReturnSuccess;
 }
@@ -704,31 +705,27 @@ uint32_t FakeIrisXEAccelerator::createContext()
 
 bool FakeIrisXEAccelerator::destroyContext(uint32_t ctxId)
 {
-    FXE_PHASE("ACCEL", 310, "destroyContext enter ctx=%u", ctxId);
-    if (!fContexts) return false;
-    IOLockLock(fCtxLock);
-    for (unsigned i = 0; i < fContexts->getCount(); ++i) {
-        OSData *d = OSDynamicCast(OSData, fContexts->getObject(i));
+    if (!contexts) return false;
+    IOLockLock(contextsLock);
+    for (unsigned i = 0; i < contexts->getCount(); ++i) {
+        OSData *d = OSDynamicCast(OSData, contexts->getObject(i));
         if (!d) continue;
-        XEContext *ctx = (XEContext*)d->getBytesNoCopy();
-        if (ctx && ctx->ctxId == ctxId) {
+        XECtx *c = (XECtx*)d->getBytesNoCopy();
+        if (c && c->ctxId == ctxId) {
             // clear any bound mapping info but don't free user memory
-            ctx->surfCPU = nullptr;
-            ctx->surfWidth = 0;
-            ctx->surfHeight = 0;
-            ctx->surfRowBytes = 0;
-            ctx->surfIOSurfaceID = 0;
-            ctx->hasSurface = false;
-            fContexts->removeObject(i);
-            // Note: OSData will free the bytes when released
-            IOLockUnlock(fCtxLock);
+            c->surf_vaddr = 0;
+            c->surf_bytes = 0;
+            c->surf_rowbytes = 0;
+            c->surf_w = 0;
+            c->surf_h = 0;
+            contexts->removeObject(i);
+            IOFree(c, sizeof(XECtx));
+            IOLockUnlock(contextsLock);
             IOLog("(FakeIrisXEFramebuffer) [Accel] destroyContext %u\n", ctxId);
-            FXE_PHASE("ACCEL", 311, "destroyContext done ctx=%u", ctxId);
             return true;
         }
     }
-    IOLockUnlock(fCtxLock);
-    FXE_LOG("[ACCEL] destroyContext not found ctx=%u", ctxId);
+    IOLockUnlock(contextsLock);
     return false;
 }
 
@@ -870,40 +867,14 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     fFB = fb;
     fExeclistFromFB = fb->getExeclist();
     fRcsRingFromFB  = fb->getRcsRing();
-    
-    // V145: Get framebuffer display buffer pointer
-    fPixels = fb->getPixelBuffer();
-    fStride = fb->getStride();
-    fW = fb->getWidth();
-    fH = fb->getHeight();
 
-    IOLog("🧩 LINK DEBUG: Exec=%p Ring=%p Pixels=%p %ux%u stride=%u\n", 
-          fExeclistFromFB, fRcsRingFromFB, fPixels, fW, fH, fStride);
+    IOLog("🧩 LINK DEBUG: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
 
-    if (!fExeclistFromFB || !fRcsRingFromFB || !fPixels)
+    if (!fExeclistFromFB || !fRcsRingFromFB)
     {
-        IOLog("❌ Accelerator link FAILED — missing RING, EXECLIST, or PIXELS\n");
+        IOLog("❌ Accelerator link FAILED — missing RING or EXECLIST\n");
         return;
     }
 
-    IOLog("🟢 Accelerator LINK COMPLETE (with display buffer)\n");
-}
-
-// V145: Set pixel buffer for shared memory rendering
-void FakeIrisXEAccelerator::setPixelBuffer(IOBufferMemoryDescriptor* buffer)
-{
-    if (fPixelBuffer) {
-        fPixelBuffer->release();
-        fPixelBuffer = nullptr;
-        fPixelBufferPtr = nullptr;
-    }
-    
-    if (buffer) {
-        buffer->retain();
-        fPixelBuffer = buffer;
-        fPixelBufferPtr = buffer->getBytesNoCopy();
-        fPixelBufferSize = buffer->getLength();
-        IOLog("(FakeIrisXEFramebuffer) [Accel] Pixel buffer set: %p, %zu bytes\n", 
-              fPixelBufferPtr, fPixelBufferSize);
-    }
+    IOLog("🟢 Accelerator LINK COMPLETE\n");
 }

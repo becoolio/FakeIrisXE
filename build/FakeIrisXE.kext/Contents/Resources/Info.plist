@@ -2,24 +2,22 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleExecutable</key>
+	<string>FakeIrisXE</string>
+	<key>CFBundleGetInfoString</key>
+	<string>FakeIrisXe V93 - Display Verification and Integration Testing</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.93</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
-	<key>CFBundleIdentifier</key>
-	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
-	<key>CFBundleExecutable</key>
-	<string>FakeIrisXE</string>
-	<key>CFBundlePackageType</key>
-	<string>KEXT</string>
 	<key>CFBundleVersion</key>
 	<string>1.0.93</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.93</string>
-	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V93 - Display Verification and Integration Testing</string>
-	<key>OSBundleRequired</key>
-	<string>Safe Boot</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelDevice</key>
@@ -60,10 +58,40 @@
 		</dict>
 		<key>FakeIrisXEFramebuffer</key>
 		<dict>
+			<key>AAPL,GfxYTile</key>
+			<data>
+			AQAAAA==
+			</data>
 			<key>AAPL,HasPanel</key>
 			<true/>
+			<key>AAPL,ig-platform-id</key>
+			<data>
+			AABSig==
+			</data>
+			<key>AAPL,slot-name</key>
+			<string>Internal@0,2,0</string>
+			<key>AAPL00,override-no-connect</key>
+			<data>
+			AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAAB
+			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
+			H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8K
+			PH0SFCR9AAAAAEY=
+			</data>
+			<key>DisplayProductID</key>
+			<integer>40060</integer>
+			<key>DisplayVendorID</key>
+			<integer>12516</integer>
 			<key>IOClass</key>
 			<string>FakeIrisXEFramebuffer</string>
+			<key>IODisplayEDID</key>
+			<data>
+			AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAAB
+			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
+			H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8K
+			PH0SFCR9AAAAAEY=
+			</data>
+			<key>IODisplayPrefsKey</key>
+			<string>DEL:0x9C7C</string>
 			<key>IOKitDebug</key>
 			<integer>65535</integer>
 			<key>IOPCIPrimaryMatch</key>
@@ -75,47 +103,53 @@
 			<key>built-in</key>
 			<true/>
 			<key>class-code</key>
-			<data>AAADAA==</data>
+			<data>
+			AAADAA==
+			</data>
+			<key>complete-modeset</key>
+			<data>
+			AQAAAA==
+			</data>
 			<key>device-id</key>
-			<data>SZoAAA==</data>
-			<key>vendor-id</key>
-			<data>hoAAAA==</data>
-			<key>subsystem-id</key>
-			<data>AaAAAA==</data>
-			<key>subsystem-vendor-id</key>
-			<data>hoAAAA==</data>
-			<key>revision-id</key>
-			<data>AAABAA==</data>
-			<key>AAPL,ig-platform-id</key>
-			<data>AABSig==</data>
-			<key>AAPL,GfxYTile</key>
-			<data>AQAAAA==</data>
-			<key>model</key>
-			<string>Intel Iris Xe Graphics</string>
-			<key>AAPL,slot-name</key>
-			<string>Internal@0,2,0</string>
+			<data>
+			SZoAAA==
+			</data>
 			<key>device_type</key>
 			<string>VGA compatible controller</string>
-			<key>DisplayVendorID</key>
-			<integer>12516</integer>
-			<key>DisplayProductID</key>
-			<integer>40060</integer>
-			<key>IODisplayPrefsKey</key>
-			<string>DEL:0x9C7C</string>
-			<key>IODisplayEDID</key>
-			<data>AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8KPH0SFCR9AAAAAEY=</data>
-			<key>AAPL00,override-no-connect</key>
-			<data>AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8KPH0SFCR9AAAAAEY=</data>
-			<key>complete-modeset</key>
-			<data>AQAAAA==</data>
-			<key>force-online</key>
-			<data>AQAAAA==</data>
 			<key>enable-cdclk-frequency-fix</key>
-			<data>AQAAAA==</data>
+			<data>
+			AQAAAA==
+			</data>
 			<key>enable-dbuf-early-optimizer</key>
-			<data>AQAAAA==</data>
+			<data>
+			AQAAAA==
+			</data>
 			<key>enable-dvmt-calc-fix</key>
-			<data>AQAAAA==</data>
+			<data>
+			AQAAAA==
+			</data>
+			<key>force-online</key>
+			<data>
+			AQAAAA==
+			</data>
+			<key>model</key>
+			<string>Intel Iris Xe Graphics</string>
+			<key>revision-id</key>
+			<data>
+			AAABAA==
+			</data>
+			<key>subsystem-id</key>
+			<data>
+			AaAAAA==
+			</data>
+			<key>subsystem-vendor-id</key>
+			<data>
+			hoAAAA==
+			</data>
+			<key>vendor-id</key>
+			<data>
+			hoAAAA==
+			</data>
 		</dict>
 	</dict>
 	<key>OSBundleCompatibleVersion</key>

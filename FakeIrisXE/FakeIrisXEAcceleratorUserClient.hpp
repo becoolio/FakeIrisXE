@@ -2,11 +2,10 @@
 #define FAKE_IRIS_XE_ACCEL_USERCLIENT_HPP
 
 #include <IOKit/IOUserClient.h>
-#include <IOKit/IOLocks.h>
-
-#include "FXE_SurfaceStore.hpp"
 
 class FakeIrisXEAccelerator;
+class FakeIrisXEGEM;
+class GEMHandleTable;   // GLOBAL forward declaration
 
 class FakeIrisXEAcceleratorUserClient : public IOUserClient {
     OSDeclareDefaultStructors(FakeIrisXEAcceleratorUserClient);
@@ -24,13 +23,6 @@ public:
 
     IOReturn clientMemoryForType(UInt32 type, UInt32 *flags, IOMemoryDescriptor **memory) override;
 
-    static IOReturn sGetCaps(OSObject* target, void* ref, IOExternalMethodArguments* args);
-    static IOReturn sCreateContext(OSObject* target, void* ref, IOExternalMethodArguments* args);
-    static IOReturn sAttachShared(OSObject* target, void* ref, IOExternalMethodArguments* args);
-    static IOReturn sBindSurface(OSObject* target, void* ref, IOExternalMethodArguments* args);
-    static IOReturn sPresent(OSObject* target, void* ref, IOExternalMethodArguments* args);
-    static IOReturn sFenceTest(OSObject* target, void* ref, IOExternalMethodArguments* args);
-
     
     
     
@@ -38,19 +30,15 @@ private:
     FakeIrisXEAccelerator* fOwner;
     task_t fTask;
 
-    IOReturn methodGetCaps(IOExternalMethodArguments* args);
-    IOReturn methodCreateContext(IOExternalMethodArguments* args);
-    IOReturn methodAttachShared(IOExternalMethodArguments* args);
-    IOReturn methodBindSurface(IOExternalMethodArguments* args);
-    IOReturn methodPresent(IOExternalMethodArguments* args);
-    IOReturn methodFenceTest(IOExternalMethodArguments* args);
+    // GEM
+    GEMHandleTable* fHandleTable = nullptr;
+    uint32_t fLastRequestedGemHandle = 0;
 
-    FXE_SurfaceStore fSurfaceStore;
-    bool mIOSurfaceEnabled = false;
-    uint64_t mCompletionCounter = 0;
-    uint32_t mNextCtxId = 1;
-
-    static const IOExternalMethodDispatch sDispatchTable[8];
+    uint32_t createGemAndRegister(uint64_t size, uint32_t flags);
+    bool destroyGemHandle(uint32_t handle);
+    IOReturn pinGemHandle(uint32_t handle, uint64_t* outGpuAddr);
+    bool unpinGemHandle(uint32_t handle);
+    IOReturn getPhysPagesForHandle(uint32_t handle, void* outBuf, size_t* outSize);
     
     
     

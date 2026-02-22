@@ -2,25 +2,40 @@
 #define FAKE_IRIS_XE_ACCEL_SHARED_H
 
 #include <IOKit/IOService.h>
+
 #include <IOKit/IOTypes.h>     // basic IOKit typedefs
 
-#include "FXE_ABI.hpp"
+#include <IOKit/IOService.h>
 
 
 enum {
-    kFakeIris_Method_GetCaps                = FXE_SEL_GET_VERSION,
-    kFakeIris_Method_CreateContext          = FXE_SEL_CREATE_CTX,
-    kFakeIris_Method_DestroyContext         = FXE_SEL_ATTACH_SHARED,
-    kFakeIris_Method_BindSurfaceUserMapped  = FXE_SEL_BIND_SURFACE,
-    kFakeIris_Method_PresentContext         = FXE_SEL_PRESENT,
-    kFakeIris_Method_SubmitExeclistFenceTest = FXE_SEL_FENCE_TEST,
+    kFakeIris_Method_GetCaps                = 0,
+    kFakeIris_Method_CreateContext          = 1,
+    kFakeIris_Method_DestroyContext         = 2,
+    kFakeIris_Method_BindSurfaceUserMapped  = 3,
+    kFakeIris_Method_PresentContext         = 4,
+
+    // New for Phase 8:
+    kFakeIris_Method_SubmitExeclistFenceTest = 5,
 };
 
+#define kFakeIris_Method_SubmitExeclistFenceTest  7
+
+
+
+//
+// ===== ACCEL Selec
 enum {
-    kFakeIrisXE_ABI_Major = FXE_ABI_MAJOR,
-    kFakeIrisXE_ABI_Minor = FXE_ABI_MINOR,
-    kFakeIrisXE_KextVersion_u32 = FXE_KEXT_VERSION_PACKED
+    kAccelSel_Ping = 0,
+    kAccelSel_GetCaps = 1,
+    kAccelSel_CreateContext = 2,
+    kAccelSel_Submit = 3,
+    kAccelSel_Flush = 4,
+    kAccelSel_DestroyContext = 5,
+    kAccelSel_BindSurface = 6,
+    kAccelSel_InjectTest = 10,      // debug
 };
+
 
 struct XECtx {
     uint32_t ctxId;
@@ -82,6 +97,16 @@ struct XEBindSurfaceIn {
   uint32_t pixelFormat;
   bool valid;
 };
+
+
+struct XEPresentPayload {
+    uint32_t ioSurfaceID;   // IOSurface ID created in userspace
+    uint32_t x;             // dest x in fb
+    uint32_t y;             // dest y in fb
+    uint32_t w;             // width
+    uint32_t h;             // height
+};
+
 
 
 struct XEBindSurfaceOut {
@@ -153,11 +178,9 @@ struct XEContext {
 //
 // ===== Constants =====
 //
-enum {
-    XE_MAGIC = 0x53524558u, // 'XERS'
-    XE_VERSION = 1,
-    XE_PAGE = 4096
-};
+static constexpr uint32_t XE_MAGIC   = 0x53524558u;  // 'XERS'
+static constexpr uint32_t XE_VERSION = 1;
+static constexpr uint32_t XE_PAGE    = 4096;
 
 static inline uint32_t xe_align(uint32_t v) {
     return (v + 3u) & ~3u;   // 4-byte align
