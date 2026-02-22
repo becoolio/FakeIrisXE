@@ -760,11 +760,58 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     IOLog("✅ [V131] super::start() succeeded\n");
 
-    auto logStage = [](uint32_t stage, const char *name) {
-        IOLog("(FakeIrisXE) [STAGE %u] %s\n", stage, name);
+    const uint64_t startTotalAbs = mach_absolute_time();
+    uint64_t stageStartAbs = startTotalAbs;
+    uint32_t currentStage = 0;
+    const char *currentStageName = "boot";
+    uint32_t softFailCount = 0;
+
+    auto publishStageDurationUs = [this](uint32_t stage, uint64_t durationUs) {
+        switch (stage) {
+            case 1:
+                setNumberProperty(this, "FakeIrisXEStage1DurationUs", durationUs, 64);
+                break;
+            case 2:
+                setNumberProperty(this, "FakeIrisXEStage2DurationUs", durationUs, 64);
+                break;
+            case 3:
+                setNumberProperty(this, "FakeIrisXEStage3DurationUs", durationUs, 64);
+                break;
+            case 4:
+                setNumberProperty(this, "FakeIrisXEStage4DurationUs", durationUs, 64);
+                break;
+            case 5:
+                setNumberProperty(this, "FakeIrisXEStage5DurationUs", durationUs, 64);
+                break;
+            default:
+                break;
+        }
     };
 
-    auto logSoftFail = [](uint32_t stage, const char *name) {
+    auto closeCurrentStage = [&]() {
+        if (!currentStage) {
+            return;
+        }
+
+        const uint64_t nowAbs = mach_absolute_time();
+        const uint64_t durationUs = absDeltaToNs(stageStartAbs, nowAbs) / 1000ULL;
+        IOLog("(FakeIrisXE) [STAGE %u] END %s (%llu us)\n",
+              currentStage,
+              currentStageName,
+              static_cast<unsigned long long>(durationUs));
+        publishStageDurationUs(currentStage, durationUs);
+        stageStartAbs = nowAbs;
+    };
+
+    auto logStage = [&](uint32_t stage, const char *name) {
+        closeCurrentStage();
+        currentStage = stage;
+        currentStageName = name;
+        IOLog("(FakeIrisXE) [STAGE %u] BEGIN %s\n", stage, name);
+    };
+
+    auto logSoftFail = [&](uint32_t stage, const char *name) {
+        ++softFailCount;
         IOLog("(FakeIrisXE) [STAGE %u] SOFT-FAIL: %s\n", stage, name);
     };
 
@@ -1175,7 +1222,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("framebuffer-con2-alldata", OSData::withBytes(con2_dp, sizeof(con2_dp)));
     
     // Additional framebuffer properties
-    setProperty("framebuffer-unifiedmem", kReportedVramBytes, 32);
     setProperty("complete-modeset", kOSBooleanTrue);
     setProperty("force-online", kOSBooleanTrue);
     
@@ -1448,8 +1494,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOAccelerator", kOSBooleanTrue);
     setProperty("IOAccelIndex", 0ULL, 32);
     setProperty("IOAccelRevision", 2ULL, 32);
-    setProperty("IOAccelVideoMemorySize", framebufferMemory->getLength(), 64);
-    setProperty("IOAccelMemorySize", 134217728ULL, 64);
 
     // Critical for Core Image
     setProperty("CISupported", kOSBooleanTrue);
@@ -1476,8 +1520,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("CITransparencySupported", kOSBooleanTrue);
 
     // Quartz Extreme requirements
-    setProperty("IOAccelVideoMemorySize", framebufferMemory->getLength(), 64);
-    setProperty("IOAccelMemorySize", 134217728ULL, 64); // 128MB for textures
     
     
     
@@ -2150,6 +2192,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("[V131] Look for color bars on screen (V81 test pattern)\n");
     IOLog("\n");
     
+    closeCurrentStage();
+    const uint64_t totalStartUs = absDeltaToNs(startTotalAbs, mach_absolute_time()) / 1000ULL;
+    setNumberProperty(this, "FakeIrisXEStartDurationUs", totalStartUs, 64);
+    setNumberProperty(this, "FakeIrisXESoftFailCount", softFailCount, 32);
+    IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
+          static_cast<unsigned long long>(totalStartUs),
+          softFailCount);
     IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V134)\n");
     return true;
 

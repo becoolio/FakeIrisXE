@@ -34,6 +34,39 @@ private:
     
     // V50: Mode tracking
     bool fGuCMode;  // true = GuC submission, false = Execlist fallback
+
+    enum GuCStage {
+        kGuCStageIdle = 0,
+        kGuCStageForceWake,
+        kGuCStageShim,
+        kGuCStageWopcm,
+        kGuCStageDmaProgram,
+        kGuCStageDmaTrigger,
+        kGuCStageBootPoll,
+        kGuCStageBootSuccess,
+        kGuCStageFailure,
+    };
+
+    struct GuCStatusDecoded {
+        uint8_t bootrom;
+        uint8_t ukernel;
+        uint8_t mia;
+        uint8_t appleStatus;
+        bool valid;
+        bool success;
+        bool failure;
+    };
+
+    struct GuCStageReport {
+        GuCStage stage;
+        uint64_t elapsed_us;
+        uint32_t raw_status;
+        GuCStatusDecoded decoded_status;
+        uint32_t retry_index;
+    };
+
+    GuCStage fLastReportedStage;
+    bool fUseAppleBringUpPath;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -59,6 +92,23 @@ public:
     bool testCommandSubmission();
     
 private:
+    bool runFastFailBringUp(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    bool runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
+                             uint32_t retryIndex, uint64_t startNs);
+    bool runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
+                             uint32_t retryIndex, uint64_t startNs);
+    bool pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, uint32_t retryIndex);
+
+    bool writeRegWithReadback(GuCStage stage, const char* regName,
+                              uint32_t reg, uint32_t value, uint32_t* outReadback = nullptr);
+    void emitStageReport(GuCStage stage, uint64_t startNs, uint32_t retryIndex,
+                         uint32_t rawStatusOverride = 0xFFFFFFFFU);
+    GuCStatusDecoded decodeStatus(uint32_t rawStatus) const;
+    bool isImpossibleStatusDecode(uint32_t rawStatus, const GuCStatusDecoded& decoded) const;
+    void producerCoherencyBarrier(const char* reason);
+    void consumerCoherencyBarrier(const char* reason);
+    void logLinuxBaselineCorrelation(bool bootSuccess);
+
     // V52.1: ForceWake helpers (matching Apple's SafeForceWake)
     bool acquireForceWake();
     void releaseForceWake();
