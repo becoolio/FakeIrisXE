@@ -5,21 +5,56 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V155 - Fix RCS ring already exists early return</string>
+	<string>FakeIrisXe V160 - Enhanced power management properties</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.155</string>
+	<string>1.0.160</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.155</string>
+	<string>1.0.160</string>
 	<key>IOKitPersonalities</key>
 	<dict>
+		<key>FakeIrisXE Backlight Injection</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
+			<key>IOClass</key>
+			<string>DisplayMergeNub</string>
+			<key>IOProbeScore</key>
+			<integer>1900</integer>
+			<key>IOProviderClass</key>
+			<string>AppleDisplay</string>
+			<key>IOProviderMergeProperties</key>
+			<dict>
+				<key>DisplayProductID</key>
+				<integer>40178</integer>
+				<key>DisplayVendorID</key>
+				<integer>1552</integer>
+				<key>IOClass</key>
+				<string>AppleBacklightDisplay</string>
+				<key>IODisplayConnectFlags</key>
+				<data>
+				AAgAAA==
+				</data>
+				<key>IODisplayEDID</key>
+				<data>
+				AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkici
+				UFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUA
+				WMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAA/ABDb2xv
+				ciBMQ0QKICAgAAAA/QA4TB5TEQAKICAgICAgAIY=
+				</data>
+				<key>IODisplayGUID</key>
+				<integer>436849163854938112</integer>
+				<key>IODisplayPrefsKey</key>
+				<string>IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/IGPU@2/AppleIntelFramebuffer@0/display0/AppleBacklightDisplay-610-9cf2</string>
+			</dict>
+		</dict>
 		<key>FakeIrisXEAccelDevice</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
@@ -80,23 +115,25 @@
 			<string>Internal@0,2,0</string>
 			<key>AAPL00,override-no-connect</key>
 			<data>
-			AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAAB
+			AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAAB
 			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
-			H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8K
-			PH0SFCR9AAAAAEY=
+			H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5T
+			EQAKICAgICAgAIY=
 			</data>
+			<key>AGXSelectedPowerProfile</key>
+			<string>MacBookPro16,2</string>
 			<key>DisplayProductID</key>
-			<integer>40060</integer>
+			<integer>40178</integer>
 			<key>DisplayVendorID</key>
-			<integer>12516</integer>
+			<integer>1552</integer>
 			<key>IOClass</key>
 			<string>FakeIrisXEFramebuffer</string>
 			<key>IODisplayEDID</key>
 			<data>
-			AP///////wAw5HycAAAAAAAfAQSVIhNgA2+xp1VMniUMUFQAAAAB
+			AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAAB
 			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
-			H0AwIDUAWMIQAAAaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAMOv8K
-			PH0SFCR9AAAAAEY=
+			H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5T
+			EQAKICAgICAgAIY=
 			</data>
 			<key>IODisplayPrefsKey</key>
 			<string>DEL:0x9C7C</string>

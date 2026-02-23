@@ -247,7 +247,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║         FAKEIRISXE V154 - Fix ring size before enableRing  ║\n");
+    IOLog("║         FAKEIRISXE V160 - AGPMInjector + Enhanced PM     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1550,6 +1550,73 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("CIBlurSupported", kOSBooleanTrue);
     setProperty("CITransparencySupported", kOSBooleanTrue);
 
+    // ================================================
+    // V160: AGPM Power Management Integration
+    // ================================================
+    IOLog("[V160] Setting up AGPM power management integration...\n");
+    
+    // GPU Power States for AGPM (MacBookPro16,2 profile)
+    setProperty("agpu-pstates", OSArray::withObjects((const OSObject*[]){
+        OSNumber::withNumber(0ULL, 32),
+        OSNumber::withNumber(1ULL, 32),
+        OSNumber::withNumber(2ULL, 32),
+        OSNumber::withNumber(3ULL, 32)
+    }, 4));
+    
+    setProperty("agpu-pstate-names", OSArray::withObjects((const OSObject*[]){
+        OSString::withCString("low"),
+        OSString::withCString("medium"),
+        OSString::withCString("high"),
+        OSString::withCString("turbo")
+    }, 4));
+    
+    // GPU power management target profile
+    setProperty("AGXSelectedPowerProfile", OSString::withCString("MacBookPro16,2"));
+    
+    // AGPM connection properties
+    setProperty("AGPM_Enabled", kOSBooleanTrue);
+    setProperty("GPUPowerManagementEnabled", kOSBooleanTrue);
+    
+    // Performance state - start at high for performance
+    setProperty("IOGPUSwitchState", OSNumber::withNumber(2ULL, 32));
+    setProperty("gpu-active-state", OSNumber::withNumber(2ULL, 32));
+    
+    // Performance level for Metal
+    setProperty("IOGPUTargetPerformanceLevel", OSNumber::withNumber(3ULL, 32));
+    setProperty("IOGPUPerformanceStatistics", OSData::withBytes((void*)"\x00\x00\x00\x00", 4));
+    
+    // GPU utilization hints
+    setProperty("GPUActivityHint", kOSBooleanTrue);
+    setProperty("GPUPerformanceMode", OSNumber::withNumber(1ULL, 32)); // 1 = performance
+    
+    // Power management caps
+    setProperty("IOGPUPowermanagementCapable", kOSBooleanTrue);
+    setProperty("IOGPUFreqThresholds", OSArray::withObjects((const OSObject*[]){
+        OSNumber::withNumber(100ULL, 32),
+        OSNumber::withNumber(400ULL, 32),
+        OSNumber::withNumber(800ULL, 32),
+        OSNumber::withNumber(1100ULL, 32)
+    }, 4));
+    
+    // Current frequency (report as high)
+    setProperty("IOGPUCurrentFreq", OSNumber::withNumber(1100ULL, 32));
+    setProperty("IOGPUMaxFreq", OSNumber::withNumber(1100ULL, 32));
+    setProperty("IOGPUMinFreq", OSNumber::withNumber(100ULL, 32));
+    
+    // Tell system we support DVFM (Dynamic Voltage Frequency Management)
+    setProperty("IOGPUDVFM", kOSBooleanTrue);
+    setProperty("IOGPUDVFMStates", OSNumber::withNumber(4ULL, 32));
+    
+    // AGPM Heuristic settings
+    setProperty("agpu-heuristic-id", OSData::withBytes((void*)"\xff\xff\xff\xff", 4));
+    setProperty("agpu-default-preference", OSNumber::withNumber(2ULL, 32)); // Performance preference
+    
+    IOLog("[V160] ✅ AGPM power management properties set\n");
+    IOLog("[V160]    Target profile: MacBookPro16,2\n");
+    IOLog("[V160]    Power states: low, medium, high, turbo\n");
+    IOLog("[V160]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
+    IOLog("[V160]    Initial state: high performance\n");
+    
     // Quartz Extreme requirements
     
     
@@ -2218,7 +2285,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
 
         
-        // attach under display0
+        // V156: Fix backlight registration - attach to this framebuffer before registerService
+        backlight->attach(this);
         backlight->registerService();
 
         IOLog("[FB] AppleBacklightDisplay published under IODisplayConnect\n");
@@ -2316,7 +2384,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V134)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V160)\n");
     return true;
 
 }
