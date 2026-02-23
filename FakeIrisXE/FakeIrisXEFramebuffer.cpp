@@ -247,7 +247,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║         FAKEIRISXE V134 - Tiger Lake GPU Driver          ║\n");
+    IOLog("║         FAKEIRISXE V154 - Fix ring size before enableRing  ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1953,6 +1953,15 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                 IOLog("FakeIrisXEFramebuffer: FAILED creating BLT ring\n");
             }
 
+            // V150: Test GPU execution
+            IOLog("(FakeIrisXE)[V151] Running GPU execution test...\n");
+            bool gpuWorking = testGPUExecution();
+            if (gpuWorking) {
+                IOLog("(FakeIrisXE)[V150] ✅ GPU EXECUTION TEST PASSED\n");
+            } else {
+                IOLog("(FakeIrisXE)[V150] ❌ GPU EXECUTION TEST FAILED\n");
+            }
+
             if (runBootDiagFull) {
                 IOLog("\n");
                 IOLog("[V88] EXECLIST command submission test (diag mode)\n");
@@ -2154,10 +2163,19 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
         backlight->setName("AppleBacklightDisplay");
         backlight->setProperty("IOClass", "IOBacklightDisplay");
-
         backlight->setProperty("IOProviderClass", "IODisplayConnect");
         backlight->setProperty("IONameMatch", "AppleBacklightDisplay");
         backlight->setProperty("AAPL,backlight-control", kOSBooleanTrue);
+        
+        // V151: Add properties for internal display detection
+        backlight->setProperty("AAPL,internal", kOSBooleanTrue);
+        backlight->setProperty("AAPL,panel-id", OSNumber::withNumber(1, 32));
+        
+        // Add vendor-specific properties
+        backlight->setProperty("vendor-id", OSNumber::withNumber(0x8086, 16));
+        backlight->setProperty("product-id", OSNumber::withNumber(0x9a49, 16));
+        backlight->setProperty("IOVendor", OSString::withCString("Intel"));
+        backlight->setProperty("IOModel", OSString::withCString("Intel Iris Xe Graphics"));
 
         // --- brightness params dictionary ---
         // --- brightness params dictionary ---
@@ -2406,12 +2424,45 @@ void FakeIrisXEFramebuffer::performSafeStop()
     // Stop power management (PM) under gated thread
     PMstop();
 
+    // V153: Fix IOBufferMemoryDescriptor panic - complete() before release
+    // Complete any pending prepare() calls to avoid registry corruption
+    if (framebufferMemory) {
+        framebufferMemory->complete();
+    }
+    if (vramMemory) {
+        vramMemory->complete();
+    }
+    if (cursorMemory) {
+        cursorMemory->complete();
+    }
+
     // Release GPU resources and memory descriptors (these touch IOGraphics/IOBuffer objects)
-    OSSafeReleaseNULL(framebufferMemory);
-    OSSafeReleaseNULL(framebufferSurface);
-    OSSafeReleaseNULL(cursorMemory);
-    OSSafeReleaseNULL(mmioMap);
-    OSSafeReleaseNULL(vramMemory);
+    // V153: Use temp variables to ensure nullify before release to prevent double-release
+    if (framebufferMemory) {
+        auto* tmp = framebufferMemory;
+        framebufferMemory = nullptr;
+        tmp->release();
+    }
+    if (framebufferSurface) {
+        auto* tmp = framebufferSurface;
+        framebufferSurface = nullptr;
+        tmp->release();
+    }
+    if (cursorMemory) {
+        auto* tmp = cursorMemory;
+        cursorMemory = nullptr;
+        tmp->release();
+    }
+    if (mmioMap) {
+        auto* tmp = mmioMap;
+        mmioMap = nullptr;
+        tmp->release();
+    }
+    if (vramMemory) {
+        auto* tmp = vramMemory;
+        vramMemory = nullptr;
+        tmp->release();
+    }
 
     // Remove interrupt sources if any
     if (vsyncSource && workLoop) {
@@ -4640,9 +4691,11 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 {
     IOLog("(FakeIrisXE) createRcsRing() size=%zu\n", ringBytes);
 
-    // If ring already exists — return it
+    // If ring already exists — still call enableRing to ensure it's enabled
     if (fRingRCS != nullptr) {
-        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p\n", fRingRCS);
+        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p, calling enableRing\n", fRingRCS);
+        fRingRCS->setRingSize(ringBytes);  // V154: Ensure size is set
+        fRingRCS->enableRing();
         return fRingRCS;
     }
 
@@ -4673,6 +4726,7 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 
     // Save metadata into ring object
     fRingRCS->attachRingGPUAddress(ringGpuVA);
+    fRingRCS->setRingSize(ringBytes);  // V154: Set ring size before enableRing
     fRingSize = ringBytes;
     fRingGpuVA = ringGpuVA;
     fRingGem = ringGem;      // store GEM (so it doesn't get freed)
@@ -4708,6 +4762,157 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
           (unsigned long long) ringGpuVA, ringBytes, fRingRCS);
 
     return fRingRCS;
+}
+
+// V151: Enhanced GPU Execution Test with comprehensive diagnostics
+bool FakeIrisXEFramebuffer::testGPUExecution()
+{
+    IOLog("(FakeIrisXE)[V151] ============================================\n");
+    IOLog("(FakeIrisXE)[V151] GPU EXECUTION TEST - COMPREHENSIVE DIAGNOSTICS\n");
+    IOLog("(FakeIrisXE)[V151] ============================================\n");
+    
+    if (!fExeclist || !fRingRCS) {
+        IOLog("(FakeIrisXE)[V151] ❌ No Execlist or Ring available\n");
+        return false;
+    }
+    
+    // V151: Check power and forcewake first
+    IOLog("(FakeIrisXE)[V151] --- POWER STATUS ---\n");
+    
+    // Check FORCEWAKE status
+    uint32_t forcewakeReq = safeMMIORead(0xA00C);  // FORCEWAKE_REQ
+    uint32_t forcewakeAck = safeMMIORead(0xA00D);  // FORCEWAKE_ACK  
+    uint32_t forcewakeAck2 = safeMMIORead(0x130044); // Alternative ACK register
+    IOLog("(FakeIrisXE)[V151] FORCEWAKE: REQ=0x%08X ACK=0x%08X ACK2=0x%08X\n", 
+          forcewakeReq, forcewakeAck, forcewakeAck2);
+    
+    // Check GT power status
+    uint32_t gtlc0 = safeMMIORead(0x1381B4);  // GTLC0
+    uint32_t gtlc1 = safeMMIORead(0x1381B8);  // GTLC1
+    uint32_t gtlcP = safeMMIORead(0x1381BC);   // GTLCx_PUBLISHED
+    IOLog("(FakeIrisXE)[V151] GT POWER: GTLC0=0x%08X GTLC1=0x%08X PUBLISHED=0x%08X\n",
+          gtlc0, gtlc1, gtlcP);
+    
+    // Check render power well
+    uint32_t renderPWR = safeMMIORead(0xA010);  // Render power well status
+    IOLog("(FakeIrisXE)[V151] Render PWR Status: 0x%08X\n", renderPWR);
+    
+    IOLog("(FakeIrisXE)[V151] --- RING REGISTERS ---\n");
+    
+    // Read all ring registers
+    uint32_t ringBaseLo = safeMMIORead(0x2000);   // RING_BASE_LO
+    uint32_t ringBaseHi = safeMMIORead(0x2004);   // RING_BASE_HI
+    uint32_t ringHead = safeMMIORead(0x2010);     // RING_HEAD
+    uint32_t ringTail = safeMMIORead(0x2020);     // RING_TAIL
+    uint32_t ringCtl = safeMMIORead(0x2030);     // RING_CTL
+    uint32_t ringStatus = safeMMIORead(0x2038);   // RING_STATUS
+    uint32_t ringHWS = safeMMIORead(0x2040);     // RING_HWS
+    
+    IOLog("(FakeIrisXE)[V151] BASE:  0x%08X%08X\n", ringBaseHi, ringBaseLo);
+    IOLog("(FakeIrisXE)[V151] HEAD:  0x%08X (GPU read position)\n", ringHead);
+    IOLog("(FakeIrisXE)[V151] TAIL:  0x%08X (CPU write position)\n", ringTail);
+    IOLog("(FakeIrisXE)[V151] CTL:   0x%08X (EN=%s SIZE=%dKB)\n", ringCtl,
+          (ringCtl & 0x1) ? "YES" : "NO",
+          (ringCtl & 0x3FF000) >> 12);
+    IOLog("(FakeIrisXE)[V151] STATUS: 0x%08X (IDLE=%s)\n", ringStatus,
+          (ringStatus & 0x1) ? "YES" : "NO");
+    IOLog("(FakeIrisXE)[V151] HWS:   0x%08X\n", ringHWS);
+    
+    // Check if ring is enabled
+    bool ringEnabled = (ringCtl & 0x1) != 0;
+    bool gpuIdle = (ringStatus & 0x1) != 0;
+    bool ringReady = ringEnabled && !gpuIdle;
+    
+    IOLog("(FakeIrisXE)[V151] Ring Enabled: %s\n", ringEnabled ? "✅ YES" : "❌ NO");
+    IOLog("(FakeIrisXE)[V151] GPU Idle: %s\n", gpuIdle ? "✅ YES" : "❌ NO (GPU BUSY)");
+    IOLog("(FakeIrisXE)[V151] Ring Ready: %s\n", ringReady ? "✅ YES" : "❌ NO");
+    
+    if (!ringEnabled) {
+        IOLog("(FakeIrisXE)[V151] ❌ RING NOT ENABLED - Cannot submit commands!\n");
+        return false;
+    }
+    
+    // Read initial ring state
+    IOLog("(FakeIrisXE)[V151] --- SUBMITTING TEST BATCH ---\n");
+    uint32_t ringHeadStart = ringHead;
+    uint32_t ringTailStart = ringTail;
+    IOLog("(FakeIrisXE)[V151] Before: HEAD=0x%08X TAIL=0x%08X\n", ringHeadStart, ringTailStart);
+    
+    // Create a simple test batch buffer with MI_NOOP + MI_BATCH_END
+    const size_t batchSize = 64;
+    FakeIrisXEGEM* testBatch = FakeIrisXEGEM::withSize(batchSize, 0);
+    if (!testBatch) {
+        IOLog("(FakeIrisXE)[V150] ❌ Test batch GEM allocation failed\n");
+        return false;
+    }
+    
+    testBatch->pin();
+    uint64_t batchGGTT = ggttMap(testBatch);
+    if (batchGGTT == 0) {
+        IOLog("(FakeIrisXE)[V150] ❌ Test batch GGTT mapping failed\n");
+        testBatch->unpin();
+        testBatch->release();
+        return false;
+    }
+    
+    // Write MI_NOOP commands to batch buffer
+    IOBufferMemoryDescriptor* md = testBatch->memoryDescriptor();
+    void* cpuPtr = md->getBytesNoCopy();
+    uint32_t* cmds = (uint32_t*)cpuPtr;
+    
+    // MI_NOOP x 8 (each NOOP is 4 bytes = 1 dword)
+    for (int i = 0; i < 14; i++) {
+        cmds[i] = 0x00000000;  // MI_NOOP
+    }
+    cmds[14] = 0x05000000;  // MI_BATCH_END (without Reloc)
+    
+    IOLog("(FakeIrisXE)[V151] Test batch @ GGTT=0x%llx (CPU %p)\n", batchGGTT, cpuPtr);
+    
+    // Submit via Execlist
+    bool submitResult = fExeclist->submitForContext(
+        fExeclist->lookupHwContext(0),
+        testBatch
+    );
+    
+    if (!submitResult) {
+        IOLog("(FakeIrisXE)[V151] ❌ Batch submission failed\n");
+        testBatch->unpin();
+        testBatch->release();
+        return false;
+    }
+    
+    IOLog("(FakeIrisXE)[V151] Batch submitted, waiting for completion...\n");
+    
+    // Wait a bit for GPU to process
+    IOSleep(50);
+    
+    // Read final ring state
+    uint32_t ringHeadEnd = safeMMIORead(0x2010);
+    uint32_t ringTailEnd = safeMMIORead(0x2020);
+    ringStatus = safeMMIORead(0x2038);
+    
+    IOLog("(FakeIrisXE)[V151] Final:   HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n", 
+          ringHeadEnd, ringTailEnd, ringStatus);
+    
+    // Check if ring advanced
+    bool ringAdvanced = (ringHeadEnd != ringHeadStart) || (ringTailEnd != ringTailStart);
+    
+    if (ringAdvanced) {
+        IOLog("(FakeIrisXE)[V151] ✅ GPU EXECUTED COMMANDS! Ring advanced.\n");
+    } else {
+        IOLog("(FakeIrisXE)[V151] ⚠️  Ring did NOT advance - GPU may not be executing\n");
+    }
+    
+    // Check status register for completion
+    gpuIdle = (ringStatus & 0x1) != 0;  // Bit 0 = GPU idle
+    IOLog("(FakeIrisXE)[V151] GPU Idle: %s\n", gpuIdle ? "YES" : "NO");
+    
+    testBatch->unpin();
+    testBatch->release();
+    
+    IOLog("(FakeIrisXE)[V151] ============================================\n");
+    
+    return ringAdvanced;
 }
 
 // V138: Create BLT ring for 2D operations
@@ -4750,6 +4955,7 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createBltRing(size_t ringBytes)
 
     // Save metadata into ring object
     fBltRing->attachRingGPUAddress(ringGpuVA);
+    fBltRing->setRingSize(ringBytes);  // V154: Set ring size before enableRing
 
     // Program BLT ring registers
     fBltRing->programRingBaseToHW();

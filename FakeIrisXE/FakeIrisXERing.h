@@ -39,6 +39,9 @@ public:
     size_t size() const { return mRingSize; }
     uint64_t gpuAddr() const { return mRingGPUAddr; }
 
+    // Set ring size (needed before enableRing since we use GEM for memory)
+    void setRingSize(size_t bytes) { mRingSize = bytes; }
+
 private:
     volatile uint32_t* mMMIO;   // BAR0 base
     uint32_t           mRingBaseOffset;  // Ring base offset (0x2000 for RCS, 0x22000 for BLT)

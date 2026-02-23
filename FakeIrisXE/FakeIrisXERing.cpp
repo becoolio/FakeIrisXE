@@ -96,11 +96,21 @@ void FakeIrisXERing::enableRing()
     if (!mMMIO) return;
 
     uint32_t ctlReg = mRingBaseOffset + 0x30;
-    mmio_write32(mMMIO, ctlReg, 1);
+    
+    // V152: Fix RING_CTL - must include size, not just enable bit
+    // RING_CTL bits: [0] = Enable, [1-11] = Size in 512-byte units
+    // Size in 512-byte units = ring_size / 512
+    uint32_t sizeUnits = (mRingSize >> 9);  // Ring size in 512-byte units
+    uint32_t ctlValue = 1 | (sizeUnits << 1);  // Enable bit + size
+    
+    IOLog("(FakeIrisXE)[V152] enableRing: size=%zu bytes, units=%d, CTL=0x%08X\n", 
+          mRingSize, sizeUnits, ctlValue);
+    
+    mmio_write32(mMMIO, ctlReg, ctlValue);
     IOSleep(1);
 
     uint32_t ctl = mmio_read32(mMMIO, ctlReg);
-    IOLog("(FakeIrisXE) Ring CTL (0x%X) = 0x%08x\n", ctlReg, ctl);
+    IOLog("(FakeIrisXE)[V152] Ring CTL (0x%X) = 0x%08x\n", ctlReg, ctl);
 }
 
 

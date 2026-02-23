@@ -434,6 +434,7 @@ protected:
     FakeIrisXERing* fBltRing;   // BLT ring (for 2D operations)
     FakeIrisXEGEM* createTinyBatchGem();
     FakeIrisXERing* createBltRing(size_t bytes);
+    bool testGPUExecution();  // V150: GPU execution test
 
     
     // GGTT mapping area (aperture)
