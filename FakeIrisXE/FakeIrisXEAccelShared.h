@@ -2,24 +2,45 @@
 #define FAKE_IRIS_XE_ACCEL_SHARED_H
 
 #include <IOKit/IOService.h>
-
-#include <IOKit/IOTypes.h>     // basic IOKit typedefs
-
-#include <IOKit/IOService.h>
+#include <IOKit/IOTypes.h>
 
 
-enum {
-    kFakeIris_Method_GetCaps                = 0,
-    kFakeIris_Method_CreateContext          = 1,
-    kFakeIris_Method_DestroyContext         = 2,
-    kFakeIris_Method_BindSurfaceUserMapped  = 3,
-    kFakeIris_Method_PresentContext         = 4,
+// Existing test selector (keep value 7 for compatibility)
+#define kFakeIris_Method_SubmitExeclistFenceTest  7
 
-    // New for Phase 8:
-    kFakeIris_Method_SubmitExeclistFenceTest = 5,
+
+// New selectors for IOAcceleratorFamily2 contract
+enum : uint32_t {
+    kFIx_Method_OpenSession         =  0,
+    kFIx_Method_CloseSession        =  1,
+    kFIx_Method_CreateGEM           = 10,  // in: size, flags; out: handle
+    kFIx_Method_DestroyGEM          = 11,  // in: handle
+    kFIx_Method_PinGEM              = 12,  // in: handle; out: gpuVA
+    kFIx_Method_UnpinGEM            = 13,  // in: handle
+    kFIx_Method_GetPhysPages        = 14,  // in: handle; out: uint64_t [pages]
+    kFIx_Method_BindMemTypeToHandle = 20, // in: memType, handle
+    kFIx_Method_UnbindMemType       = 21,  // in: memType
+    kFIx_Method_RegisterSurface     = 30,  // in: surfID, handle, width, height, bytesPerRow, pixfmt
+    kFIx_Method_UnregisterSurface   = 31,  // in: surfID
+    kFIx_Method_GetSurfaceInfo      = 32,  // in: surfID; out: SurfaceInfo struct
+    kFIx_Method_Submit             = 40,  // in: batchHandle, surfID, flags; out: fenceId
+    kFIx_Method_WaitFence          = 41,  // in: fenceId, timeoutMs
+    kFIx_Method_QueryFence         = 42,  // in: fenceId; out: signaled
+    kFIx_Method_GetCaps            = 90,  // out: caps blob
+    kFIx_Method_GetStats           = 91   // out: stats blob
 };
 
-#define kFakeIris_Method_SubmitExeclistFenceTest  7
+
+// Minimal struct for IOSurface info (used in RegisterSurface, GetSurfaceInfo)
+typedef struct {
+    uint32_t version;    // set to 1
+    uint32_t ioSurfaceID;
+    uint32_t width;
+    uint32_t height;
+    uint32_t bytesPerRow;
+    uint32_t pixelFormat;
+    uint32_t handle;     // backing GEM handle
+} FakeIrisXESurfaceInfo;
 
 
 

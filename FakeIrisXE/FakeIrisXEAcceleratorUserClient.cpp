@@ -54,7 +54,9 @@ public:
         key->release();
 
         gem->retain();
-        return nextHandle++;
+        uint32_t handle = nextHandle++;
+        IOLockUnlock(lock);  // FIX: Added missing unlock
+        return handle;
     }
 
     FakeIrisXEGEM* lookup(uint32_t h) {
@@ -103,6 +105,21 @@ OSDefineMetaClassAndStructors(GEMHandleTable, OSObject)
 #define super IOUserClient
 OSDefineMetaClassAndStructors(FakeIrisXEAcceleratorUserClient, IOUserClient)
 
+// Rate-limited logging utility
+static void RLLog(const char *fmt, ...) {
+    static uint64_t last = 0;
+    uint64_t now = mach_absolute_time();
+    if (last == 0 || (now - last) > 1000000000) { // 1 second throttle
+        last = now;
+        va_list ap;
+        va_start(ap, fmt);
+        char buf[256];
+        vsnprintf(buf, sizeof(buf), fmt, ap);
+        va_end(ap);
+        IOLog("%s\n", buf);
+    }
+}
+
 bool FakeIrisXEAcceleratorUserClient::initWithTask(task_t task, void* secID, UInt32 type)
 {
     if (!super::initWithTask(task, secID, type)) return false;
@@ -118,11 +135,42 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider)
     if (!fOwner) return false;
 
     fHandleTable = GEMHandleTable::create();
+    
+    // V169: Initialize memType→handle dictionary
+    fMemTypeToHandle = OSDictionary::withCapacity(64);
+    fMemBindLock = IOLockAlloc();
+    fSurfaceRegistry = OSDictionary::withCapacity(64);
+    fSurfaceLock = IOLockAlloc();
+    
+    RLLog("[FakeIrisXE] UserClient started with memType dictionary");
     return true;
 }
 
 void FakeIrisXEAcceleratorUserClient::stop(IOService* provider)
 {
+    // V169: Clean up dictionaries
+    if (fMemBindLock) {
+        IOLockFree(fMemBindLock);
+        fMemBindLock = nullptr;
+    }
+    if (fMemTypeToHandle) {
+        fMemTypeToHandle->release();
+        fMemTypeToHandle = nullptr;
+    }
+    if (fSurfaceLock) {
+        IOLockFree(fSurfaceLock);
+        fSurfaceLock = nullptr;
+    }
+    if (fSurfaceRegistry) {
+        fSurfaceRegistry->release();
+        fSurfaceRegistry = nullptr;
+    }
+    
+    if (fHandleTable) {
+        fHandleTable->release();
+        fHandleTable = nullptr;
+    }
+    
     fOwner = nullptr;
     super::stop(provider);
 }

@@ -247,7 +247,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║         FAKEIRISXE V160 - AGPMInjector + Enhanced PM     ║\n");
+    IOLog("║         FAKEIRISXE V168 - PCI Device IDs + Enhanced AGPM    ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -753,15 +753,15 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  FAKEIRISXE V131 - start() - WindowServer Integration         ║\n");
+    IOLog("║  FAKEIRISXE V168 - PCI Device IDs + Enhanced AGPM         ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
     if (!super::start(provider)) {
-        IOLog("❌ [V131] super::start() failed\n");
+        IOLog("❌ [V168] super::start() failed\n");
         return false;
     }
-    IOLog("✅ [V131] super::start() succeeded\n");
+    IOLog("✅ [V168] super::start() succeeded\n");
 
     // V149: Add GEM/GTT Diagnostics
     IOLog("(FakeIrisXE)[V149] ============================================\n");
@@ -1252,6 +1252,24 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     setProperty("framebuffer-con2-alldata", OSData::withBytes(con2_dp, sizeof(con2_dp)));
     
+    // ================================================
+    // V166: Proper AAPL01-int-cmn-overrides for internal display
+    // This is the critical framebuffer patch for Tiger Lake internal panel
+    // ================================================
+    static const uint8_t aapl01_cmn_overrides[] = {
+        0x00, 0x00, 0x00, 0x00,  // Framebuffer 0, flags=0
+        0x04, 0x00, 0x00, 0x00,  // eDP panel type
+        0x01, 0x00, 0x00, 0x00,  // Backlight: PWM control
+        0x00, 0x00, 0x00, 0x00,  // Reserved
+        0x00, 0x00, 0x00, 0x00,  // Backlight level min
+        0xFF, 0x00, 0x00, 0x00,  // Backlight level max (255)
+        0x00, 0x00, 0x00, 0x00,  // Panel ID
+        0x01, 0x00, 0x00, 0x00,  // Version
+        0x00, 0x00, 0x00, 0x00,  // Feature flags
+    };
+    setProperty("AAPL01-int-cmn-overrides", OSData::withBytes(aapl01_cmn_overrides, sizeof(aapl01_cmn_overrides)));
+    IOLog("[V166] AAPL01-int-cmn-overrides set for internal eDP panel\n");
+    
     // Additional framebuffer properties
     setProperty("complete-modeset", kOSBooleanTrue);
     setProperty("force-online", kOSBooleanTrue);
@@ -1270,6 +1288,28 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("builtin", kOSBooleanTrue);
     setProperty("display-type", OSString::withCString("built-in"));
     setProperty("panel-orientation", OSString::withCString("normal"));
+    
+    // V167: Additional display properties for proper attachment
+    // Mark as boot display - critical for suppressing .Display_boot
+    setProperty("AAPL,boot-display", kOSBooleanTrue);
+    setProperty("AAPL,has-display", kOSBooleanTrue);
+    setProperty("AAPL,ignore-ulve", kOSBooleanTrue);
+    
+    // V167: Internal display identification
+    setProperty("IODisplayIsInternal", kOSBooleanTrue);
+    setProperty("built-in", kOSBooleanTrue);
+    setProperty("display-type", OSString::withCString("built-in"));
+    setProperty("IODisplayLocation", OSString::withCString("internal"));
+    
+    // V167: Proper slot-name for internal display (critical for .Display_boot suppression)
+    // Format: Internal@bus,device,function - Tiger Lake iGPU is typically @
+    setProperty("AAPL,slot-name", OSData::withBytes((const void*)"\x00\x00\x00\x00Internal@2", 16));
+    
+    // V167: Add framebuffer index for proper routing
+    setProperty("AAPL,framebuffer-index", OSNumber::withNumber(0ULL, 32));
+    
+    // V167: Tell system this is the primary display
+    setProperty("IODisplayConnectsToFB", kOSBooleanTrue);
     
     // Keep reporter-facing identity properties as Data (32-bit LE blobs),
     // which matches IORegistry expectations used by display tools.
@@ -1290,13 +1330,42 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     if (pciDevice) {
         pciDevice->setProperty("model", OSString::withCString("Intel Iris Xe Graphics"));
         pciDevice->setProperty("model Alias", OSString::withCString("Intel Xe"));
+        
+        // V168: Add vendor/device IDs directly to PCI device for AGPM
+        pciDevice->setProperty("vendor-id", OSNumber::withNumber(0x8086, 16));
+        pciDevice->setProperty("device-id", OSNumber::withNumber(0x9A49, 16));
+        pciDevice->setProperty("subsystem-vendor-id", OSNumber::withNumber(0x8086, 16));
+        pciDevice->setProperty("subsystem-id", OSNumber::withNumber(0x9A49, 16));
+        pciDevice->setProperty("class-code", OSNumber::withNumber(0x300000, 24));
+        pciDevice->setProperty("revision-id", OSNumber::withNumber(0x01, 8));
+        
+        // V168: AGPM matching properties on PCI device
+        pciDevice->setProperty("IONameMatchedKey", OSString::withCString("Intel Iris Xe Graphics"));
+        pciDevice->setProperty("AGPMVendorID", OSNumber::withNumber(0x8086, 16));
+        pciDevice->setProperty("AGPMDeviceID", OSNumber::withNumber(0x9A49, 16));
     }
     
-    IOLog("[V131] Connector/framebuffer patch properties published\n");
-    IOLog("[V131] - Port 0: eDP (internal panel)\n");
-    IOLog("[V131] - Port 1: HDMI\n");
-    IOLog("[V131] - Port 2: DP\n");
-    IOLog("[V131] GPU detection properties added\n");
+    // V167: Metal/Hardware Rendering verification properties
+    setProperty("MetalPluginClassName", OSString::withCString("FakeIrisXEAccelerator"));
+    setProperty("MetalPluginBundleID", OSString::withCString("com.anomy.driver.FakeIrisXEFramebuffer"));
+    setProperty("MetalSupported", kOSBooleanTrue);
+    setProperty("MetalDevice", kOSBooleanTrue);
+    setProperty("MetalRenderer", OSString::withCString("Intel Iris Xe Graphics"));
+    setProperty("MetalFamilyID", OSNumber::withNumber(1ULL, 32));
+    setProperty("MetalVendorID", OSNumber::withNumber(0x8086, 32));
+    setProperty("MetalDeviceID", OSNumber::withNumber(0x9A49, 32));
+    
+    // V167: Hardware acceleration verification
+    setProperty("IOFBAccelerator", kOSBooleanTrue);
+    setProperty("IOFBAcceleratorLinked", kOSBooleanTrue);
+    setProperty("HardwareAccelerated", kOSBooleanTrue);
+    setProperty("GPURendering", kOSBooleanTrue);
+    
+    IOLog("[V167] Connector/framebuffer patch properties published\n");
+    IOLog("[V167] - Port 0: eDP (internal panel)\n");
+    IOLog("[V167] - Port 1: HDMI\n");
+    IOLog("[V167] - Port 2: DP\n");
+    IOLog("[V167] GPU detection properties added\n");
     
 
     
@@ -1380,54 +1449,52 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     
     
-
-    // === V74: Enhanced EDID with detailed timing descriptors ===
+    // === V161: LG Display EDID - defined here for access throughout function ===
+    static const uint8_t lgDisplayEDID[128] = {
+        0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
+        0x30, 0xE4, 0x1E, 0x07, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x1F, 0x01, 0x04, 0x95, 0x22, 0x13, 0x78,
+        0x03, 0xB3, 0x85, 0x99, 0x5E, 0x5B, 0x8C, 0x26,
+        0x1B, 0x50, 0x54, 0x00, 0x00, 0x00, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x2E, 0x36, 0x80, 0xA0, 0x70, 0x38, 0x1F, 0x40,
+        0x30, 0x20, 0x35, 0x00, 0x58, 0xC2, 0x10, 0x00,
+        0x00, 0x1A, 0x1F, 0x24, 0x80, 0xA0, 0x70, 0x38,
+        0x1F, 0x40, 0x30, 0x20, 0x35, 0x00, 0x58, 0xC2,
+        0x10, 0x00, 0x00, 0x1A, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    
+    // === V161: Proper LG Display EDID for Tiger Lake integrated panel (LGD 0x071E) ===
     {
-        // V80: Proper EDID for Dell Latitude 5520 15.6" 1920x1080 panel (128 bytes)
-        static const uint8_t properEDID[128] = {
-            0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
-            0x30, 0xE4, 0x9C, 0x7C, 0x00, 0x00, 0x00, 0x00,
-            0x1F, 0x1F, 0x01, 0x04, 0xA5, 0x1F, 0x14, 0x78,
-            0x04, 0x95, 0x95, 0xA3, 0x55, 0x4C, 0x9E, 0x26,
-            0x0F, 0x50, 0x54, 0x00, 0x00, 0x00, 0x01, 0x01,
-            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-            0x2E, 0x36, 0x80, 0xA0, 0x70, 0x38, 0x1F, 0x40,
-            0x30, 0x20, 0x35, 0x00, 0x58, 0xC2, 0x10, 0x00,
-            0x00, 0x1A, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0xFD, 0x00, 0x38, 0x4B, 0x1E,
-            0x5E, 0x11, 0x00, 0x0A, 0x20, 0x20, 0x20, 0x20,
-            0x20, 0x20, 0x00, 0xFC, 0x00, 0x44, 0x65, 0x6C,
-            0x6C, 0x20, 0x4C, 0x61, 0x74, 0x35, 0x35, 0x32
-        };
+        // Actual EDID from user's LG Display panel (1920x1080 @ 60Hz, 14.0" laptop panel)
+        // Manufacturer: LG Display (0xE430), Product Code: 0x071E (1822)
         
-        OSData *edidData = OSData::withBytes(properEDID, sizeof(properEDID));
+        OSData *edidData = OSData::withBytes(lgDisplayEDID, sizeof(lgDisplayEDID));
         if (edidData) {
             setProperty("IODisplayEDID", edidData);
             edidData->release();
-            IOLog("[V80] Proper Dell EDID published (Dell Latitude 5520)\n");
-        }
-
-        // V80: Critical for display recognition - override EDID from physical connection
-        OSData *overrideEDID = OSData::withBytes(properEDID, sizeof(properEDID));
-        if (overrideEDID) {
-            setProperty("AAPL00,override-no-connect", overrideEDID);
-            overrideEDID->release();
-            IOLog("[V80] AAPL00,override-no-connect set for display detection\n");
+            IOLog("[V161] LG Display EDID published (LGD 0x071E, 1920x1080)\n");
         }
 
         setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
         
-        // V80: Display identification properties
-        setProperty("IODisplaySerialNumber", OSString::withCString("CN-0F7CRH-7275581"));
-        setProperty("IODisplayVendorID", OSNumber::withNumber(0xE430, 16));  // Dell
-        setProperty("IODisplayProductID", OSNumber::withNumber(0x7C9C, 16));  // Latitude 5520 panel
-        setProperty("IODisplayName", OSString::withCString("Dell Latitude 5520"));
-        setProperty("IODisplayPrefsKey", OSString::withCString("DEL:0x7C9C"));
+        // V161: Correct LG Display vendor/product IDs - use OSNumber for proper values
+        setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)0, 32));
+        setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)0xE430, 16));
+        setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)0x071E, 16));
+        setProperty("IODisplayName", OSString::withCString("AppleBacklightDisplay"));
+        setProperty("IODisplayPrefsKey", OSString::withCString("LGD:0x071E"));
         
-        IOLog("[V80] Display properties set for Dell Latitude 5520 panel\n");
+        // V161: Mark as internal panel to suppress .Display_boot fallback
+        setProperty("AAPL,slot-name", OSString::withCString("Internal@0,2,0"));
+        setProperty("built-in", kOSBooleanTrue);
+        
+        IOLog("[V161] Display properties set for LG Display panel\n");
     }
 
     // Display Timing Information
@@ -1497,13 +1564,29 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOFBIsMainDisplay", kOSBooleanTrue);
     setProperty("AAPL,boot-display", kOSBooleanTrue);
 
+    // V161: Additional properties to suppress .Display_boot fallback
+    setProperty("AAPL,ignore-ulve", kOSBooleanTrue);  // Ignore unexpected LVDS/eDP
+    setProperty("AAPL,has-display", kOSBooleanTrue);  // We have a display
+    
+    // V167: Enhanced brightness control properties
     setProperty("brightness-control", kOSBooleanTrue);
     setProperty("IOBacklight", kOSBooleanTrue);
+    setProperty("IODisplayHasBacklight", kOSBooleanTrue);
+    setProperty("IODisplayCanRotate", OSNumber::withNumber(0ULL, 32));
+    
+    // V167: Backlight calibration
+    setProperty("brightness-level", OSNumber::withNumber(100ULL, 32));
+    setProperty("brightness-max", OSNumber::withNumber(100ULL, 32));
+    setProperty("brightness-min", OSNumber::withNumber(0ULL, 32));
+    setProperty("brightness-default", OSNumber::withNumber(75ULL, 32));
+    
     // backlight-index / backlight-control-type must be OSNumber
     OSNumber *idx = OSNumber::withNumber((uint64_t)1ULL, 32);
     if (idx) { setProperty("AAPL,backlight-control-type", idx); idx->release(); }
     
-    setProperty("IODisplayHasBacklight", kOSBooleanTrue);
+    // V167: Additional backlight
+    setProperty("AAPL01-internal-panel", kOSBooleanTrue);
+    setProperty("AAPL00,PanelPowerOn", kOSBooleanTrue);
 
     
     //optional
@@ -1543,7 +1626,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // Enable IOSurface support - CRITICAL for transparency
     setProperty("IOSurfaceSupport", kOSBooleanTrue);
     setProperty("IOSurfaceIsGlobal", kOSBooleanTrue);
-    setProperty("IOAccelSurfaceSupported", kOSBooleanTrue);
 
     // Core Image acceleration
     setProperty("CISupported", kOSBooleanTrue);
@@ -1551,9 +1633,25 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("CITransparencySupported", kOSBooleanTrue);
 
     // ================================================
-    // V160: AGPM Power Management Integration
+    // V167: AGPM Power Management - FIX RECOGNITION
     // ================================================
-    IOLog("[V160] Setting up AGPM power management integration...\n");
+    IOLog("[V167] Setting up AGPM power management...\n");
+    
+    // V167: CRITICAL - Add vendor/device IDs that AGPM recognizes
+    // Format: Data (32-bit LE) - byte-swapped from actual device ID
+    // 0x9A49 -> 0x49498086 (LE bytes: 49 49 80 86)
+    setProperty("vendor-id", OSData::withBytes((const void*)"\x86\x80\x49\x00", 4));
+    setProperty("device-id", OSData::withBytes((const void*)"\x49\x49\x80\x00", 4));
+    setProperty("subsystem-vendor-id", OSData::withBytes((const void*)"\x86\x80\x49\x00", 4));
+    setProperty("subsystem-id", OSData::withBytes((const void*)"\x49\x49\x80\x00", 4));
+    
+    // V167: Also set as OSNumber for other subsystems
+    setProperty("AGPMVendorID", OSNumber::withNumber(0x8086, 16));
+    setProperty("AGPMDeviceID", OSNumber::withNumber(0x9A49, 16));
+    
+    // GPU name for AGPM matching
+    setProperty("IONameMatchedKey", OSString::withCString("Intel Iris Xe Graphics"));
+    setProperty("model", OSString::withCString("Intel(R) Iris(R) Xe Graphics"));
     
     // GPU Power States for AGPM (MacBookPro16,2 profile)
     setProperty("agpu-pstates", OSArray::withObjects((const OSObject*[]){
@@ -1570,12 +1668,14 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         OSString::withCString("turbo")
     }, 4));
     
-    // GPU power management target profile
+    // V167: AGPM target profile - use MacBookPro16,2 which has Iris Xe
     setProperty("AGXSelectedPowerProfile", OSString::withCString("MacBookPro16,2"));
+    setProperty("AGPMTargetProfile", OSString::withCString("MacBookPro16,2"));
     
     // AGPM connection properties
     setProperty("AGPM_Enabled", kOSBooleanTrue);
     setProperty("GPUPowerManagementEnabled", kOSBooleanTrue);
+    setProperty("IOGPUPowerManagement", kOSBooleanTrue);
     
     // Performance state - start at high for performance
     setProperty("IOGPUSwitchState", OSNumber::withNumber(2ULL, 32));
@@ -1583,11 +1683,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     // Performance level for Metal
     setProperty("IOGPUTargetPerformanceLevel", OSNumber::withNumber(3ULL, 32));
-    setProperty("IOGPUPerformanceStatistics", OSData::withBytes((void*)"\x00\x00\x00\x00", 4));
     
     // GPU utilization hints
     setProperty("GPUActivityHint", kOSBooleanTrue);
-    setProperty("GPUPerformanceMode", OSNumber::withNumber(1ULL, 32)); // 1 = performance
+    setProperty("GPUPerformanceMode", OSNumber::withNumber(1ULL, 32));
     
     // Power management caps
     setProperty("IOGPUPowermanagementCapable", kOSBooleanTrue);
@@ -1599,23 +1698,41 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }, 4));
     
     // Current frequency (report as high)
-    setProperty("IOGPUCurrentFreq", OSNumber::withNumber(1100ULL, 32));
-    setProperty("IOGPUMaxFreq", OSNumber::withNumber(1100ULL, 32));
-    setProperty("IOGPUMinFreq", OSNumber::withNumber(100ULL, 32));
+    setNumberProperty(this, "IOGPUCurrentFreq", 1100ULL, 32);
+    setNumberProperty(this, "IOGPUMaxFreq", 1100ULL, 32);
+    setNumberProperty(this, "IOGPUMinFreq", 100ULL, 32);
     
     // Tell system we support DVFM (Dynamic Voltage Frequency Management)
     setProperty("IOGPUDVFM", kOSBooleanTrue);
     setProperty("IOGPUDVFMStates", OSNumber::withNumber(4ULL, 32));
     
-    // AGPM Heuristic settings
-    setProperty("agpu-heuristic-id", OSData::withBytes((void*)"\xff\xff\xff\xff", 4));
-    setProperty("agpu-default-preference", OSNumber::withNumber(2ULL, 32)); // Performance preference
+    // V168: Additional AGPM properties
+    setProperty("agpu-min-voltage", OSNumber::withNumber(0ULL, 32));     // 0mV
+    setProperty("agpu-max-voltage", OSNumber::withNumber(1200000ULL, 32)); // 1200mV
+    setProperty("agpu-voltage-steps", OSArray::withObjects((const OSObject*[]){
+        OSNumber::withNumber(0ULL, 32),
+        OSNumber::withNumber(600000ULL, 32),
+        OSNumber::withNumber(900000ULL, 32),
+        OSNumber::withNumber(1200000ULL, 32)
+    }, 4));
     
-    IOLog("[V160] ✅ AGPM power management properties set\n");
-    IOLog("[V160]    Target profile: MacBookPro16,2\n");
-    IOLog("[V160]    Power states: low, medium, high, turbo\n");
-    IOLog("[V160]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
-    IOLog("[V160]    Initial state: high performance\n");
+    // V168: Performance table
+    setProperty("IOGPUPerfTable", OSArray::withObjects((const OSObject*[]){
+        OSNumber::withNumber(100ULL, 32),    // freq
+        OSNumber::withNumber(0ULL, 32),      // voltage
+        OSNumber::withNumber(5000ULL, 32),   // latency
+        OSNumber::withNumber(1ULL, 32),      // enabled
+    }, 4));
+    
+    // V168: Tell AGPM we have full control
+    setProperty("AGPMFullControl", kOSBooleanTrue);
+    setProperty("IOGPUPowerControl", kOSBooleanTrue);
+    
+    IOLog("[V168] ✅ AGPM power management properties set\n");
+    IOLog("[V168]    Target profile: MacBookPro16,2\n");
+    IOLog("[V168]    Power states: low, medium, high, turbo\n");
+    IOLog("[V168]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
+    IOLog("[V168]    Initial state: high performance\n");
     
     // Quartz Extreme requirements
     
@@ -2219,11 +2336,58 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     
+    
+    
+    
+    
+    
+    // --- V161: Create proper IODisplayConnect to suppress .Display_boot fallback ---
+    IODisplayConnect* displayConnect = OSTypeAlloc(IODisplayConnect);
+    if (displayConnect && displayConnect->init()) {
+        displayConnect->setName("DisplayConnect");
+        displayConnect->setProperty("IOClass", "IODisplayConnect");
+        displayConnect->setProperty("IODisplayConnectFlags", OSNumber::withNumber((uint64_t)0, 32));
+        
+        // V166: Mark as primary display (critical for boot display selection)
+        displayConnect->setProperty("IODisplayPrimary", kOSBooleanTrue);
+        displayConnect->setProperty("AAPL,display-type", OSNumber::withNumber(0ULL, 32));  // 0 = built-in
+        
+        // Copy EDID to display connect
+        OSData* edidCopy = OSData::withBytes(lgDisplayEDID, sizeof(lgDisplayEDID));
+        if (edidCopy) {
+            displayConnect->setProperty("IODisplayEDID", edidCopy);
+            edidCopy->release();
+        }
+        
+        // Display identification - use OSNumber for proper numeric values
+        displayConnect->setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)0xE430, 16));
+        displayConnect->setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)0x071E, 16));
+        displayConnect->setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)0, 32));
+        displayConnect->setProperty("IODisplayName", OSString::withCString("AppleBacklightDisplay"));
+        
+        // Mark as internal
+        displayConnect->setProperty("AAPL,internal", kOSBooleanTrue);
+        
+        // V166: Link to our framebuffer
+        displayConnect->setProperty("IOFramebuffer", this);
+        
+        // Attach and register
+        displayConnect->attach(this);
+        displayConnect->registerService();
+        
+        IOLog("[V166] IODisplayConnect created with proper properties + primary flag\n");
+    }
+    
+    // --- V163: Log .Display_boot presence (don't steal - causes crashes) ---
+    IOLog("[V163] .Display_boot exists - display will use boot framebuffer\n");
+    // Note: Display is attached to .Display_boot but GPU rendering is handled by our framebuffer
+    // The display connection happens early in boot before our kext loads
+    
+    
+    
+    
+    
 
-    
-    
-    
-    
     // --- Create the Backlight Node ---
     FakeIrisXEBacklight* backlight = OSTypeAlloc(FakeIrisXEBacklight);
     if (backlight && backlight->init()) {
@@ -2244,43 +2408,43 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         backlight->setProperty("IOVendor", OSString::withCString("Intel"));
         backlight->setProperty("IOModel", OSString::withCString("Intel Iris Xe Graphics"));
 
-        // --- brightness params dictionary ---
-        // --- brightness params dictionary ---
+        // --- V161: Properly serialize IODisplayParameters dictionary ---
         OSDictionary* params = OSDictionary::withCapacity(2);
-        OSDictionary* bright = OSDictionary::withCapacity(3);
-        OSDictionary* vblm   = OSDictionary::withCapacity(3);
-        
         
         OSNumber *nMin   = OSNumber::withNumber((uint64_t)0ULL,   32);
         OSNumber *nMax   = OSNumber::withNumber((uint64_t)100ULL, 32);
         OSNumber *nVal   = OSNumber::withNumber((uint64_t)100ULL, 32);
 
-        if (bright && vblm && params && nMin && nMax && nVal) {
-
-            bright->setObject("min", nMin);
-            bright->setObject("max", nMax);
-            bright->setObject("value", nVal);
-
+        if (params && nMin && nMax && nVal) {
+            // Create brightness sub-dictionary
             OSDictionary* brightnessDict = OSDictionary::withCapacity(3);
-            brightnessDict->setObject(OSSymbol::withCString("min"), nMin);
-            brightnessDict->setObject(OSSymbol::withCString("max"), nMax);
-                           brightnessDict->setObject(OSSymbol::withCString("value"), nVal);
-                           params->setObject(OSSymbol::withCString("brightness"), brightnessDict);
-
-            vblm->setObject("min", nMin);
-            vblm->setObject("max", nMax);
-            vblm->setObject("value", nVal);
-            params->setObject("vblm", vblm);
-            backlight->setProperty("IODisplayParameters", params);
+            if (brightnessDict) {
+                brightnessDict->setObject("min", nMin);
+                brightnessDict->setObject("max", nMax);
+                brightnessDict->setObject("value", nVal);
+                params->setObject("brightness", brightnessDict);
+                brightnessDict->release();
+            }
             
+            // Create vblm (vertical blanking) sub-dictionary
+            OSDictionary* vblmDict = OSDictionary::withCapacity(3);
+            if (vblmDict) {
+                vblmDict->setObject("min", nMin);
+                vblmDict->setObject("max", nMax);
+                vblmDict->setObject("value", nVal);
+                params->setObject("vblm", vblmDict);
+                vblmDict->release();
+            }
+            
+            // Set the property - this retains the dictionary
+            backlight->setProperty("IODisplayParameters", params);
+            IOLog("[V161] IODisplayParameters properly serialized\n");
         }
 
-        // release everything we created (setObject retained)
+        // Release our references (backlight retained the dictionary via setProperty)
         if (nMin) nMin->release();
         if (nMax) nMax->release();
         if (nVal) nVal->release();
-        if (bright) bright->release();
-        if (vblm) vblm->release();
         if (params) params->release();
 
 
@@ -2347,7 +2511,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V131: Final initialization diagnostics with WindowServer info
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  V131 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
+    IOLog("║  V168 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  FRAMEBUFFER STATUS                                          ║\n");
     IOLog("║  Framebuffer:     %s\n", framebufferMemory ? "✅ ALLOCATED" : "❌ MISSING");
@@ -2384,7 +2548,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V160)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V168)\n");
     return true;
 
 }
