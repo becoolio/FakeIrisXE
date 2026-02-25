@@ -129,9 +129,9 @@ using namespace libkern;
 OSDefineMetaClassAndStructors(FakeIrisXEFramebuffer, IOFramebuffer);
 
 // V73-V75: Display mode structures (defined early for use in timing functions)
-static const uint32_t kNumDisplayModes = 6;
+static const uint32_t kNumDisplayModes = 1;
 
-// Mode IDs: 1=1920x1080, 2=1440x900, 3=1366x768, 4=1280x720, 5=1024x768, 6=2560x1440
+// Mode ID 1: stable built-in timing (1920x1080)
 
 typedef struct {
     uint32_t width;
@@ -143,11 +143,6 @@ typedef struct {
 // Use different name to avoid conflict with header member variable
 static const DisplayModeInfo s_displayModes[kNumDisplayModes] = {
     {1920, 1080, 1, "1920x1080"},
-    {1440,  900, 2, "1440x900"},
-    {1366,  768, 3, "1366x768"},
-    {1280,  720, 4, "1280x720"},
-    {1024,  768, 5, "1024x768"},
-    {2560, 1440, 6, "2560x1440"},
 };
 
 static void setNumberProperty(IORegistryEntry *entry, const char *key, uint64_t value, uint32_t bits)
@@ -1319,30 +1314,17 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     IOLog("[V131] ✅ Internal display properties set\n");
     
-    // Metal/Acceleration properties
-    setProperty("IOAccelTypes", OSArray::withObjects((const OSObject*[]){
-        OSString::withCString("Accel"),
-        OSString::withCString("Metal"),
-        OSString::withCString("OpenGL")
-    }, 3));
+    // Keep IOAccelTypes scalar; IOAccel user-space probing expects
+    // string-like values and can fault on array-typed payloads.
+    setProperty("IOAccelTypes", OSString::withCString("Accel"));
     
     // PCI properties for GPU detection
     if (pciDevice) {
         pciDevice->setProperty("model", OSString::withCString("Intel Iris Xe Graphics"));
         pciDevice->setProperty("model Alias", OSString::withCString("Intel Xe"));
-        
-        // V168: Add vendor/device IDs directly to PCI device for AGPM
-        pciDevice->setProperty("vendor-id", OSNumber::withNumber(0x8086, 16));
-        pciDevice->setProperty("device-id", OSNumber::withNumber(0x9A49, 16));
-        pciDevice->setProperty("subsystem-vendor-id", OSNumber::withNumber(0x8086, 16));
-        pciDevice->setProperty("subsystem-id", OSNumber::withNumber(0x9A49, 16));
-        pciDevice->setProperty("class-code", OSNumber::withNumber(0x300000, 24));
-        pciDevice->setProperty("revision-id", OSNumber::withNumber(0x01, 8));
-        
-        // V168: AGPM matching properties on PCI device
-        pciDevice->setProperty("IONameMatchedKey", OSString::withCString("Intel Iris Xe Graphics"));
-        pciDevice->setProperty("AGPMVendorID", OSNumber::withNumber(0x8086, 16));
-        pciDevice->setProperty("AGPMDeviceID", OSNumber::withNumber(0x9A49, 16));
+
+        // Keep native PCI identity keys as their kernel-provided Data types.
+        // Overriding these with OSNumber causes ApplePCIeAnalytics to fault.
     }
     
     // V167: Metal/Hardware Rendering verification properties
@@ -1560,7 +1542,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
 
     setProperty("IOFBOnline", kOSBooleanTrue);
-    setProperty("IOFBDisplayModeCount", (uint64_t)6, 32);
+    setProperty("IOFBDisplayModeCount", (uint64_t)kNumDisplayModes, 32);
     setProperty("IOFBIsMainDisplay", kOSBooleanTrue);
     setProperty("AAPL,boot-display", kOSBooleanTrue);
 
@@ -1637,17 +1619,17 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // ================================================
     IOLog("[V167] Setting up AGPM power management...\n");
     
-    // V167: CRITICAL - Add vendor/device IDs that AGPM recognizes
-    // Format: Data (32-bit LE) - byte-swapped from actual device ID
-    // 0x9A49 -> 0x49498086 (LE bytes: 49 49 80 86)
-    setProperty("vendor-id", OSData::withBytes((const void*)"\x86\x80\x49\x00", 4));
-    setProperty("device-id", OSData::withBytes((const void*)"\x49\x49\x80\x00", 4));
-    setProperty("subsystem-vendor-id", OSData::withBytes((const void*)"\x86\x80\x49\x00", 4));
-    setProperty("subsystem-id", OSData::withBytes((const void*)"\x49\x49\x80\x00", 4));
+    // V167: Publish AGPM-facing identity with standard Data-typed PCI blobs.
+    const uint32_t agpmVendor = 0x8086;
+    const uint32_t agpmDevice = pciDevice ? pciDevice->configRead16(kIOPCIConfigDeviceID) : 0x9A49;
+    setDataProperty32(this, "vendor-id", agpmVendor);
+    setDataProperty32(this, "device-id", agpmDevice);
+    setDataProperty32(this, "subsystem-vendor-id", agpmVendor);
+    setDataProperty32(this, "subsystem-id", agpmDevice);
     
     // V167: Also set as OSNumber for other subsystems
-    setProperty("AGPMVendorID", OSNumber::withNumber(0x8086, 16));
-    setProperty("AGPMDeviceID", OSNumber::withNumber(0x9A49, 16));
+    setProperty("AGPMVendorID", OSNumber::withNumber(agpmVendor, 16));
+    setProperty("AGPMDeviceID", OSNumber::withNumber(agpmDevice, 16));
     
     // GPU name for AGPM matching
     setProperty("IONameMatchedKey", OSString::withCString("Intel Iris Xe Graphics"));
@@ -1837,14 +1819,14 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // ---- GGTT Aperture Mapping ----
 
     // 1. Read BAR0 (GTTMMADR)
-    uint64_t gttAddr = pciDevice->configRead32(kIOPCIConfigBaseAddress0);
-    gttAddr &= ~0xFULL;    // clear PCI flags
+    uint64_t bar0Phys = pciDevice->configRead32(kIOPCIConfigBaseAddress0);
+    bar0Phys &= ~0xFULL;    // clear PCI flags
 
     uint64_t gttSize2 = 2 * 1024 * 1024; // 2MB GGTT
 
     // 2. Create mapping for GGTT table
     IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(
-        gttAddr,
+        bar0Phys,
         gttSize2,
         kIODirectionOutIn
     );
@@ -1861,48 +1843,19 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     if (map) {
         fGGTT = (volatile uint32_t*)map->getVirtualAddress();
+        fBar0 = (volatile uint32_t*)map->getVirtualAddress();
         fGGTTSize = gttSize2;
         fGGTTBaseGPU = 0x00000000;
         fNextGGTTOffset = 0x00100000;
-        IOLog("FakeIrisXEFramebuffer: GGTT mapped at %p\n", fGGTT);
+        IOLog("FakeIrisXEFramebuffer: GGTT/BAR0 mapped at %p\n", fGGTT);
     }
-
-    
-//ring rcs
-    
-    IOPCIDevice* pci = OSDynamicCast(IOPCIDevice, provider);
-    pci->retain();
-    pci->setMemoryEnable(true);
 
     if (!map) {
         logSoftFail(4, "BAR0/GGTT map missing; skipping ring init");
     }
 
-    if (map) {
-        fBar0 = (volatile uint32_t*)map->getVirtualAddress();
-        IOLog("BAR0 mapped at %p\n", fBar0);
-    }
-
-
-    // 1. Create ring object
-    if (fBar0) {
-        fRingRCS = new FakeIrisXERing(fBar0);
-    }
-
-    // 2. Allocate 64KB ring buffer
-    if (!fRingRCS || !fRingRCS->allocateRing(64 * 1024)) {
-        logSoftFail(4, "Failed to allocate first RCS ring");
-    } else {
-        fRingRCS->attachRingGPUAddress(gttAddr);
-        fRingRCS->programRingBaseToHW();
-        fRingRCS->enableRing();
-        IOLog("RCS ring initialization complete.\n");
-    }
-
-
-    
-    // map BAR0 into fBar0 — you already have this
-    // map GGTT into fGGTT — you already have this
+    // map BAR0 into fBar0 — done above
+    // map GGTT into fGGTT — done above
     fNextGGTTOffset = 0x00100000; // choose appropriate base
 
     // Create ring
@@ -2341,120 +2294,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     
-    // --- V161: Create proper IODisplayConnect to suppress .Display_boot fallback ---
-    IODisplayConnect* displayConnect = OSTypeAlloc(IODisplayConnect);
-    if (displayConnect && displayConnect->init()) {
-        displayConnect->setName("DisplayConnect");
-        displayConnect->setProperty("IOClass", "IODisplayConnect");
-        displayConnect->setProperty("IODisplayConnectFlags", OSNumber::withNumber((uint64_t)0, 32));
-        
-        // V166: Mark as primary display (critical for boot display selection)
-        displayConnect->setProperty("IODisplayPrimary", kOSBooleanTrue);
-        displayConnect->setProperty("AAPL,display-type", OSNumber::withNumber(0ULL, 32));  // 0 = built-in
-        
-        // Copy EDID to display connect
-        OSData* edidCopy = OSData::withBytes(lgDisplayEDID, sizeof(lgDisplayEDID));
-        if (edidCopy) {
-            displayConnect->setProperty("IODisplayEDID", edidCopy);
-            edidCopy->release();
-        }
-        
-        // Display identification - use OSNumber for proper numeric values
-        displayConnect->setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)0xE430, 16));
-        displayConnect->setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)0x071E, 16));
-        displayConnect->setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)0, 32));
-        displayConnect->setProperty("IODisplayName", OSString::withCString("AppleBacklightDisplay"));
-        
-        // Mark as internal
-        displayConnect->setProperty("AAPL,internal", kOSBooleanTrue);
-        
-        // V166: Link to our framebuffer
-        displayConnect->setProperty("IOFramebuffer", this);
-        
-        // Attach and register
-        displayConnect->attach(this);
-        displayConnect->registerService();
-        
-        IOLog("[V166] IODisplayConnect created with proper properties + primary flag\n");
-    }
-    
-    // --- V163: Log .Display_boot presence (don't steal - causes crashes) ---
-    IOLog("[V163] .Display_boot exists - display will use boot framebuffer\n");
-    // Note: Display is attached to .Display_boot but GPU rendering is handled by our framebuffer
-    // The display connection happens early in boot before our kext loads
-    
-    
-    
-    
-    
-
-    // --- Create the Backlight Node ---
-    FakeIrisXEBacklight* backlight = OSTypeAlloc(FakeIrisXEBacklight);
-    if (backlight && backlight->init()) {
-
-        backlight->setName("AppleBacklightDisplay");
-        backlight->setProperty("IOClass", "IOBacklightDisplay");
-        backlight->setProperty("IOProviderClass", "IODisplayConnect");
-        backlight->setProperty("IONameMatch", "AppleBacklightDisplay");
-        backlight->setProperty("AAPL,backlight-control", kOSBooleanTrue);
-        
-        // V151: Add properties for internal display detection
-        backlight->setProperty("AAPL,internal", kOSBooleanTrue);
-        backlight->setProperty("AAPL,panel-id", OSNumber::withNumber(1, 32));
-        
-        // Add vendor-specific properties
-        backlight->setProperty("vendor-id", OSNumber::withNumber(0x8086, 16));
-        backlight->setProperty("product-id", OSNumber::withNumber(0x9a49, 16));
-        backlight->setProperty("IOVendor", OSString::withCString("Intel"));
-        backlight->setProperty("IOModel", OSString::withCString("Intel Iris Xe Graphics"));
-
-        // --- V161: Properly serialize IODisplayParameters dictionary ---
-        OSDictionary* params = OSDictionary::withCapacity(2);
-        
-        OSNumber *nMin   = OSNumber::withNumber((uint64_t)0ULL,   32);
-        OSNumber *nMax   = OSNumber::withNumber((uint64_t)100ULL, 32);
-        OSNumber *nVal   = OSNumber::withNumber((uint64_t)100ULL, 32);
-
-        if (params && nMin && nMax && nVal) {
-            // Create brightness sub-dictionary
-            OSDictionary* brightnessDict = OSDictionary::withCapacity(3);
-            if (brightnessDict) {
-                brightnessDict->setObject("min", nMin);
-                brightnessDict->setObject("max", nMax);
-                brightnessDict->setObject("value", nVal);
-                params->setObject("brightness", brightnessDict);
-                brightnessDict->release();
-            }
-            
-            // Create vblm (vertical blanking) sub-dictionary
-            OSDictionary* vblmDict = OSDictionary::withCapacity(3);
-            if (vblmDict) {
-                vblmDict->setObject("min", nMin);
-                vblmDict->setObject("max", nMax);
-                vblmDict->setObject("value", nVal);
-                params->setObject("vblm", vblmDict);
-                vblmDict->release();
-            }
-            
-            // Set the property - this retains the dictionary
-            backlight->setProperty("IODisplayParameters", params);
-            IOLog("[V161] IODisplayParameters properly serialized\n");
-        }
-
-        // Release our references (backlight retained the dictionary via setProperty)
-        if (nMin) nMin->release();
-        if (nMax) nMax->release();
-        if (nVal) nVal->release();
-        if (params) params->release();
-
-
-        
-        // V156: Fix backlight registration - attach to this framebuffer before registerService
-        backlight->attach(this);
-        backlight->registerService();
-
-        IOLog("[FB] AppleBacklightDisplay published under IODisplayConnect\n");
-    }
+    // Keep display graph ownership with IOGraphicsFamily.
+    // Synthetic IODisplayConnect / backlight nodes caused unstable CoreDisplay routing
+    // and user-space property parsing crashes.
+    IOLog("[V169] Skipping synthetic IODisplayConnect/backlight publication\n");
 
 
 
@@ -2562,22 +2405,18 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
     // in FakeIrisXEFramebuffer::stop(IOService* provider)
     if (fInterruptSource) {
         fInterruptSource->disable();
-        fWorkLoop->removeEventSource(fInterruptSource);
+        if (fWorkLoop) {
+            fWorkLoop->removeEventSource(fInterruptSource);
+        }
         fInterruptSource->release();
         fInterruptSource = nullptr;
-    }
-    if (fPendingSubmissions) {
-        fPendingSubmissions->release();
-        fPendingSubmissions = nullptr;
-    }
-    if (fWorkLoop) {
-        fWorkLoop->release();
-        fWorkLoop = nullptr;
     }
 
     
     if (fCmdGate) {
-        fWorkLoop->removeEventSource(fCmdGate);
+        if (fWorkLoop) {
+            fWorkLoop->removeEventSource(fCmdGate);
+        }
         fCmdGate->release();
         fCmdGate = nullptr;
     }
@@ -2591,6 +2430,11 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
     if (fPendingLock) {
         IOLockFree(fPendingLock);
         fPendingLock = nullptr;
+    }
+
+    if (fWorkLoop) {
+        fWorkLoop->release();
+        fWorkLoop = nullptr;
     }
 
     
@@ -3141,7 +2985,7 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
          }
          
          // Force memory flush
-         __asm__ volatile("mfence" ::: "memory");
+         __sync_synchronize();
          IOSleep(10);  // Give memory time to settle
          
          IOLog("[V131] ✅ Test pattern written to framebuffer\n");
@@ -3664,7 +3508,7 @@ IOReturn FakeIrisXEFramebuffer::getTimingInfoForDisplayMode(
     infoOut->appleTimingID = kIOTimingIDDefault;
     infoOut->flags         = kIOTimingInfoValid_AppleTimingID;
 
-    // V74: Proper timing for each resolution
+    // V74: Stable timing profile
     switch (modeInfo->modeID) {
         case 1: // 1920x1080 @ 60Hz
             infoOut->detailedInfo.v1.horizontalActive = 1920;
@@ -3677,71 +3521,6 @@ IOReturn FakeIrisXEFramebuffer::getTimingInfoForDisplayMode(
             infoOut->detailedInfo.v1.verticalSyncWidth = 5;
             infoOut->detailedInfo.v1.pixelClock = 148500000;
             IOLog("[V74] getTimingInfoForDisplayMode(): 1920x1080 @ 60Hz\n");
-            break;
-
-        case 2: // 1440x900 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 1440;
-            infoOut->detailedInfo.v1.horizontalBlanking = 232;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 48;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 32;
-            infoOut->detailedInfo.v1.verticalActive = 900;
-            infoOut->detailedInfo.v1.verticalBlanking = 35;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 3;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 6;
-            infoOut->detailedInfo.v1.pixelClock = 106500000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 1440x900 @ 60Hz\n");
-            break;
-
-        case 3: // 1366x768 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 1366;
-            infoOut->detailedInfo.v1.horizontalBlanking = 174;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 48;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 32;
-            infoOut->detailedInfo.v1.verticalActive = 768;
-            infoOut->detailedInfo.v1.verticalBlanking = 34;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 3;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 6;
-            infoOut->detailedInfo.v1.pixelClock = 74500000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 1366x768 @ 60Hz\n");
-            break;
-
-        case 4: // 1280x720 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 1280;
-            infoOut->detailedInfo.v1.horizontalBlanking = 200;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 40;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 40;
-            infoOut->detailedInfo.v1.verticalActive = 720;
-            infoOut->detailedInfo.v1.verticalBlanking = 30;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 5;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 5;
-            infoOut->detailedInfo.v1.pixelClock = 74250000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 1280x720 @ 60Hz\n");
-            break;
-
-        case 5: // 1024x768 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 1024;
-            infoOut->detailedInfo.v1.horizontalBlanking = 176;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 24;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 32;
-            infoOut->detailedInfo.v1.verticalActive = 768;
-            infoOut->detailedInfo.v1.verticalBlanking = 35;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 3;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 6;
-            infoOut->detailedInfo.v1.pixelClock = 65000000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 1024x768 @ 60Hz\n");
-            break;
-
-        case 6: // 2560x1440 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 2560;
-            infoOut->detailedInfo.v1.horizontalBlanking = 400;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 48;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 32;
-            infoOut->detailedInfo.v1.verticalActive = 1440;
-            infoOut->detailedInfo.v1.verticalBlanking = 60;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 3;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 5;
-            infoOut->detailedInfo.v1.pixelClock = 241500000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 2560x1440 @ 60Hz\n");
             break;
 
         default:
@@ -4969,21 +4748,15 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 
     // V149: Add ring buffer status diagnostics
     IOLog("(FakeIrisXE)[V149] RCS Ring Status After Enable:\n");
-    // Correct ring register offsets from FakeIrisXERing.cpp:
-    // RENDER_RING_BASE = 0x2000
-    // RENDER_RING_HEAD = 0x2010
-    // RENDER_RING_TAIL = 0x2020
-    // RENDER_RING_CTL = 0x2030
+    // Keep diagnostics aligned with FakeIrisXERing.cpp offsets.
+    // RENDER_RING_BASE = 0x2000, HEAD = +0x10, TAIL = +0x18, CTL = +0x20
     uint32_t ringHead = safeMMIORead(0x2010);  // RING_HEAD
-    uint32_t ringTail = safeMMIORead(0x2020);  // RING_TAIL
-    uint32_t ringCtl = safeMMIORead(0x2030);   // RING_CTL
-    // RING_STATUS is at 0x2038 (not 0x2028)
-    uint32_t ringStatus = safeMMIORead(0x2038); // RING_STATUS
+    uint32_t ringTail = safeMMIORead(0x2018);  // RING_TAIL
+    uint32_t ringCtl = safeMMIORead(0x2020);   // RING_CTL
     
     IOLog("(FakeIrisXE)[V149]   RING_HEAD:  0x%08X\n", ringHead);
     IOLog("(FakeIrisXE)[V149]   RING_TAIL:  0x%08X\n", ringTail);
     IOLog("(FakeIrisXE)[V149]   RING_CTL:   0x%08X\n", ringCtl);
-    IOLog("(FakeIrisXE)[V149]   RING_STATUS: 0x%08X\n", ringStatus);
     
     bool ringEmpty = (ringHead & 0xFFFF) == (ringTail & 0xFFFF);
     bool ringRunning = (ringCtl & 0x1) != 0;
@@ -5035,10 +4808,10 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     uint32_t ringBaseLo = safeMMIORead(0x2000);   // RING_BASE_LO
     uint32_t ringBaseHi = safeMMIORead(0x2004);   // RING_BASE_HI
     uint32_t ringHead = safeMMIORead(0x2010);     // RING_HEAD
-    uint32_t ringTail = safeMMIORead(0x2020);     // RING_TAIL
-    uint32_t ringCtl = safeMMIORead(0x2030);     // RING_CTL
-    uint32_t ringStatus = safeMMIORead(0x2038);   // RING_STATUS
-    uint32_t ringHWS = safeMMIORead(0x2040);     // RING_HWS
+    uint32_t ringTail = safeMMIORead(0x2018);     // RING_TAIL
+    uint32_t ringCtl = safeMMIORead(0x2020);      // RING_CTL
+    uint32_t ringStatus = safeMMIORead(0x2038);   // RING_STATUS (diag only)
+    uint32_t ringHWS = safeMMIORead(0x2040);      // RING_HWS
     
     IOLog("(FakeIrisXE)[V151] BASE:  0x%08X%08X\n", ringBaseHi, ringBaseLo);
     IOLog("(FakeIrisXE)[V151] HEAD:  0x%08X (GPU read position)\n", ringHead);
@@ -5052,11 +4825,9 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     
     // Check if ring is enabled
     bool ringEnabled = (ringCtl & 0x1) != 0;
-    bool gpuIdle = (ringStatus & 0x1) != 0;
-    bool ringReady = ringEnabled && !gpuIdle;
+    bool ringReady = ringEnabled;
     
     IOLog("(FakeIrisXE)[V151] Ring Enabled: %s\n", ringEnabled ? "✅ YES" : "❌ NO");
-    IOLog("(FakeIrisXE)[V151] GPU Idle: %s\n", gpuIdle ? "✅ YES" : "❌ NO (GPU BUSY)");
     IOLog("(FakeIrisXE)[V151] Ring Ready: %s\n", ringReady ? "✅ YES" : "❌ NO");
     
     if (!ringEnabled) {
@@ -5120,7 +4891,7 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     
     // Read final ring state
     uint32_t ringHeadEnd = safeMMIORead(0x2010);
-    uint32_t ringTailEnd = safeMMIORead(0x2020);
+    uint32_t ringTailEnd = safeMMIORead(0x2018);
     ringStatus = safeMMIORead(0x2038);
     
     IOLog("(FakeIrisXE)[V151] Final:   HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n", 
@@ -5136,7 +4907,7 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     }
     
     // Check status register for completion
-    gpuIdle = (ringStatus & 0x1) != 0;  // Bit 0 = GPU idle
+    bool gpuIdle = (ringStatus & 0x1) != 0;  // Bit 0 = GPU idle
     IOLog("(FakeIrisXE)[V151] GPU Idle: %s\n", gpuIdle ? "YES" : "NO");
     
     testBatch->unpin();
@@ -5477,6 +5248,8 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
     // 2) Build a tail batch that writes a unique seq into fence
     static atomic_uint_fast32_t global_seq = 1;
     uint32_t seq = (uint32_t)atomic_fetch_add(&global_seq, 1);
+    fFenceSeq = seq;
+
     IOBufferMemoryDescriptor* fenceDesc = fFenceGEM->memoryDescriptor();
     uint64_t fenceGpu = fFenceGEM->physicalAddress(); // prefer gpuAddress if you set it; use physicalAddress if placeholder
     // If you have proper fFenceGEM->gpuAddress(), prefer that:
@@ -5527,12 +5300,36 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
     IOLog("FakeIrisXEFramebuffer: Batch submitted (master=0x%llx user=0x%llx tail=0x%llx) seq=%u\n",
           (unsigned long long)masterGpuAddr, (unsigned long long)userGpu, (unsigned long long)tailGpuAddr, seq);
 
-    // Do not release master/tail immediately — keep them alive until fence observed to avoid reuse.
-    // We can store them in a small list or release after fence observed in IRQ handler.
-    // For simplicity keep refs in a tiny list (you should implement proper cleanup).
-    // For now: keep masterGem and tailGem retained and rely on periodic cleanup / reboot (for bring-up).
-    // (Production: add list<active_submission> and cleanup when fence observed.)
+    if (!addPendingSubmission(seq, masterGem, tailGem)) {
+        IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - pending queue add failed (seq=%u)\n", seq);
+        masterGem->unpin();
+        masterGem->release();
+        tailGem->unpin();
+        tailGem->release();
+        return 0;
+    }
 
+    // Drop local references; pending-submission list owns retained refs now.
+    masterGem->release();
+    tailGem->release();
+
+    trackGPUCommandSubmitted();
+
+    return seq;
+}
+
+uint32_t FakeIrisXEFramebuffer::readCompletedFenceSeq() const
+{
+    uint32_t seq = fFenceCompletedSeq;
+    if (fFenceGEM) {
+        IOBufferMemoryDescriptor* desc = fFenceGEM->memoryDescriptor();
+        if (desc) {
+            volatile uint32_t* fenceCpu = (volatile uint32_t*)desc->getBytesNoCopy();
+            if (fenceCpu && fenceCpu[0] > seq) {
+                seq = fenceCpu[0];
+            }
+        }
+    }
     return seq;
 }
 
@@ -5623,9 +5420,15 @@ void FakeIrisXEFramebuffer::handleInterrupt(IOInterruptEventSource* /*src*/, int
                 IOLog("FakeIrisXEFramebuffer: IRQ - fenceCpu[0]=0x%08x\n", val);
 
                 if (val != 0) {
+                    if (val > fFenceCompletedSeq) {
+                        fFenceCompletedSeq = val;
+                    }
+
                     // reset fence immediately (optional)
                     fenceCpu[0] = 0;
                     __sync_synchronize();
+
+                    trackGPUCommandCompleted(val);
 
                     if (fCmdGate) {
                         // Defer cleanup to gate

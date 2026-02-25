@@ -1,13 +1,17 @@
 #include "FakeIrisXEAcceleratorUserClient.hpp"
 #include "FakeIrisXEAccelerator.hpp"
 #include "FakeIrisXEGEM.hpp"
+#include "FakeIrisXEFenceRetirement.hpp"
+#include "FakeIrisXEIOSurfaceManager.hpp"
 #include <IOKit/IOLib.h>
+#include <libkern/c++/OSData.h>
+#include <libkern/c++/OSNumber.h>
 #include <libkern/c++/OSSymbol.h>
 #include "FakeIrisXEFramebuffer.hpp"
-#include "FakeIrisXEAccelShared.h"   // for kFakeIris_Method_SubmitExeclistFenceTest
+#include "FakeIrisXEAccelShared.h"
 
 
-#define super OSObject
+#define GEMSuper OSObject
 
 class GEMHandleTable : public OSObject {
     OSDeclareDefaultStructors(GEMHandleTable);
@@ -40,7 +44,7 @@ public:
     void free() override {
         if (dict) dict->release();
         if (lock) IOLockFree(lock);
-        super::free();
+        GEMSuper::free();
     }
 
     uint32_t add(FakeIrisXEGEM* gem) {
@@ -102,10 +106,25 @@ OSDefineMetaClassAndStructors(GEMHandleTable, OSObject)
 
 
 
+#undef GEMSuper
 #define super IOUserClient
 OSDefineMetaClassAndStructors(FakeIrisXEAcceleratorUserClient, IOUserClient)
 
 // Rate-limited logging utility
+enum : uint32_t {
+    kLog_Default = 0,
+    kLog_Submit = 1,
+    kLog_WaitTimeout = 2,
+};
+
+static const char* RLTag(uint32_t cat) {
+    switch (cat) {
+        case kLog_Submit: return "submit";
+        case kLog_WaitTimeout: return "wait-timeout";
+        default: return "general";
+    }
+}
+
 static void RLLog(const char *fmt, ...) {
     static uint64_t last = 0;
     uint64_t now = mach_absolute_time();
@@ -117,6 +136,20 @@ static void RLLog(const char *fmt, ...) {
         vsnprintf(buf, sizeof(buf), fmt, ap);
         va_end(ap);
         IOLog("%s\n", buf);
+    }
+}
+
+static void RLLog(uint32_t category, const char *fmt, ...) {
+    static uint64_t last = 0;
+    uint64_t now = mach_absolute_time();
+    if (last == 0 || (now - last) > 1000000000) {
+        last = now;
+        va_list ap;
+        va_start(ap, fmt);
+        char buf[320];
+        vsnprintf(buf, sizeof(buf), fmt, ap);
+        va_end(ap);
+        IOLog("[FakeIrisXE][%s] %s\n", RLTag(category), buf);
     }
 }
 
@@ -141,6 +174,11 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider)
     fMemBindLock = IOLockAlloc();
     fSurfaceRegistry = OSDictionary::withCapacity(64);
     fSurfaceLock = IOLockAlloc();
+
+    if (!fHandleTable || !fMemTypeToHandle || !fMemBindLock || !fSurfaceRegistry || !fSurfaceLock) {
+        RLLog("[FakeIrisXE] UserClient start failed: missing allocations");
+        return false;
+    }
     
     RLLog("[FakeIrisXE] UserClient started with memType dictionary");
     return true;
@@ -176,6 +214,8 @@ void FakeIrisXEAcceleratorUserClient::stop(IOService* provider)
 }
 
 IOReturn FakeIrisXEAcceleratorUserClient::clientClose() {
+    clearMemBindings();
+    terminate();
     return kIOReturnSuccess;
 }
 
@@ -255,15 +295,136 @@ IOReturn FakeIrisXEAcceleratorUserClient::getPhysPagesForHandle(
     return kIOReturnSuccess;
 }
 
+static inline const OSSymbol* makeKey(UInt32 v) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u", (unsigned)v);
+    return OSSymbol::withCString(buf);
+}
+
+void FakeIrisXEAcceleratorUserClient::setMemBinding(UInt32 type, uint32_t handle) {
+    const OSSymbol* key = makeKey(type);
+    if (!key) return;
+    IOLockLock(fMemBindLock);
+    if (handle == 0) {
+        fMemTypeToHandle->removeObject(key);
+    } else {
+        OSNumber* val = OSNumber::withNumber(handle, 32);
+        fMemTypeToHandle->setObject(key, val);
+        val->release();
+    }
+    IOLockUnlock(fMemBindLock);
+    key->release();
+}
+
+uint32_t FakeIrisXEAcceleratorUserClient::getMemBinding(UInt32 type) {
+    uint32_t handle = 0;
+    const OSSymbol* key = makeKey(type);
+    if (!key) return 0;
+    IOLockLock(fMemBindLock);
+    OSNumber* val = OSDynamicCast(OSNumber, fMemTypeToHandle->getObject(key));
+    if (val) handle = val->unsigned32BitValue();
+    IOLockUnlock(fMemBindLock);
+    key->release();
+    return handle;
+}
+
+IOReturn FakeIrisXEAcceleratorUserClient::clearMemBindings() {
+    if (fMemBindLock) {
+        IOLockLock(fMemBindLock);
+        if (fMemTypeToHandle) fMemTypeToHandle->flushCollection();
+        IOLockUnlock(fMemBindLock);
+    }
+    return kIOReturnSuccess;
+}
+
+const OSSymbol* FakeIrisXEAcceleratorUserClient::keyForUInt32(UInt32 v) {
+    return makeKey(v);
+}
+
+IOReturn FakeIrisXEAcceleratorUserClient::registerSurface(uint32_t surfID, uint32_t handle,
+                                                          uint32_t w, uint32_t h,
+                                                          uint32_t rowBytes, uint32_t pixFmt) {
+    if (!fSurfaceRegistry || !fSurfaceLock) return kIOReturnNotReady;
+    if (surfID == 0 || w == 0 || h == 0 || rowBytes == 0) return kIOReturnBadArgument;
+    if (!fHandleTable) return kIOReturnNotReady;
+    FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
+    if (!gem) return kIOReturnNotFound;
+    gem->release();
+    RLLog("[RegisterSurface] id=%u handle=%u w=%u h=%u stride=%u fmt=0x%x",
+          (unsigned)surfID, (unsigned)handle, (unsigned)w, (unsigned)h, (unsigned)rowBytes, (unsigned)pixFmt);
+    FakeIrisXESurfaceInfo info = {1, surfID, w, h, rowBytes, pixFmt, handle};
+
+    if (fOwner && fOwner->surfaceManager()) {
+        IOReturn r = fOwner->surfaceManager()->createSurface(surfID, gem, info);
+        if (r != kIOReturnSuccess && r != kIOReturnExclusiveAccess) {
+            gem->release();
+            return r;
+        }
+    }
+
+    gem->release();
+
+    OSData* blob = OSData::withBytes(&info, sizeof(info));
+    const OSSymbol* key = makeKey(surfID);
+    IOLockLock(fSurfaceLock);
+    fSurfaceRegistry->setObject(key, blob);
+    IOLockUnlock(fSurfaceLock);
+    blob->release(); key->release();
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEAcceleratorUserClient::unregisterSurface(uint32_t surfID) {
+    if (!fSurfaceRegistry || !fSurfaceLock) return kIOReturnNotReady;
+
+    if (fOwner && fOwner->surfaceManager()) {
+        (void)fOwner->surfaceManager()->destroySurface(surfID, true);
+    }
+
+    const OSSymbol* key = makeKey(surfID);
+    IOLockLock(fSurfaceLock);
+    fSurfaceRegistry->removeObject(key);
+    IOLockUnlock(fSurfaceLock);
+    key->release();
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEAcceleratorUserClient::getSurfaceInfo(uint32_t surfID, void* out, size_t *outSize) {
+    if (!outSize) return kIOReturnBadArgument;
+    const OSSymbol* key = makeKey(surfID);
+    IOLockLock(fSurfaceLock);
+    OSData* blob = OSDynamicCast(OSData, fSurfaceRegistry->getObject(key));
+    if (blob) blob->retain();
+    IOLockUnlock(fSurfaceLock);
+    key->release();
+    if (!blob) return kIOReturnNotFound;
+    size_t len = blob->getLength();
+    if (!out || *outSize < len) {
+        *outSize = len;
+        blob->release();
+        return kIOReturnNoSpace;
+    }
+    memcpy(out, blob->getBytesNoCopy(), len);
+    *outSize = len;
+    blob->release();
+    return kIOReturnSuccess;
+}
+
 
 
 
 IOReturn FakeIrisXEAcceleratorUserClient::clientMemoryForType(
     UInt32 type, UInt32* flags, IOMemoryDescriptor** mem)
 {
-    if (!mem) return kIOReturnBadArgument;
+    if (!flags || !mem) return kIOReturnBadArgument;
 
-    uint32_t handle = fLastRequestedGemHandle;
+    uint32_t handle = getMemBinding(type);
+    if (handle == 0) {
+        RLLog("[clientMemoryForType] type=%u no binding", (unsigned)type);
+        return kIOReturnUnsupported;
+    }
+    RLLog("[clientMemoryForType] type=%u -> handle=%u", (unsigned)type, (unsigned)handle);
+    
+    if (!fHandleTable) return kIOReturnNotReady;
     FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
     if (!gem) return kIOReturnNotFound;
 
@@ -298,49 +459,178 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
 
     switch (selector) {
 
-        case kFakeIris_Method_SubmitExeclistFenceTest:
-        {
-            IOLog("(FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest called\n");
+        case kFIx_Method_CreateGEM: {
+            if (args->scalarInputCount < 2 || args->scalarOutputCount < 1) return kIOReturnBadArgument;
+            uint64_t size = args->scalarInput[0];
+            uint32_t flags = (uint32_t)args->scalarInput[1];
+            uint32_t h = createGemAndRegister(size, flags);
+            if (h == 0) return kIOReturnNoMemory;
+            args->scalarOutput[0] = h;
+            args->scalarOutputCount = 1;
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_DestroyGEM: {
+            if (args->scalarInputCount < 1) return kIOReturnBadArgument;
+            return destroyGemHandle((uint32_t)args->scalarInput[0]) ? kIOReturnSuccess : kIOReturnNotFound;
+        }
+        case kFIx_Method_PinGEM: {
+            if (args->scalarInputCount < 1 || args->scalarOutputCount < 1) return kIOReturnBadArgument;
+            uint64_t addr = 0;
+            IOReturn r = pinGemHandle((uint32_t)args->scalarInput[0], &addr);
+            if (r != kIOReturnSuccess) return r;
+            args->scalarOutput[0] = addr;
+            args->scalarOutputCount = 1;
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_UnpinGEM: {
+            if (args->scalarInputCount < 1) return kIOReturnBadArgument;
+            return unpinGemHandle((uint32_t)args->scalarInput[0]) ? kIOReturnSuccess : kIOReturnNotFound;
+        }
+        case kFIx_Method_GetPhysPages: {
+            if (args->scalarInputCount < 1 || !args->structureOutput) return kIOReturnBadArgument;
+            size_t outSize = args->structureOutputSize;
+            IOReturn r = getPhysPagesForHandle((uint32_t)args->scalarInput[0], args->structureOutput, &outSize);
+            args->structureOutputSize = outSize;
+            return r;
+        }
+        case kFIx_Method_BindMemTypeToHandle: {
+            if (args->scalarInputCount < 2) return kIOReturnBadArgument;
+            setMemBinding((UInt32)args->scalarInput[0], (uint32_t)args->scalarInput[1]);
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_UnbindMemType: {
+            if (args->scalarInputCount < 1) return kIOReturnBadArgument;
+            setMemBinding((UInt32)args->scalarInput[0], 0);
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_RegisterSurface: {
+            if (args->scalarInputCount < 6) return kIOReturnBadArgument;
+            return registerSurface((uint32_t)args->scalarInput[0],
+                                   (uint32_t)args->scalarInput[1],
+                                   (uint32_t)args->scalarInput[2],
+                                   (uint32_t)args->scalarInput[3],
+                                   (uint32_t)args->scalarInput[4],
+                                   (uint32_t)args->scalarInput[5]);
+        }
+        case kFIx_Method_UnregisterSurface: {
+            if (args->scalarInputCount < 1) return kIOReturnBadArgument;
+            return unregisterSurface((uint32_t)args->scalarInput[0]);
+        }
+        case kFIx_Method_GetSurfaceInfo: {
+            if (args->scalarInputCount < 1 || !args->structureOutput) return kIOReturnBadArgument;
+            size_t outSize = args->structureOutputSize;
+            IOReturn r = getSurfaceInfo((uint32_t)args->scalarInput[0], args->structureOutput, &outSize);
+            args->structureOutputSize = outSize;
+            return r;
+        }
+        case kFIx_Method_Submit: {
+            if (!args || args->scalarInputCount < 3 || args->scalarOutputCount < 2) return kIOReturnBadArgument;
 
-            if (!fOwner) {
-                IOLog("(FakeIrisXEFramebuffer) [UC] no owner\n");
-                return kIOReturnNotReady;
-            }
+            uint32_t batchHandle = (uint32_t)args->scalarInput[0];
+            uint32_t surfID      = (uint32_t)args->scalarInput[1];
+            uint32_t flags       = (uint32_t)args->scalarInput[2];
 
-            FakeIrisXEFramebuffer* fb = fOwner->getFramebufferOwner();
-            if (!fb) {
-                IOLog("(FakeIrisXEFramebuffer) [UC] no framebuffer owner\n");
-                return kIOReturnNotReady;
-            }
+            if (!fOwner) return kIOReturnNotReady;
 
-            
-            FakeIrisXEExeclist* exec = fOwner->fExeclistFromFB;
-            FakeIrisXERing* ring = fOwner->fRcsRingFromFB;
-
-            if (!exec || !ring) {
-                IOLog("❌ [UC] Missing exec=%p ring=%p\n", exec, ring);
-                return kIOReturnNotReady;
-            }
-
-
-
-            
-            FakeIrisXEGEM* batchGem = fb->createTinyBatchGem();
+            FakeIrisXEGEM* batchGem = fHandleTable ? fHandleTable->lookup(batchHandle) : nullptr;
             if (!batchGem) {
-                IOLog("(FakeIrisXEFramebuffer) [UC] createTinyBatchGem FAILED\n");
+                return kIOReturnNotFound;
+            }
+
+            if (surfID != 0) {
+                size_t sz = 0;
+                IOReturn surfRet = getSurfaceInfo(surfID, nullptr, &sz);
+                if (surfRet != kIOReturnNoSpace && surfRet != kIOReturnSuccess) {
+                    batchGem->release();
+                    return surfRet;
+                }
+            }
+
+            uint32_t hwSeq = fOwner->submitBatchWithFence(batchGem, flags);
+            batchGem->release();
+            if (hwSeq == 0) {
+                return kIOReturnIOError;
+            }
+
+            FakeIrisXEFenceManager* fm = fOwner->fenceManager;
+            uint64_t fenceId = (fm ? fm->allocFence(hwSeq) : 0);
+            if (!fm || fenceId == 0) {
                 return kIOReturnNoMemory;
             }
 
-            bool ok = exec->submitBatchWithExeclist(fb, batchGem, 0, ring, 2000);
+            args->scalarOutput[0] = (uint32_t)(fenceId >> 32);
+            args->scalarOutput[1] = (uint32_t)(fenceId & 0xFFFFFFFFu);
+            args->scalarOutputCount = 2;
 
-
-            batchGem->release();
-
-            IOLog("(FakeIrisXEFramebuffer) [UC] SubmitExeclistFenceTest result=%d\n",
-                  ok ? 1 : 0);
-            return ok ? kIOReturnSuccess : kIOReturnError;
+            RLLog(kLog_Submit,
+                  "Submit: batch=%u surfID=%u flags=0x%x hwSeq=%u => fenceId=0x%llx",
+                  (unsigned)batchHandle,
+                  (unsigned)surfID,
+                  (unsigned)flags,
+                  (unsigned)hwSeq,
+                  (unsigned long long)fenceId);
+            return kIOReturnSuccess;
         }
+        case kFIx_Method_WaitFence: {
+            if (!args || args->scalarInputCount < 3) return kIOReturnBadArgument;
 
+            uint64_t fenceId = ((uint64_t)args->scalarInput[0] << 32) | (uint64_t)args->scalarInput[1];
+            uint32_t timeoutMs = (uint32_t)args->scalarInput[2];
+
+            if (!fOwner) return kIOReturnNotReady;
+            FakeIrisXEFenceManager* fm = fOwner->fenceManager;
+            if (!fm) return kIOReturnNotReady;
+
+            IOReturn res = fm->waitFence(fenceId, timeoutMs);
+            if (res == kIOReturnTimeout) {
+                RLLog(kLog_WaitTimeout,
+                      "WaitFence timeout: fenceId=0x%llx after %u ms",
+                      (unsigned long long)fenceId,
+                      (unsigned)timeoutMs);
+            }
+            return res;
+        }
+        case kFIx_Method_QueryFence: {
+            if (!args || args->scalarInputCount < 2 || args->scalarOutputCount < 1) return kIOReturnBadArgument;
+
+            uint64_t fenceId = ((uint64_t)args->scalarInput[0] << 32) | (uint64_t)args->scalarInput[1];
+
+            if (!fOwner) return kIOReturnNotReady;
+            FakeIrisXEFenceManager* fm = fOwner->fenceManager;
+            if (!fm) return kIOReturnNotReady;
+
+            bool signaled = fm->isFenceSignaled(fenceId);
+            args->scalarOutput[0] = signaled ? 1 : 0;
+            args->scalarOutputCount = 1;
+
+            RLLog(kLog_Submit,
+                  "QueryFence: fenceId=0x%llx signaled=%d",
+                  (unsigned long long)fenceId,
+                  signaled ? 1 : 0);
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_GetCaps: {
+            if (!args->structureOutput) return kIOReturnBadArgument;
+            struct { uint32_t version; uint32_t conservative; } caps = {1,1};
+            size_t sz = args->structureOutputSize;
+            if (sz < sizeof(caps)) {
+                args->structureOutputSize = sizeof(caps);
+                return kIOReturnNoSpace;
+            }
+            memcpy(args->structureOutput, &caps, sizeof(caps));
+            args->structureOutputSize = sizeof(caps);
+            return kIOReturnSuccess;
+        }
+        case kFIx_Method_GetStats: {
+            if (!args->structureOutput) return kIOReturnBadArgument;
+            size_t sz = args->structureOutputSize;
+            if (sz > 0) {
+                struct { uint32_t version; uint32_t surfaces; } stats = {1,0};
+                memcpy(args->structureOutput, &stats, sizeof(stats));
+                args->structureOutputSize = sizeof(stats);
+            }
+            return kIOReturnSuccess;
+        }
         default:
             IOLog("(FakeIrisXEFramebuffer) [UC] externalMethod unsupported selector=%u\n",
                   selector);

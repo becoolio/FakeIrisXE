@@ -19,6 +19,8 @@
 
 // Forward-declare the framebuffer class
 class FakeIrisXEFramebuffer;
+class FakeIrisXEFenceManager;
+class FakeIrisXEIOSurfaceManager;
 
 // Include the shared structures used in public methods
 #include "FakeIrisXEAccelShared.h"
@@ -98,6 +100,12 @@ public:
     IOReturn flush(uint32_t ctxId = 0);                              // flush (called by UC)
     IOReturn bindSurfaceToContext(uint32_t ctxId, uint32_t surfID);  // bind IOSurface to ctx
     IOBufferMemoryDescriptor* getSharedMD() const { return fSharedMem; } // expose shared MD if needed
+    uint32_t nextSeqNo();
+    uint32_t submitBatchWithFence(FakeIrisXEGEM* batchGem, uint32_t flags);
+    FakeIrisXEFramebuffer* framebuffer() const { return fFB; }
+
+    FakeIrisXEFenceManager* fenceManager {nullptr};
+    FakeIrisXEIOSurfaceManager* surfaceManager() const { return fSurfaceMgr; }
 
     
     // Shared Ring Buffer
@@ -248,6 +256,8 @@ private:
 private:
     FakeIrisXEExeclist* fExeclist = nullptr;
     FakeIrisXERing*     fRcsRing = nullptr;
+    volatile uint32_t fFenceSeqno {0};
+    FakeIrisXEIOSurfaceManager* fSurfaceMgr {nullptr};
 
     
     

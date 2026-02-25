@@ -4,11 +4,6 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOTypes.h>
 
-
-// Existing test selector (keep value 7 for compatibility)
-#define kFakeIris_Method_SubmitExeclistFenceTest  7
-
-
 // New selectors for IOAcceleratorFamily2 contract
 enum : uint32_t {
     kFIx_Method_OpenSession         =  0,

@@ -47,7 +47,7 @@ private:
     // Memory-type binding (new per guide)
     void setMemBinding(UInt32 type, uint32_t handle);
     uint32_t getMemBinding(UInt32 type);
-    void clearMemBindings();
+    IOReturn clearMemBindings();
 
     // IOSurface registry helpers
     IOReturn registerSurface(uint32_t surfID, uint32_t handle,

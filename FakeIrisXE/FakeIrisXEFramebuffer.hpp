@@ -628,7 +628,8 @@ protected:
     FakeIrisXEGEM*    fFenceGEM = nullptr;
     uint64_t          fRingGpuVA = 0;             // GPU VA of ring buffer (GGTT)
     size_t            fRingSize = 0;              // bytes
-    uint32_t fFenceSeq;
+    uint32_t fFenceSeq = 0;
+    volatile uint32_t fFenceCompletedSeq = 0;
     FakeIrisXEGEM* fRingGem = nullptr;  // <--- Add this
 
     
@@ -643,6 +644,7 @@ protected:
     
     
     uint32_t appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem, size_t userBatchOffsetBytes, size_t userBatchSizeBytes);
+    uint32_t readCompletedFenceSeq() const;
    
     void handleInterrupt(IOInterruptEventSource* src, int count);
     bool addPendingSubmission(uint32_t seq, FakeIrisXEGEM* master, FakeIrisXEGEM* tail);

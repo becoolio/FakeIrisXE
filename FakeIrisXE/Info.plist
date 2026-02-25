@@ -22,25 +22,6 @@
 	<string>Safe Boot</string>
 	<key>IOKitPersonalities</key>
 	<dict>
-		<key>FakeIrisXEAccelDevice</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
-			<key>IOClass</key>
-			<string>FakeIrisXEAccelDevice</string>
-			<key>IOMatchCategory</key>
-			<string>IOAccelerator</string>
-			<key>IOProbeScore</key>
-			<integer>60000</integer>
-			<key>IOGVACapabilities</key>
-			<string>basic</string>
-			<key>IONameMatch</key>
-			<string>FakeIrisXEFramebuffer</string>
-			<key>IOProviderClass</key>
-			<string>FakeIrisXEFramebuffer</string>
-			<key>MetalPluginClassName</key>
-			<string>FakeIrisXEAccelerator</string>
-		</dict>
 		<key>FakeIrisXEAccelerator</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
@@ -156,78 +137,6 @@
 					<integer>0</integer>
 				</dict>
 			</dict>
-		</dict>
-		<key>FakeIrisXE Backlight Injection</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
-			<key>IOClass</key>
-			<string>DisplayMergeNub</string>
-			<key>IOProviderClass</key>
-			<string>AppleBacklightDisplay</string>
-			<key>IOProbeScore</key>
-			<integer>1900</integer>
-			<key>IOProviderMergeProperties</key>
-			<dict>
-				<key>DisplayProductID</key>
-				<integer>40178</integer>
-				<key>DisplayVendorID</key>
-				<integer>1552</integer>
-				<key>IOClass</key>
-				<string>AppleBacklightDisplay</string>
-				<key>IODisplayConnectFlags</key>
-				<data>AAgAAA==</data>
-				<key>IODisplayEDID</key>
-				<data>AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5TEQAKICAgICAgAIY=</data>
-				<key>IODisplayGUID</key>
-				<integer>436849163854938112</integer>
-			<key>IODisplayPrefsKey</key>
-			<string>IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/IGPU@2/AppleIntelFramebuffer@0/display0/AppleBacklightDisplay-610-9cf2</string>
-			</dict>
-		</dict>
-		<key>FakeIrisXE Display Connector</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
-			<key>IOClass</key>
-			<string>IODisplayConnect</string>
-			<key>IOProviderClass</key>
-			<string>FakeIrisXEFramebuffer</string>
-			<key>IOProbeScore</key>
-			<integer>99999</integer>
-			<key>IOMatchCategory</key>
-			<string>FakeIrisXEFramebuffer</string>
-			<key>IONameMatch</key>
-			<array>
-				<string>FakeIrisXEFramebuffer</string>
-				<string>display0</string>
-			</array>
-			<key>AAPL,is-internal</key>
-			<true/>
-			<key>AAPL,internal</key>
-			<true/>
-			<key>IODisplayParameters</key>
-			<dict>
-				<key>brightness</key>
-				<dict>
-					<key>min</key>
-					<integer>0</integer>
-					<key>max</key>
-					<integer>100</integer>
-				</dict>
-			</dict>
-			<key>IODisplayConnectFlags</key>
-			<data>AAgAAA==</data>
-			<key>IODisplayHasBacklight</key>
-			<true/>
-			<key>IODisplayVendorID</key>
-			<integer>1552</integer>
-			<key>IODisplayProductID</key>
-			<integer>40178</integer>
-			<key>IODisplayEDID</key>
-			<data>AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5TEQAKICAgICAgAIY=</data>
-			<key>IODisplayPrefKey</key>
-			<string>IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2/FakeIrisXEFramebuffer/display0</string>
 		</dict>
 	</dict>
 	<key>OSBundleCompatibleVersion</key>

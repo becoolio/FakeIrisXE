@@ -1,10 +1,10 @@
 #include "FakeIrisXEAccelerator.hpp"
 #include "FakeIrisXEAccelShared.h"
 #include "FakeIrisXEFramebuffer.hpp"
+#include "FakeIrisXEFenceRetirement.hpp"
+#include "FakeIrisXEIOSurfaceManager.hpp"
 #include <IOKit/IOLib.h>
 #include <IOKit/IOTimerEventSource.h>
-#include <IOKit/IOLib.h>
-#include <IOKit/IOLib.h>
 
 
 
@@ -28,36 +28,16 @@ extern "C" void IOSurfaceRelease(IOSurfaceRef);
 OSDefineMetaClassAndStructors(FakeIrisXEAccelerator, IOService)
 
 
-// Add near other helpers in FakeIrisXEAccelerator.cpp
+static uint32_t readFenceSeqnoFromFramebuffer(void* ctx)
+{
+    FakeIrisXEAccelerator* accel = static_cast<FakeIrisXEAccelerator*>(ctx);
+    if (!accel) return 0;
 
-static inline uint8_t clamp_u8(int v) { return (v < 0) ? 0 : (v > 255 ? 255 : (uint8_t)v); }
+    FakeIrisXEFramebuffer* fb = accel->framebuffer();
+    if (!fb) return 0;
 
-// srcArgb over dstArgb -> result ARGB8888
-static inline uint32_t blend_src_over_dst_argb8888(uint32_t src, uint32_t dst) {
-    // little-endian layout: 0xAABBGGRR as stored
-    uint8_t sa = (src >> 24) & 0xFF;
-    if (sa == 0xFF) return src;           // fully opaque -> fast path
-    if (sa == 0x00) return dst;           // fully transparent
-    uint8_t sr = (src) & 0xFF;
-    uint8_t sg = (src >> 8) & 0xFF;
-    uint8_t sb = (src >> 16) & 0xFF;
-
-    uint8_t dr = (dst) & 0xFF;
-    uint8_t dg = (dst >> 8) & 0xFF;
-    uint8_t db = (dst >> 16) & 0xFF;
-    uint8_t da = (dst >> 24) & 0xFF;
-
-    // alpha blending: out = src + (1 - sa) * dst
-    int invA = 255 - sa;
-    uint8_t outR = clamp_u8((sr * sa + dr * invA) / 255);
-    uint8_t outG = clamp_u8((sg * sa + dg * invA) / 255);
-    uint8_t outB = clamp_u8((sb * sa + db * invA) / 255);
-    uint8_t outA = clamp_u8((sa * 1 + da * invA / 255)); // coarse alpha combine
-
-    return (uint32_t(outA) << 24) | (uint32_t(outB) << 16) | (uint32_t(outG) << 8) | (uint32_t(outR));
+    return fb->readCompletedFenceSeq();
 }
-
-
 
 #pragma mark - Init / Probe
 
@@ -72,6 +52,9 @@ bool FakeIrisXEAccelerator::init(OSDictionary* dict) {
     fPixels    = nullptr;
     fWL        = nullptr;
     fTimer     = nullptr;
+    fenceManager = nullptr;
+    fFenceSeqno = 0;
+    fSurfaceMgr = nullptr;
     fContexts  = OSArray::withCapacity(8);
     fCtxLock   = IOLockAlloc();
     fNextCtxId = 1;
@@ -101,6 +84,26 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     if (!fFB) {
         LOG("provider is not FakeIrisXEFramebuffer");
         return false;
+    }
+
+    if (!fWL) {
+        fWL = getWorkLoop();
+        if (fWL) fWL->retain();
+    }
+
+    if (!fenceManager) {
+        fenceManager = FakeIrisXEFenceManager::create(fWL);
+        if (fenceManager) {
+            fenceManager->setSeqnoReader(readFenceSeqnoFromFramebuffer, this);
+            IOLog("(FakeIrisXEFramebuffer) [Accel] fence manager initialized\n");
+        }
+    }
+
+    if (!fSurfaceMgr) {
+        fSurfaceMgr = FakeIrisXEIOSurfaceManager::create();
+        if (fSurfaceMgr) {
+            IOLog("(FakeIrisXEFramebuffer) [Accel] IOSurface manager initialized\n");
+        }
     }
 
     // V148: Comprehensive startup diagnostics
@@ -158,10 +161,15 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     
     
 
-    linkFromFramebuffer(fFB);
+    if (fFB->getExeclist() && fFB->getRcsRing()) {
+        linkFromFramebuffer(fFB);
+    } else {
+        setProperty("FakeIrisXELinkPending", kOSBooleanTrue);
+        IOLog("(FakeIrisXEFramebuffer) [Accel] deferring link until execlist/ring are ready\n");
+    }
 
     registerService(kIOServiceSynchronous);
-    LOG("started; waiting for user client attachShared()");
+    LOG("started; waiting for accelerator user client methods");
 
     return true;
 }
@@ -170,6 +178,16 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
 
 void FakeIrisXEAccelerator::stop(IOService* provider) {
     LOG("stop");
+
+    if (fenceManager) {
+        fenceManager->release();
+        fenceManager = nullptr;
+    }
+
+    if (fSurfaceMgr) {
+        fSurfaceMgr->release();
+        fSurfaceMgr = nullptr;
+    }
 
     if (fTimer) {
         fTimer->cancelTimeout();
@@ -195,6 +213,23 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
 
     fFB = nullptr;
     IOService::stop(provider);
+}
+
+uint32_t FakeIrisXEAccelerator::nextSeqNo()
+{
+    return (uint32_t)__sync_add_and_fetch(&fFenceSeqno, 1);
+}
+
+uint32_t FakeIrisXEAccelerator::submitBatchWithFence(FakeIrisXEGEM* batchGem, uint32_t flags)
+{
+    (void)flags;
+
+    FakeIrisXEFramebuffer* fb = getFramebufferOwner();
+    if (!fb || !batchGem) {
+        return 0;
+    }
+
+    return fb->appendFenceAndSubmit(batchGem, 0, 0);
 }
 
 
@@ -944,20 +979,23 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     
     IOLog("(FakeIrisXEFramebuffer) [Accel][V148] ============================================\n");
     
+    IOLog("(FakeIrisXEFramebuffer) [Accel] link debug: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
+
+    if (!fExeclistFromFB || !fRcsRingFromFB)
+    {
+        setProperty("FakeIrisXELinkPending", kOSBooleanTrue);
+        setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanFalse);
+        IOLog("(FakeIrisXEFramebuffer) [Accel] link pending: missing RING or EXECLIST\n");
+        return;
+    }
+
+    setProperty("FakeIrisXELinkPending", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
     setProperty("IOAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
     fFB->setProperty("IOFBAccelerator", kOSBooleanTrue);
     fFB->setProperty("IOFBAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("IOAccelServiceRegistryID", accelRegistryID, 64);
-
-    IOLog("(FakeIrisXEFramebuffer) [Accel] link debug: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
-
-    if (!fExeclistFromFB || !fRcsRingFromFB)
-    {
-        IOLog("(FakeIrisXEFramebuffer) [Accel] link pending: missing RING or EXECLIST\n");
-        return;
-    }
 
     IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - METAL READY ✅\n");
 }

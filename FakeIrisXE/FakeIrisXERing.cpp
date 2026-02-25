@@ -13,10 +13,10 @@
 #define RENDER_RING_HEAD (RENDER_RING_BASE + 0x10)
 #endif
 #ifndef RENDER_RING_TAIL
-#define RENDER_RING_TAIL (RENDER_RING_BASE + 0x20)
+#define RENDER_RING_TAIL (RENDER_RING_BASE + 0x18)
 #endif
 #ifndef RENDER_RING_CTL
-#define RENDER_RING_CTL  (RENDER_RING_BASE + 0x30)
+#define RENDER_RING_CTL  (RENDER_RING_BASE + 0x20)
 #endif
 #ifndef RENDER_RING_BASE_LO
 #define RENDER_RING_BASE_LO (RENDER_RING_BASE + 0x00)
@@ -95,16 +95,24 @@ void FakeIrisXERing::enableRing()
 {
     if (!mMMIO) return;
 
-    uint32_t ctlReg = mRingBaseOffset + 0x30;
-    
-    // V152: Fix RING_CTL - must include size, not just enable bit
-    // RING_CTL bits: [0] = Enable, [1-11] = Size in 512-byte units
-    // Size in 512-byte units = ring_size / 512
-    uint32_t sizeUnits = (mRingSize >> 9);  // Ring size in 512-byte units
-    uint32_t ctlValue = 1 | (sizeUnits << 1);  // Enable bit + size
-    
+    const uint32_t headReg = mRingBaseOffset + 0x10;
+    const uint32_t tailReg = mRingBaseOffset + 0x18;
+    const uint32_t ctlReg = mRingBaseOffset + 0x20;
+
+    // Gen9+ ring CTL: bit0=enable, bits 20:12=(ring pages - 1)
+    // where each page is 4KB.
+    uint32_t sizePages = static_cast<uint32_t>(mRingSize >> 12);
+    if (sizePages == 0) {
+        sizePages = 1;
+    }
+    uint32_t ctlValue = 1u | ((sizePages - 1u) << 12);
+
+    // Reset head/tail before enabling.
+    mmio_write32(mMMIO, headReg, 0);
+    mmio_write32(mMMIO, tailReg, 0);
+
     IOLog("(FakeIrisXE)[V152] enableRing: size=%zu bytes, units=%d, CTL=0x%08X\n", 
-          mRingSize, sizeUnits, ctlValue);
+          mRingSize, sizePages, ctlValue);
     
     mmio_write32(mMMIO, ctlReg, ctlValue);
     IOSleep(1);
@@ -136,7 +144,7 @@ void FakeIrisXERing::updateHWTail()
 {
     if (!mMMIO) return;
 
-    uint32_t tailReg = mRingBaseOffset + 0x20;
+    uint32_t tailReg = mRingBaseOffset + 0x18;
     uint32_t tail = (uint32_t)mRingWriteOffset;
     mmio_write32(mMMIO, tailReg, tail);
     (void)mmio_read32(mMMIO, tailReg);
