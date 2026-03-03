@@ -232,6 +232,108 @@ static uint64_t absDeltaToNs(uint64_t startAbs, uint64_t endAbs)
     return deltaNs;
 }
 
+static IOService *findDisplayServiceUnderFramebuffer(IOService *fb)
+{
+    if (!fb) {
+        return nullptr;
+    }
+
+    OSIterator *fbChildren = fb->getChildIterator(gIOServicePlane);
+    if (!fbChildren) {
+        return nullptr;
+    }
+
+    IOService *result = nullptr;
+    IOService *child = nullptr;
+
+    while ((child = OSDynamicCast(IOService, fbChildren->getNextObject()))) {
+        const char *childName = child->getName();
+        if (!childName || strcmp(childName, "display0") != 0) {
+            continue;
+        }
+
+        OSIterator *displayChildren = child->getChildIterator(gIOServicePlane);
+        if (displayChildren) {
+            IOService *displayDriver = nullptr;
+            while ((displayDriver = OSDynamicCast(IOService, displayChildren->getNextObject()))) {
+                const char *driverName = displayDriver->getName();
+                if (!driverName) {
+                    continue;
+                }
+
+                if (!strcmp(driverName, "AppleDisplay") || !strcmp(driverName, "AppleBacklightDisplay")) {
+                    displayDriver->retain();
+                    result = displayDriver;
+                    break;
+                }
+            }
+            displayChildren->release();
+        }
+
+        if (!result) {
+            child->retain();
+            result = child;
+        }
+        break;
+    }
+
+    fbChildren->release();
+    return result;
+}
+
+static void applyDisplayMergeOverrides(IOService *service)
+{
+    if (!service) {
+        return;
+    }
+
+    static constexpr uint64_t kMergedDisplayProductID = 40178ULL;
+    static constexpr uint64_t kMergedDisplayVendorID = 1552ULL;
+    static constexpr uint64_t kMergedDisplayGUID = 436849163854938112ULL;
+    static constexpr uint64_t kOriginalDisplayProductID = 1815ULL;
+    static constexpr uint64_t kOriginalDisplayVendorID = 1970170734ULL;
+
+    setNumberProperty(service, "DisplayProductID", kMergedDisplayProductID, 32);
+    setNumberProperty(service, "DisplayVendorID", kMergedDisplayVendorID, 32);
+    setNumberProperty(service, "IODisplayGUID", kMergedDisplayGUID, 64);
+    setNumberProperty(service, "DisplayProductIDOld", kOriginalDisplayProductID, 32);
+    setNumberProperty(service, "DisplayVendorIDOld", kOriginalDisplayVendorID, 32);
+    service->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+
+    const char *name = service->getName();
+    if (name && !strcmp(name, "AppleDisplay")) {
+        service->setName("AppleBacklightDisplay");
+    }
+
+    IOService *provider = OSDynamicCast(IOService, service->getProvider());
+    if (provider) {
+        const char *providerName = provider->getName();
+        if (providerName && !strcmp(providerName, "display0")) {
+            setNumberProperty(provider, "DisplayProductID", kMergedDisplayProductID, 32);
+            setNumberProperty(provider, "DisplayVendorID", kMergedDisplayVendorID, 32);
+            setNumberProperty(provider, "IODisplayGUID", kMergedDisplayGUID, 64);
+            provider->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+        }
+    }
+}
+
+static void injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
+{
+    if (!fb) {
+        return;
+    }
+
+    IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
+    if (!displayService) {
+        IOLog("[V170] display0 not found under FakeIrisXEFramebuffer yet\n");
+        return;
+    }
+
+    applyDisplayMergeOverrides(displayService);
+    IOLog("[V170] Applied display merge overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    displayService->release();
+}
+
 
 
 //probe
@@ -1451,32 +1553,98 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
     
-    // === V161: Proper LG Display EDID for Tiger Lake integrated panel (LGD 0x071E) ===
+    // === V170: Display Identity Injection (MacBookAir-like) ===
+    // Use boot-arg: -fakeirisxe-display=air10_1, pro16_1, pro13_1, or lg
     {
-        // Actual EDID from user's LG Display panel (1920x1080 @ 60Hz, 14.0" laptop panel)
-        // Manufacturer: LG Display (0xE430), Product Code: 0x071E (1822)
+        // Default to MacBook Air identity for better macOS compatibility
+        uint32_t displayVendorID = 0xE430;    // LG Display
+        uint32_t displayProductID = 0x071E;   // LGD panel
+        const char* displayName = "AppleBacklightDisplay";
+        const char* displayPrefsKey = "LGD:0x071E";
+        uint32_t displaySerial = 0;
         
+        char displayArgBuf[32] = {0};
+        if (PE_parse_boot_argn("-fakeirisxe-display", displayArgBuf, sizeof(displayArgBuf))) {
+            IOLog("[V170] Display identity boot-arg: '%s'\n", displayArgBuf);
+            
+            if (strncmp(displayArgBuf, "air10_1", 7) == 0) {
+                // MacBook Air (M1, 2020) - 13.3" 2560x1600
+                displayVendorID = 0x0610;    // Apple vendor ID
+                displayProductID = 0x8601;   // MacBook Air product ID
+                displayName = "MacBook Air";
+                displayPrefsKey = "apple";
+                displaySerial = 0x00000001;
+                IOLog("[V170] Using MacBook Air (M1, 2020) display identity\n");
+            } else if (strncmp(displayArgBuf, "pro16_1", 7) == 0) {
+                // MacBook Pro 16" (2019) - 3072x1920
+                displayVendorID = 0x0610;
+                displayProductID = 0x8612;
+                displayName = "MacBook Pro";
+                displayPrefsKey = "apple";
+                displaySerial = 0x00000002;
+                IOLog("[V170] Using MacBook Pro 16\" display identity\n");
+            } else if (strncmp(displayArgBuf, "pro13_1", 7) == 0) {
+                // MacBook Pro 13" (Intel) - 2560x1600
+                displayVendorID = 0x0610;
+                displayProductID = 0x8603;
+                displayName = "MacBook Pro";
+                displayPrefsKey = "apple";
+                displaySerial = 0x00000003;
+                IOLog("[V170] Using MacBook Pro 13\" display identity\n");
+            } else if (strncmp(displayArgBuf, "lg", 2) == 0) {
+                // Original LG panel
+                IOLog("[V170] Using LG Display panel identity\n");
+            } else {
+                IOLog("[V170] Unknown display identity, using MacBook Air\n");
+                displayVendorID = 0x0610;
+                displayProductID = 0x8601;
+                displayName = "MacBook Air";
+                displayPrefsKey = "apple";
+                displaySerial = 0x00000001;
+            }
+        } else {
+            // Default to MacBook Air identity for better macOS compatibility
+            displayVendorID = 0x0610;
+            displayProductID = 0x8601;
+            displayName = "MacBook Air";
+            displayPrefsKey = "apple";
+            displaySerial = 0x00000001;
+            IOLog("[V170] No display identity specified, defaulting to MacBook Air\n");
+        }
+        
+        // Apply display properties
         OSData *edidData = OSData::withBytes(lgDisplayEDID, sizeof(lgDisplayEDID));
         if (edidData) {
             setProperty("IODisplayEDID", edidData);
             edidData->release();
-            IOLog("[V161] LG Display EDID published (LGD 0x071E, 1920x1080)\n");
+            IOLog("[V170] EDID published\n");
         }
 
         setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
+        setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)displaySerial, 32));
+        setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)displayVendorID, 16));
+        setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)displayProductID, 16));
+        setProperty("IODisplayName", OSString::withCString(displayName));
+        setProperty("IODisplayPrefsKey", OSString::withCString(displayPrefsKey));
         
-        // V161: Correct LG Display vendor/product IDs - use OSNumber for proper values
-        setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)0, 32));
-        setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)0xE430, 16));
-        setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)0x071E, 16));
-        setProperty("IODisplayName", OSString::withCString("AppleBacklightDisplay"));
-        setProperty("IODisplayPrefsKey", OSString::withCString("LGD:0x071E"));
+        // Set Apple-specific properties for MacBook identity
+        if (displayVendorID == 0x0610) {
+            // Apple display - additional properties
+            setProperty("IODisplayPanelID", OSNumber::withNumber((uint64_t)0x0001, 16));
+            setProperty("AAPL,backlight-control-type", OSNumber::withNumber(1ULL, 32));
+            setProperty("AAPL01-internal-panel", kOSBooleanTrue);
+        }
         
-        // V161: Mark as internal panel to suppress .Display_boot fallback
+        // Internal panel properties
         setProperty("AAPL,slot-name", OSString::withCString("Internal@0,2,0"));
         setProperty("built-in", kOSBooleanTrue);
         
-        IOLog("[V161] Display properties set for LG Display panel\n");
+        IOLog("[V170] Display identity applied: Vendor=0x%04X, Product=0x%04X\n", displayVendorID, displayProductID);
+    }
+
+    // === V161: Proper LG Display EDID for Tiger Lake integrated panel (LGD 0x071E) ===
+    {
+        // (Legacy - now handled by V170 block above)
     }
 
     // Display Timing Information
@@ -1545,6 +1713,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOFBDisplayModeCount", (uint64_t)kNumDisplayModes, 32);
     setProperty("IOFBIsMainDisplay", kOSBooleanTrue);
     setProperty("AAPL,boot-display", kOSBooleanTrue);
+    setProperty(kIOConsoleFramebufferKey, kOSBooleanTrue);
+    setProperty(kIOFramebufferIsConsoleKey, kOSBooleanTrue);
+    setProperty("IOFramebufferOpenGLIndex", 0ULL, 32);
 
     // V161: Additional properties to suppress .Display_boot fallback
     setProperty("AAPL,ignore-ulve", kOSBooleanTrue);  // Ignore unexpected LVDS/eDP
@@ -2313,11 +2484,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     
     // 6. Finally, publish the framebuffer
-    attachToParent(getProvider(), gIOServicePlane);
-    
-    
-    
-    
     registerService();
     IOLog("register service called");
 
@@ -2340,6 +2506,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     deliverFramebufferNotification(0, kIOFBNotifyDisplayModeChange, nullptr);
     deliverFramebufferNotification(0, kIOFBConfigChanged, nullptr);
     IOLog("WS notified\n");
+
+    // Try to rewrite display identity on display0 when it appears under this framebuffer.
+    injectDisplayMergeOverridesIfAvailable(this);
     
    
 
@@ -2601,8 +2770,7 @@ void FakeIrisXEFramebuffer::performSafeStop()
 
 void FakeIrisXEFramebuffer::startIOFB() {
     IOLog("FakeIrisXEFramebuffer::startIOFB() called\n");
-    // deliverFramebufferNotification(0, kIOFBNotifyDisplayModeChange, nullptr); // This is enough
-
+    injectDisplayMergeOverridesIfAvailable(this);
 }
 
  
@@ -3924,6 +4092,7 @@ void FakeIrisXEFramebuffer::deliverFramebufferNotification(IOIndex index, UInt32
 IOReturn FakeIrisXEFramebuffer::setNumberOfDisplays(UInt32 count)
 {
     IOLog("setNumberOfDisplays(%u)\n", count);
+    setNumberProperty(this, "IOFBDisplayCount", count, 32);
     return kIOReturnSuccess;
 }
 

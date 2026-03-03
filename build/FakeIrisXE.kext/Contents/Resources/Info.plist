@@ -172,6 +172,56 @@
 			hoAAAA==
 			</data>
 		</dict>
+		<key>Monitor Apple ID Injection</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.apple.driver.AppleUSBMergeNub</string>
+			<key>DisplayProductID</key>
+			<integer>1815</integer>
+			<key>DisplayVendorID</key>
+			<integer>1970170734</integer>
+			<key>IOClass</key>
+			<string>AppleUSBMergeNub</string>
+			<key>IOProbeScore</key>
+			<integer>5000</integer>
+			<key>IOProviderClass</key>
+			<string>AppleBacklightDisplay</string>
+			<key>IOProviderMergeProperties</key>
+			<dict>
+				<key>DisplayProductID</key>
+				<integer>40178</integer>
+				<key>DisplayVendorID</key>
+				<integer>1552</integer>
+				<key>IODisplayGUID</key>
+				<integer>436849163854938112</integer>
+			</dict>
+		</dict>
+		<key>Monitor Apple ID Injection Local</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
+			<key>DisplayProductID</key>
+			<integer>1815</integer>
+			<key>DisplayVendorID</key>
+			<integer>1970170734</integer>
+			<key>IOClass</key>
+			<string>DisplayMergeNub</string>
+			<key>IOProbeScore</key>
+			<integer>5100</integer>
+			<key>IOProviderClass</key>
+			<string>AppleDisplay</string>
+			<key>IOProviderMergeProperties</key>
+			<dict>
+				<key>DisplayProductID</key>
+				<integer>40178</integer>
+				<key>DisplayVendorID</key>
+				<integer>1552</integer>
+				<key>IOClass</key>
+				<string>AppleBacklightDisplay</string>
+				<key>IODisplayGUID</key>
+				<integer>436849163854938112</integer>
+			</dict>
+		</dict>
 	</dict>
 	<key>OSBundleCompatibleVersion</key>
 	<string>1.0.0</string>
