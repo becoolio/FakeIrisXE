@@ -765,6 +765,32 @@ void FakeIrisXEGuC::logAppleBootAudit(const char* label) const
     }
 }
 
+void FakeIrisXEGuC::logAppleRegisterWindow(const char* label) const
+{
+    if (!fOwner) {
+        return;
+    }
+
+    auto readReg = [&](uint32_t reg) -> uint32_t {
+        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeMMIORead(reg) : 0xFFFFFFFFU;
+    };
+
+    const char* snapshotLabel = label ? label : "snapshot";
+    IOLog("(FakeIrisXE) [GuC][Regs] %s DMA_ADDR_0_LOW=0x%08X DMA_ADDR_0_HIGH=0x%08X DMA_ADDR_1_LOW=0x%08X DMA_ADDR_1_HIGH=0x%08X DMA_COPY_SIZE=0x%08X\n",
+          snapshotLabel,
+          readReg(DMA_ADDR_0_LOW_V137),
+          readReg(DMA_ADDR_0_HIGH_V137),
+          readReg(DMA_ADDR_1_LOW_V137),
+          readReg(DMA_ADDR_1_HIGH_V137),
+          readReg(DMA_COPY_SIZE_V137));
+    IOLog("(FakeIrisXE) [GuC][Regs] %s DMA_CTRL=0x%08X GUC_STATUS=0x%08X GUC_SHIM_CONTROL=0x%08X GUC_MISC_CONTROL=0x%08X\n",
+          snapshotLabel,
+          readReg(DMA_CTRL_V137),
+          readReg(GUC_STATUS_V137),
+          readReg(GUC_SHIM_CONTROL_V137),
+          readReg(GUC_MISC_CONTROL));
+}
+
 void FakeIrisXEGuC::issueGuCTlbInvalidate() const
 {
     if (!fOwner) {
@@ -1060,6 +1086,10 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
         uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
         GuCStatusDecoded decoded = decodeStatus(status);
         pollCount++;
+
+        if (fFirmwareMode == kGuCFirmwareModeAppleOnly && pollCount == 1U) {
+            logAppleRegisterWindow("apple-first-boot-poll");
+        }
 
         if (status == lastStatus) {
             stableCount++;
@@ -1473,12 +1503,14 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     const uint32_t kAppleWopcmSizeValue = 0x80100001U;
     const uint32_t kAppleWopcmOffsetValue = 0x80000001U;
     const uint32_t kAppleDmaDestOffset = 0x00002000U;
+    const uint32_t kAppleDmaDestHigh = 0x00070000U;
     bool forceWakeHeld = false;
 
     IOLog("(FakeIrisXE) [GuC][Boot] mode=apple-only parser=v139 regs=tgl-0xC000 dma=apple-magic fallback=disabled\n");
 
     auto failAppleBoot = [&](const char* reason) -> bool {
         uint32_t rawStatus = fOwner->safeMMIORead(GUC_STATUS_V137);
+        logAppleRegisterWindow("apple-fail-snapshot");
         logForceWakeDiagnostics("apple-fail");
         logAppleBootAudit("apple-fail");
         if (forceWakeHeld) {
@@ -1530,7 +1562,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     uint32_t srcLow = (uint32_t)(srcAddr & 0xFFFFFFFFULL);
     uint32_t srcHigh = (uint32_t)((srcAddr >> 32) & 0x0000FFFFULL);
     uint32_t dstLow = kAppleDmaDestOffset;
-    uint32_t dstHigh = DMA_ADDRESS_SPACE_WOPCM_V137;
+    uint32_t dstHigh = kAppleDmaDestHigh;
 
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_ADDR_0_LOW", DMA_ADDR_0_LOW_V137,
                          srcLow, 0);
@@ -1542,6 +1574,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
                          dstHigh, 0);
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_COPY_SIZE", DMA_COPY_SIZE_V137,
                          layout.dma_copy_size, 0);
+    logAppleRegisterWindow("apple-after-dma-programming");
 
     writeGuCParams();
     issueGuCTlbInvalidate();
@@ -1562,6 +1595,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     emitStageReport(kGuCStageDmaTrigger, startNs, retryIndex);
     writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
                          APPLE_DMA_MAGIC_TRIGGER, 0);
+    logAppleRegisterWindow("apple-after-dma-ctrl");
 
     if (!pollForBootFastFail(5000, startNs, retryIndex)) {
         return failAppleBoot("boot-poll");

@@ -119,6 +119,7 @@ private:
     bool ownerBooleanPropertyEnabled(const char* key) const;
     void logForceWakeDiagnostics(const char* label) const;
     void logAppleBootAudit(const char* label) const;
+    void logAppleRegisterWindow(const char* label) const;
     void issueGuCTlbInvalidate() const;
     void logDoorbellSnapshot(const char* label) const;
     bool programDoorbellEnable(GuCStage stage);
