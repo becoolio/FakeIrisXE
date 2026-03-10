@@ -65,8 +65,13 @@ private:
         uint32_t retry_index;
     };
 
+    enum GuCFirmwareMode {
+        kGuCFirmwareModeAppleOnly = 0,
+        kGuCFirmwareModeLinuxReserved,
+    };
+
     GuCStage fLastReportedStage;
-    bool fUseAppleBringUpPath;
+    GuCFirmwareMode fFirmwareMode;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -92,7 +97,12 @@ public:
     bool testCommandSubmission();
     
 private:
-    bool runFastFailBringUp(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    bool bootGuCFirmware(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
+    GuCFirmwareMode selectFirmwareMode() const;
+    const char* firmwareModeName(GuCFirmwareMode mode) const;
+    void logBootFailureSignature(const char* reason, uint64_t startNs, uint32_t retryIndex,
+                                 uint32_t rawStatusOverride = 0xFFFFFFFFU);
+    bool prepareAppleWopcm(GuCStage stage, uint32_t desiredSizeValue, uint32_t desiredOffsetValue);
     bool runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                              uint32_t retryIndex, uint64_t startNs);
     bool runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
@@ -105,7 +115,11 @@ private:
                          uint32_t rawStatusOverride = 0xFFFFFFFFU);
     GuCStatusDecoded decodeStatus(uint32_t rawStatus) const;
     bool isImpossibleStatusDecode(uint32_t rawStatus, const GuCStatusDecoded& decoded) const;
+    uint32_t selectGtPmConfigReg() const;
     bool ownerBooleanPropertyEnabled(const char* key) const;
+    void logForceWakeDiagnostics(const char* label) const;
+    void logAppleBootAudit(const char* label) const;
+    void issueGuCTlbInvalidate() const;
     void logDoorbellSnapshot(const char* label) const;
     bool programDoorbellEnable(GuCStage stage);
     void producerCoherencyBarrier(const char* reason);

@@ -1104,7 +1104,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
         // 7️⃣ Now it's SAFE to do MMIO read/write
         // We already read pciID, so let's check the other registers
-        IOLog("FORCEWAKE_ACK: 0x%08X\n", safeMMIORead(0xA188)); // Read the register we just polled
+        IOLog("FORCEWAKE_MT snapshot: REQ=0x%08X ACK=0x%08X\n",
+              safeMMIORead(0xA188),
+              safeMMIORead(0x130044));
     IOLog("✅ Returned from initPowerManagement()\n");
    
     
@@ -1118,8 +1120,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     uint32_t zeroReg = safeMMIORead(0x0000);
     IOLog("MMIO[0x0000] = 0x%08X\n", zeroReg);
 
-    uint32_t ack = safeMMIORead(0xA188);
-    IOLog("FORCEWAKE_ACK: 0x%08X\n", ack);
+    uint32_t ack = safeMMIORead(0x130044);
+    IOLog("FORCEWAKE_MT_ACK: 0x%08X\n", ack);
 
     
     
@@ -2055,60 +2057,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     bool runBootDiagFull = PE_parse_boot_argn("-fakeirisxe-diag", runtimeArgBuf, sizeof(runtimeArgBuf));
     bool runBootDiagQuick = PE_parse_boot_argn("-fakeirisxe-quickdiag", runtimeArgBuf, sizeof(runtimeArgBuf));
 
-    bool gucApplePath = true;
-    bool gucPmExperiment = true;
-    bool gucDoorbellProbe = true;
-    bool gucDoorbellAggressive = false;
-    bool gucDoorbellBypass = false;  // V140: Bypass doorbell failure
-    bool gucAppleLab = false;
-
-    if (PE_parse_boot_argn("-fakeirisxe-guc-no-apple", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucApplePath = false;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-no-pmexp", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucPmExperiment = false;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-no-doorbell-probe", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucDoorbellProbe = false;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-apple", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucApplePath = true;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-pm-experiment", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucPmExperiment = true;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-probe", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucDoorbellProbe = true;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-aggressive", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucDoorbellProbe = true;
-        gucDoorbellAggressive = true;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-doorbell-bypass", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucDoorbellBypass = true;
-    }
-    if (PE_parse_boot_argn("-fakeirisxe-guc-apple-lab", runtimeArgBuf, sizeof(runtimeArgBuf))) {
-        gucAppleLab = true;
-    }
-
-    setProperty("FakeIrisXEGuCApplePath", gucApplePath ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("FakeIrisXEGuCPMExperiment", gucPmExperiment ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("FakeIrisXEGuCDoorbellProbe", gucDoorbellProbe ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("FakeIrisXEGuCDoorbellAggressive", gucDoorbellAggressive ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("FakeIrisXEGuCDoorbellBypass", gucDoorbellBypass ? kOSBooleanTrue : kOSBooleanFalse);  // V140
-    setProperty("FakeIrisXEGuCAppleLab", gucAppleLab ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V45] Runtime toggles: diag_full=%u diag_quick=%u guc_apple=%u guc_pm_experiment=%u doorbell_probe=%u doorbell_aggressive=%u apple_lab=%u\n",
+    IOLog("(FakeIrisXE) [V45] Runtime toggles: diag_full=%u diag_quick=%u guc_fw_mode=apple-only\n",
           runBootDiagFull ? 1U : 0U,
-          runBootDiagQuick ? 1U : 0U,
-          gucApplePath ? 1U : 0U,
-          gucPmExperiment ? 1U : 0U,
-          gucDoorbellProbe ? 1U : 0U,
-          gucDoorbellAggressive ? 1U : 0U,
-          gucDoorbellBypass ? 1U : 0U,
-          gucAppleLab ? 1U : 0U);
+          runBootDiagQuick ? 1U : 0U);
 
     // V45: Program MOCS before GuC init
     IOLog("(FakeIrisXE) [V45] Programming MOCS...\n");

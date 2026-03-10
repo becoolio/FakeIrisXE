@@ -137,31 +137,62 @@ protected:
     
     
     
- public:
+     public:
     
     
-    // Safe MMIO access methods
-       uint32_t safeMMIORead(uint32_t offset) {
-           if (!mmioBase || offset >= mmioMap->getLength()) {
-               IOLog("Invalid MMIO read at 0x%X\n", offset);
-               return 0xFFFFFFFF;
-           }
-           return *(volatile uint32_t*)(mmioBase + offset);
-       }
-       
-       void safeMMIOWrite(uint32_t offset, uint32_t value) {
-           if (!mmioBase || offset >= mmioMap->getLength()) {
-               IOLog("Invalid MMIO write at 0x%X\n", offset);
-               return;
-           }
-           *(volatile uint32_t*)(mmioBase + offset) = value;
+     // Safe MMIO access methods
+        uint32_t safeMMIORead(uint32_t offset) {
+           if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
+               offset > mmioMap->getLength() - sizeof(uint32_t)) {
+                IOLog("Invalid MMIO read at 0x%X\n", offset);
+                return 0xFFFFFFFF;
+            }
+            return *(volatile uint32_t*)(mmioBase + offset);
+        }
+        
+        void safeMMIOWrite(uint32_t offset, uint32_t value) {
+            if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
+                offset > mmioMap->getLength() - sizeof(uint32_t)) {
+                IOLog("Invalid MMIO write at 0x%X\n", offset);
+                return;
+            }
+            *(volatile uint32_t*)(mmioBase + offset) = value;
                   #ifdef OSMemoryBarrier
                   OSMemoryBarrier();
                   #else
                   __asm__ volatile("mfence" ::: "memory"); // x86 specific
                   #endif
 
-       }
+        }
+
+        uint16_t getPCIVendorID() const {
+            return pciDevice ? pciDevice->configRead16(kIOPCIConfigVendorID) : 0;
+        }
+
+        uint16_t getPCIDeviceID() const {
+            return pciDevice ? pciDevice->configRead16(kIOPCIConfigDeviceID) : 0;
+        }
+
+        uint32_t getBAR0ConfigLow() const {
+            return pciDevice ? pciDevice->configRead32(kIOPCIConfigBaseAddress0) : 0;
+        }
+
+        uint32_t getBAR0ConfigHigh() const {
+            return pciDevice ? pciDevice->configRead32(kIOPCIConfigBaseAddress0 + 4) : 0;
+        }
+
+        uint64_t getBAR0PhysicalAddress() const {
+            return bar0Phys;
+        }
+
+        uint64_t getMMIOMapLength() const {
+            return mmioMap ? mmioMap->getLength() : 0;
+        }
+
+        bool isMMIOOffsetValid(uint32_t offset) const {
+            return mmioMap && mmioMap->getLength() >= sizeof(uint32_t) &&
+                   offset <= mmioMap->getLength() - sizeof(uint32_t);
+        }
     
     
     
