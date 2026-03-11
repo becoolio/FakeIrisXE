@@ -20,7 +20,8 @@
     "overrides" : {
       "commandLine" : {
         "table" : {
-          "CODE_SIGNING_ALLOWED" : "NO"
+          "CODE_SIGNING_ALLOWED" : "NO",
+          "CODE_SIGNING_REQUIRED" : "NO"
         }
       },
       "synthesized" : {

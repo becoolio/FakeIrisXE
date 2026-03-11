@@ -71,8 +71,16 @@ private:
         kGuCFirmwareModeLinuxReserved,
     };
 
+    enum AppleRegisterDomain {
+        kAppleRegisterDomainNone = 0,
+        kAppleRegisterDomainGlobal,
+        kAppleRegisterDomainRender,
+        kAppleRegisterDomainMedia,
+    };
+
     GuCStage fLastReportedStage;
     GuCFirmwareMode fFirmwareMode;
+    bool fApplePinnedAccessActive;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -118,10 +126,19 @@ private:
     GuCStatusDecoded decodeStatus(uint32_t rawStatus) const;
     bool isImpossibleStatusDecode(uint32_t rawStatus, const GuCStatusDecoded& decoded) const;
     uint32_t selectGtPmConfigReg() const;
+    AppleRegisterDomain determinePowerDomainForOffset(uint32_t offset) const;
+    const char* appleRegisterDomainName(AppleRegisterDomain domain) const;
+    bool beginAppleRegisterAccess(AppleRegisterDomain domain, const char* label,
+                                  bool* outAcquiredSession = nullptr);
+    void endAppleRegisterAccess(bool acquiredSession);
+    uint32_t safeRead32Apple(uint32_t offset, const char* label, bool* outOk = nullptr);
+    bool safeWrite32Apple(uint32_t offset, uint32_t value, const char* label,
+                          uint32_t* outReadback = nullptr);
     bool ownerBooleanPropertyEnabled(const char* key) const;
     void logForceWakeDiagnostics(const char* label) const;
     void logAppleBootAudit(const char* label) const;
     void logAppleRegisterWindow(const char* label) const;
+    bool ensureApplePublicKeyBlob(uint64_t* outGpuAddr, bool logBlob);
     bool writeAndPollAppleReg(GuCStage stage, const char* label, uint32_t writeReg,
                               uint32_t writeValue, uint32_t pollReg, uint32_t pollMask,
                               uint32_t expectedValue, uint32_t timeoutMs,
@@ -133,7 +150,7 @@ private:
                              uint32_t ackReg, uint32_t requestValue,
                              uint32_t ackMask, uint32_t expectedAckValue);
     bool acquireAppleWakeDomains(GuCStage stage);
-    bool runApplePreAuthHandshake(GuCStage stage);
+    bool runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFreqToken);
     bool writeAppleBootParams(GuCStage stage);
     void issueGuCTlbInvalidate() const;
     void logDoorbellSnapshot(const char* label) const;
