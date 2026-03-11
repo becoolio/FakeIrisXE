@@ -3,7 +3,7 @@
 #pragma once
 
 
-#include <IOKit/acpi/IOACPIPlatformDevice.h>
+// #include <IOKit/acpi/IOACPIPlatformDevice.h> - Not needed for this implementation
 
 #include <IOKit/graphics/IOFramebuffer.h>
 #include <IOKit/pci/IOPCIDevice.h> // for IOPCIDevice
@@ -140,30 +140,9 @@ protected:
      public:
     
     
-     // Safe MMIO access methods
-        uint32_t safeMMIORead(uint32_t offset) {
-           if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
-               offset > mmioMap->getLength() - sizeof(uint32_t)) {
-                IOLog("Invalid MMIO read at 0x%X\n", offset);
-                return 0xFFFFFFFF;
-            }
-            return *(volatile uint32_t*)(mmioBase + offset);
-        }
-        
-        void safeMMIOWrite(uint32_t offset, uint32_t value) {
-            if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
-                offset > mmioMap->getLength() - sizeof(uint32_t)) {
-                IOLog("Invalid MMIO write at 0x%X\n", offset);
-                return;
-            }
-            *(volatile uint32_t*)(mmioBase + offset) = value;
-                  #ifdef OSMemoryBarrier
-                  OSMemoryBarrier();
-                  #else
-                  __asm__ volatile("mfence" ::: "memory"); // x86 specific
-                  #endif
-
-        }
+      // Safe MMIO access methods
+    uint32_t safeMMIORead(uint32_t offset);
+    void safeMMIOWrite(uint32_t offset, uint32_t value);
 
         uint16_t getPCIVendorID() const {
             return pciDevice ? pciDevice->configRead16(kIOPCIConfigVendorID) : 0;

@@ -3,7 +3,6 @@
 #include <libkern/libkern.h>
 #include <IOKit/pci/IOPCIDevice.h>
 #include <IOKit/IOPlatformExpert.h>
-#include <IOKit/acpi/IOACPIPlatformDevice.h>
 #include <libkern/c++/OSSymbol.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IODeviceMemory.h>
@@ -26,6 +25,7 @@
 #include <mach/mach_time.h>
 
 #include <IOKit/IOLocks.h>
+#include "SafeRegisterAccess.hpp"
 
 
 
@@ -529,32 +529,37 @@ IOPMPowerState FakeIrisXEFramebuffer::powerStates[kNumPowerStates] = {
   // These functions ensure safe access to the memory-mapped registers.
   // They are essential for the power management block to compile and run.
 inline uint32_t safeMMIORead(uint32_t offset){
-      if (!mmioBase || !mmioMap || offset >= mmioMap->getLength()) {
-          IOLog("❌ MMIO Read attempted with invalid offset: 0x%08X\n", offset);
-          return 0;
-      }
-      return *(volatile uint32_t*)(mmioBase + offset);
-  }
-
-  inline void safeMMIOWrite(uint32_t offset, uint32_t value) {
-      if (!mmioBase || !mmioMap || offset >= mmioMap->getLength()) {
-          IOLog("❌ MMIO Write attempted with invalid offset: 0x%08X\n", offset);
-          return;
-      }
-      *(volatile uint32_t*)(mmioBase + offset) = value;
-  }
-
-
-
-//helper to reactive gpu power
-
-bool FakeIrisXEFramebuffer::gpuPowerOn(){
-    IOLog("gpuPowerOn(): Waking GT + RCS engine...\n");
-
-    if (!pciDevice || !pciDevice->isOpen(this)) {
-        IOLog("❌ gpuPowerOn(): PCI device not open\n");
-        return false;
+    if (!mmioBase || !mmioMap || offset >= mmioMap->getLength()) {
+        IOLog("❌ MMIO Read attempted with invalid offset: 0x%08X\n", offset);
+        return 0;
     }
+    
+    // Use domain-aware safe register access
+    return SafeRegisterAccess::safeReadRegister32(offset, mmioBase, mmioMap->getLength());
+}
+
+inline void safeMMIOWrite(uint32_t offset, uint32_t value) {
+    if (!mmioBase || !mmioMap || offset >= mmioMap->getLength()) {
+        IOLog("❌ MMIO Write attempted with invalid offset: 0x%08X\n", offset);
+        return;
+    }
+    
+    // Use domain-aware safe register access
+    SafeRegisterAccess::safeWriteRegister32(offset, value, mmioBase, mmioMap->getLength());
+}
+
+uint32_t FakeIrisXEFramebuffer::safeMMIORead(uint32_t offset) {
+    return ::safeMMIORead(offset);
+}
+
+void FakeIrisXEFramebuffer::safeMMIOWrite(uint32_t offset, uint32_t value) {
+    ::safeMMIOWrite(offset, value);
+}
+
+#if 0
+// Legacy duplicate forcewake/register-access experiment disabled.
+// The active GuC/pre-auth path now uses the Apple-scoped access helpers in FakeIrisXEGuC.cpp,
+// and framebuffer-wide MMIO compatibility remains through SafeRegisterAccess.hpp.
     // --- PCI Power Management (Force D0) ---
     uint16_t pmcsr = pciDevice->configRead16(0x84);
     IOLog("PCI PMCSR before = 0x%04X\n", pmcsr);
@@ -695,6 +700,7 @@ bool FakeIrisXEFramebuffer::gpuPowerOn(){
     IOLog("gpuPowerOn(): GT and RCS awake — READY for ELSP writes!\n");
     return true;
 }
+#endif
 
 
 

@@ -10,6 +10,7 @@
 #include "i915_reg.h"
 #include "FakeIrisXEGuCTGLPublicKey.hpp"
 #include <libkern/c++/OSBoolean.h>
+#include "SafeRegisterAccess.hpp"
 
 extern "C" void OSSynchronizeIO(void);
 
@@ -803,8 +804,8 @@ bool FakeIrisXEGuC::writeRegWithReadback(GuCStage stage, const char* regName,
                                          uint32_t reg, uint32_t value,
                                          uint32_t* outReadback)
 {
-    fOwner->safeMMIOWrite(reg, value);
-    uint32_t readback = fOwner->safeMMIORead(reg);
+    uint32_t readback = 0;
+    safeWrite32Apple(reg, value, regName, &readback);
 
     if (outReadback) {
         *outReadback = readback;
@@ -1297,12 +1298,14 @@ bool FakeIrisXEGuC::writeAndPollAppleReg(GuCStage stage, const char* label, uint
                                          uint32_t timeoutMs, uint32_t* outPollValue)
 {
     uint32_t writeReadback = 0;
-    writeRegWithReadback(stage, label, writeReg, writeValue, &writeReadback);
+    safeWrite32Apple(writeReg, writeValue, label, &writeReadback);
+    IOLog("(FakeIrisXE) [GuC][RW] stage=%u %s(0x%04X) write=0x%08X read=0x%08X\n",
+          (uint32_t)stage, label, writeReg, writeValue, writeReadback);
 
     uint32_t pollValue = 0xFFFFFFFFU;
     const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
     for (uint32_t poll = 0; poll < maxPolls; ++poll) {
-        pollValue = fOwner->safeMMIORead(pollReg);
+        pollValue = safeRead32Apple(pollReg, label, 0);
         if ((pollValue & pollMask) == expectedValue) {
             if (outPollValue) {
                 *outPollValue = pollValue;
@@ -1341,7 +1344,7 @@ bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32
     uint32_t value = 0xFFFFFFFFU;
     const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
     for (uint32_t poll = 0; poll < maxPolls; ++poll) {
-        value = fOwner->safeMMIORead(reg);
+        value = safeRead32Apple(reg, label, 0);
         if (value == expectedValue) {
             if (outValue) {
                 *outValue = value;
@@ -1370,17 +1373,28 @@ bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32
 }
 
 bool FakeIrisXEGuC::safeForceWakeDomain(GuCStage stage, const char* label,
-                                        uint32_t requestReg, uint32_t ackReg,
-                                        uint32_t requestValue, uint32_t ackMask,
-                                        uint32_t expectedAckValue)
+                                         uint32_t requestReg, uint32_t ackReg,
+                                         uint32_t requestValue, uint32_t ackMask,
+                                         uint32_t expectedAckValue)
 {
+    if (!fOwner) {
+        IOLog("(FakeIrisXE) [GuC][stage=%u] ERROR: No fOwner for safeForceWakeDomain\n",
+              (uint32_t)stage);
+        return false;
+    }
+
     uint32_t requestReadback = 0;
 
-    writeRegWithReadback(stage, label, requestReg, requestValue, &requestReadback);
+    // Use safe register access for the request register write
+    fOwner->safeMMIOWrite(requestReg, requestValue);
+    requestReadback = fOwner->safeMMIORead(requestReg);
+    IOLog("(FakeIrisXE) [GuC][stage=%u] %s: wrote 0x%08X to 0x%08X (readback 0x%08X)\n",
+          (uint32_t)stage, label, requestValue, requestReg, requestReadback);
 
     uint32_t ackValue = 0;
     for (uint32_t retrigger = 0; retrigger <= APPLE_FORCEWAKE_MAX_RETRIGGERS_V175; ++retrigger) {
         for (uint32_t poll = 0; poll < APPLE_FORCEWAKE_POLLS_PER_TRY_V175; ++poll) {
+            // Use safe register access for reading the ack register
             ackValue = fOwner->safeMMIORead(ackReg);
             if ((ackValue & ackMask) == expectedAckValue) {
                 IOLog("(FakeIrisXE) [GuC][Apple] %s ack=0x%08X mask=0x%08X expected=0x%08X polls=%u retriggers=%u\n",
@@ -1404,7 +1418,9 @@ bool FakeIrisXEGuC::safeForceWakeDomain(GuCStage stage, const char* label,
               ackValue,
               expectedAckValue,
               retrigger + 1U);
-        writeRegWithReadback(stage, label, requestReg, requestValue, &requestReadback);
+        // Re-apply the request on retrigger
+        fOwner->safeMMIOWrite(requestReg, requestValue);
+        (void)fOwner->safeMMIORead(requestReg); // readback
         IODelay(APPLE_FORCEWAKE_POLL_DELAY_US_V175);
     }
 
@@ -1566,17 +1582,35 @@ bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFre
                                       APPLE_TGL_ME_WAKE_ACK_MASK_V173,
                                       APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179,
                                       &pollValue)) {
-                lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
-                lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
-                IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u wake-fail me=0x%08X reset=0x%08X\n",
-                      attempt,
-                      lastMeValue,
-                      lastResetValue);
-            } else {
-                IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-wake me=0x%08X reset=0x%08X\n",
-                      attempt,
-                      fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
-                      fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+            lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+            lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
+            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u wake-fail me=0x%08X reset=0x%08X\n",
+                  attempt,
+                  lastMeValue,
+                  lastResetValue);
+            
+            // Additional diagnostic logging for ME wake failure
+            IOLog("(FakeIrisXE) [GuC][Apple] ME wake diagnostics: 0xC0F4 write=0x%08X, expected ack mask=0x%08X, timeout=%ums\n",
+                  APPLE_TGL_ME_WAKE_REQ_V173,
+                  APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                  APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179);
+                  
+            // Read the register multiple times to see if it's changing
+            uint32_t meWakeVals[5];
+            for (int i = 0; i < 5; i++) {
+                meWakeVals[i] = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+                IODelay(1000); // 1ms between reads
+            }
+            IOLog("(FakeIrisXE) [GuC][Apple] ME wake register 0xC0F4 values over time: ");
+            for (int i = 0; i < 5; i++) {
+                IOLog("0x%08X ", meWakeVals[i]);
+            }
+            IOLog("\n");
+        } else {
+            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-wake me=0x%08X reset=0x%08X\n",
+                  attempt,
+                  fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
+                  fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
 
                 if (!writeAndPollAppleReg(stage,
                                           "GFX_RESET_PREAUTH_2",
@@ -2403,6 +2437,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         logAppleRegisterWindow("apple-fail-snapshot");
         logForceWakeDiagnostics("apple-fail");
         logAppleBootAudit("apple-fail");
+        fApplePinnedAccessActive = false;
         if (freqOverrideArmed) {
             if (!changeAppleLoadFrequency("RESTORE_LOAD_FREQ", savedFreqToken)) {
                 IOLog("(FakeIrisXE) [GuC][Apple] restore frequency warning token=0x%08X after failure\n",
@@ -2423,6 +2458,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return failAppleBoot("forcewake");
     }
     forceWakeHeld = true;
+    fApplePinnedAccessActive = true;
     logForceWakeDiagnostics("apple-boot-forcewake");
     logAppleBootAudit("apple-pre-shim");
 
@@ -2551,6 +2587,7 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         freqOverrideArmed = false;
     }
 
+    fApplePinnedAccessActive = false;
     releaseForceWake();
     forceWakeHeld = false;
     return true;
