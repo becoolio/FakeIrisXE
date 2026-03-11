@@ -8,6 +8,7 @@
 // FakeIrisXEGuC.cpp
 #include "FakeIrisXEGuC.hpp"
 #include "i915_reg.h"
+#include "FakeIrisXEGuCTGLPublicKey.hpp"
 #include <libkern/c++/OSBoolean.h>
 
 extern "C" void OSSynchronizeIO(void);
@@ -43,6 +44,10 @@ extern "C" void OSSynchronizeIO(void);
 
 #ifndef GUC_STATUS_WOPCMERR
 #define GUC_STATUS_WOPCMERR        0x40000000  // WOPCM error
+#endif
+
+#ifndef GUC_HEADER_INFO_V170
+#define GUC_HEADER_INFO_V170       0xC014
 #endif
 
 // V135: Additional Gen12/Tiger Lake registers from Linux i915
@@ -177,6 +182,93 @@ extern "C" void OSSynchronizeIO(void);
 #ifndef GUC_MISC_CONTROL
 #define GUC_MISC_CONTROL            0xC068  // Same as SHIM_CONTROL2?
 #endif
+
+#ifndef APPLE_TGL_GUC_RESET_CTRL_V173
+#define APPLE_TGL_GUC_RESET_CTRL_V173 0x941C
+#endif
+#ifndef APPLE_TGL_ME_FW_STATUS_V173
+#define APPLE_TGL_ME_FW_STATUS_V173 0xC0F4
+#endif
+#ifndef APPLE_TGL_GUC_RESET_BIT_V173
+#define APPLE_TGL_GUC_RESET_BIT_V173 0x00000008U
+#endif
+#ifndef APPLE_TGL_ME_WAKE_REQ_V173
+#define APPLE_TGL_ME_WAKE_REQ_V173 0x00000002U
+#endif
+#ifndef APPLE_TGL_ME_WAKE_ACK_MASK_V173
+#define APPLE_TGL_ME_WAKE_ACK_MASK_V173 0x00000001U
+#endif
+#ifndef APPLE_TGL_ME_HASH_READY_V173
+#define APPLE_TGL_ME_HASH_READY_V173 0x000001FFU
+#endif
+#ifndef APPLE_TGL_SPRINGBOARD_PTR_V173
+#define APPLE_TGL_SPRINGBOARD_PTR_V173 0xC1B8
+#endif
+
+#ifndef GEN11_FORCEWAKE_KERNEL_BIT_V174
+#define GEN11_FORCEWAKE_KERNEL_BIT_V174 0x00000001U
+#endif
+#ifndef GEN11_FORCEWAKE_MASKED_ENABLE_V174
+#define GEN11_FORCEWAKE_MASKED_ENABLE_V174 0x00010001U
+#endif
+#ifndef GEN11_FORCEWAKE_MASKED_DISABLE_V174
+#define GEN11_FORCEWAKE_MASKED_DISABLE_V174 0x00010000U
+#endif
+
+#ifndef APPLE_FORCEWAKE_POLL_DELAY_US_V175
+#define APPLE_FORCEWAKE_POLL_DELAY_US_V175 100U
+#endif
+#ifndef APPLE_FORCEWAKE_POLLS_PER_TRY_V175
+#define APPLE_FORCEWAKE_POLLS_PER_TRY_V175 3000U
+#endif
+#ifndef APPLE_FORCEWAKE_MAX_RETRIGGERS_V175
+#define APPLE_FORCEWAKE_MAX_RETRIGGERS_V175 8U
+#endif
+
+#ifndef APPLE_TGL_FORCEWAKE_GLOBAL_ENABLE_V176
+#define APPLE_TGL_FORCEWAKE_GLOBAL_ENABLE_V176 0x00020002U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_GLOBAL_DISABLE_V176
+#define APPLE_TGL_FORCEWAKE_GLOBAL_DISABLE_V176 0x00020000U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176
+#define APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176 0x00000002U
+#endif
+
+#ifndef APPLE_TGL_FORCEWAKE_RENDER_ENABLE_V176
+#define APPLE_TGL_FORCEWAKE_RENDER_ENABLE_V176 0x00020002U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_RENDER_DISABLE_V176
+#define APPLE_TGL_FORCEWAKE_RENDER_DISABLE_V176 0x00020000U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176
+#define APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176 0x00000002U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_RENDER_ACK_V176
+#define APPLE_TGL_FORCEWAKE_RENDER_ACK_V176 0x0D84U
+#endif
+
+#ifndef APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176
+#define APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176 0x00010001U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_MEDIA_DISABLE_V176
+#define APPLE_TGL_FORCEWAKE_MEDIA_DISABLE_V176 0x00010000U
+#endif
+#ifndef APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176
+#define APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176 0x00000001U
+#endif
+#ifndef GEN11_FORCEWAKE_MEDIA_VDBOX0
+#define GEN11_FORCEWAKE_MEDIA_VDBOX0 0x0000A540U
+#endif
+#ifndef GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK
+#define GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK 0x00000D50U
+#endif
+#ifndef GEN11_FORCEWAKE_MEDIA_VEBOX0
+#define GEN11_FORCEWAKE_MEDIA_VEBOX0 0x0000A560U
+#endif
+#ifndef GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK
+#define GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK 0x00000D70U
+#endif
 #endif
 // GuC status at 0xC000
 #ifndef GUC_STATUS
@@ -246,6 +338,32 @@ extern "C" void OSSynchronizeIO(void);
 #define DMA_CTRL_V137              0xC314    // control + trigger
 #endif
 
+#ifndef GUC_SOFT_SCRATCH_V170
+#define GUC_SOFT_SCRATCH_V170(n)   (0xC180 + ((n) * 4))
+#endif
+
+#ifndef GUC_CTL_LOG_PARAMS_V170
+#define GUC_CTL_LOG_PARAMS_V170    0U
+#endif
+#ifndef GUC_CTL_WA_V170
+#define GUC_CTL_WA_V170            1U
+#endif
+#ifndef GUC_CTL_FEATURE_V170
+#define GUC_CTL_FEATURE_V170       2U
+#endif
+#ifndef GUC_CTL_DEBUG_V170
+#define GUC_CTL_DEBUG_V170         3U
+#endif
+#ifndef GUC_CTL_ADS_V170
+#define GUC_CTL_ADS_V170           4U
+#endif
+#ifndef GUC_CTL_DEVID_V170
+#define GUC_CTL_DEVID_V170         5U
+#endif
+#ifndef GUC_CTL_MAX_DWORDS_V170
+#define GUC_CTL_MAX_DWORDS_V170    6U
+#endif
+
 // Address space encoding (in HIGH registers)
 #ifndef DMA_ADDRESS_SPACE_WOPCM_V137
 // V142: Fixed - Linux uses 0x10000, not 0x70000!
@@ -278,6 +396,9 @@ extern "C" void OSSynchronizeIO(void);
 #ifndef UOS_MOVE_V137
 #define UOS_MOVE_V137                (1u << 4)
 #endif
+#ifndef GUC_CTL_DISABLE_SCHEDULER_V170
+#define GUC_CTL_DISABLE_SCHEDULER_V170 (1u << 14)
+#endif
 
 // UOS RSA scratch registers (0xC200+)
 #ifndef UOS_RSA_SCRATCH_BASE_V137
@@ -305,6 +426,19 @@ extern "C" void OSSynchronizeIO(void);
 #endif
 #ifndef GUC_MIA_CORE_STATUS_SHIFT_V137
 #define GUC_MIA_CORE_STATUS_SHIFT_V137 16
+#endif
+
+#ifndef GUC_AUTH_STATUS_MASK_V170
+#define GUC_AUTH_STATUS_MASK_V170  (0x3u << 30)
+#endif
+#ifndef GUC_AUTH_STATUS_SHIFT_V170
+#define GUC_AUTH_STATUS_SHIFT_V170 30
+#endif
+#ifndef GUC_AUTH_STATUS_BAD_V170
+#define GUC_AUTH_STATUS_BAD_V170   0x1U
+#endif
+#ifndef GUC_AUTH_STATUS_GOOD_V170
+#define GUC_AUTH_STATUS_GOOD_V170  0x2U
 #endif
 
 // Helper macros
@@ -498,6 +632,7 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
     obj->fGuCMode = false;
     obj->fLastReportedStage = kGuCStageIdle;
     obj->fFirmwareMode = kGuCFirmwareModeAppleOnly;
+    obj->fGuCPublicKeyGem = nullptr;
     return obj;
 }
 
@@ -539,6 +674,20 @@ const char* FakeIrisXEGuC::firmwareModeName(GuCFirmwareMode mode) const
     return "unknown";
 }
 
+const char* FakeIrisXEGuC::authStatusName(uint8_t authStatus) const
+{
+    switch (authStatus) {
+        case 0:
+            return "none";
+        case GUC_AUTH_STATUS_BAD_V170:
+            return "bad";
+        case GUC_AUTH_STATUS_GOOD_V170:
+            return "good";
+        default:
+            return "other";
+    }
+}
+
 void FakeIrisXEGuC::logBootFailureSignature(const char* reason, uint64_t startNs,
                                             uint32_t retryIndex, uint32_t rawStatusOverride)
 {
@@ -548,14 +697,15 @@ void FakeIrisXEGuC::logBootFailureSignature(const char* reason, uint64_t startNs
     }
 
     GuCStatusDecoded decoded = decodeStatus(rawStatus);
-    IOLog("(FakeIrisXE) [GuC][Boot] FAIL mode=%s reason=%s raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X\n",
+    IOLog("(FakeIrisXE) [GuC][Boot] FAIL mode=%s reason=%s raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X auth=%s(0x%X)\n",
           firmwareModeName(fFirmwareMode),
           reason ? reason : "unknown",
           rawStatus,
           decoded.bootrom,
           decoded.ukernel,
           decoded.mia,
-          decoded.appleStatus);
+          authStatusName(decoded.authStatus),
+          decoded.authStatus);
     emitStageReport(kGuCStageFailure, startNs, retryIndex, rawStatus);
 }
 
@@ -633,12 +783,13 @@ FakeIrisXEGuC::GuCStatusDecoded FakeIrisXEGuC::decodeStatus(uint32_t rawStatus) 
     decoded.bootrom = (uint8_t)FIELD_GET_V137(GUC_BOOTROM_STATUS_MASK_V137, rawStatus);
     decoded.ukernel = (uint8_t)FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, rawStatus);
     decoded.mia = (uint8_t)FIELD_GET_V137(GUC_MIA_CORE_STATUS_MASK_V137, rawStatus);
-    decoded.appleStatus = (uint8_t)((rawStatus >> 8) & 0xFFU);
+    decoded.authStatus = (uint8_t)FIELD_GET_V137(GUC_AUTH_STATUS_MASK_V170, rawStatus);
     decoded.valid = (rawStatus != 0xFFFFFFFFU);
     decoded.success = ((decoded.bootrom == 0x7FU && decoded.ukernel == 0xFFU) ||
-                       (decoded.appleStatus == GUC_LOAD_SUCCESS_STATUS));
-    decoded.failure = (decoded.appleStatus == GUC_LOAD_FAIL_STATUS_1 ||
-                       decoded.appleStatus == GUC_LOAD_FAIL_STATUS_2 ||
+                       (decoded.ukernel == GUC_LOAD_SUCCESS_STATUS));
+    decoded.failure = (((rawStatus & 0xFEU) == GUC_LOAD_FAIL_STATUS_1) ||
+                       (decoded.ukernel == GUC_LOAD_FAIL_STATUS_2) ||
+                       (decoded.authStatus == GUC_AUTH_STATUS_BAD_V170) ||
                        decoded.bootrom == 0x06U);
     return decoded;
 }
@@ -698,14 +849,17 @@ void FakeIrisXEGuC::logForceWakeDiagnostics(const char* label) const
     };
 
     const uint32_t gtPmReg = selectGtPmConfigReg();
-    IOLog("(FakeIrisXE) [GuC][ForceWake] %s mt_req=0x%08X mt_ack=0x%08X render_req=0x%08X render_ack=0x%08X gt_req=0x%08X gt_ack=0x%08X gt_pm[%05X]=0x%08X\n",
+    IOLog("(FakeIrisXE) [GuC][ForceWake] %s mt_req=0x%08X mt_ack=0x%08X render_req=0x%08X render_ack=0x%08X render_ack_alt=0x%08X media_vdbox_req=0x%08X media_vdbox_ack=0x%08X media_vebox_req=0x%08X media_vebox_ack=0x%08X gt_pm[%05X]=0x%08X\n",
           label ? label : "snapshot",
           readAudit(FORCEWAKE_REQ),
           readAudit(FORCEWAKE_ACK),
           readAudit(GEN11_FORCEWAKE_RENDER),
           readAudit(GEN11_FORCEWAKE_RENDER_ACK),
-          readAudit(GEN11_FORCEWAKE_GT),
-          readAudit(GEN11_FORCEWAKE_GT_ACK),
+          readAudit(APPLE_TGL_FORCEWAKE_RENDER_ACK_V176),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VDBOX0),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VEBOX0),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK),
           gtPmReg,
           readAudit(gtPmReg));
 }
@@ -741,9 +895,14 @@ void FakeIrisXEGuC::logAppleBootAudit(const char* label) const
         {"FORCEWAKE_MT_ACK", FORCEWAKE_ACK},
         {"GT_PM_CONFIG_SEL", gtPmReg},
         {"GT_PM_CONFIG_GT", TGL_GT_PM_CONFIG_GT},
+        {"ME_FW_STATUS", APPLE_TGL_ME_FW_STATUS_V173},
+        {"GFX_RESET_CTRL", APPLE_TGL_GUC_RESET_CTRL_V173},
         {"GUC_STATUS", GUC_STATUS_V137},
         {"GUC_SHIM_CONTROL", GUC_SHIM_CONTROL_V137},
         {"GUC_MISC_CONTROL", GUC_MISC_CONTROL},
+        {"SOFT_SCRATCH0", GUC_SOFT_SCRATCH_V170(0)},
+        {"SOFT_SCRATCH1", GUC_SOFT_SCRATCH_V170(1)},
+        {"SPRINGBOARD_PTR", APPLE_TGL_SPRINGBOARD_PTR_V173},
         {"GUC_WOPCM_SIZE", GUC_WOPCM_SIZE_V137},
         {"DMA_GUC_WOPCM_OFFSET", DMA_GUC_WOPCM_OFFSET_V137},
         {"DMA_ADDR_0_LOW", DMA_ADDR_0_LOW_V137},
@@ -789,6 +948,360 @@ void FakeIrisXEGuC::logAppleRegisterWindow(const char* label) const
           readReg(GUC_STATUS_V137),
           readReg(GUC_SHIM_CONTROL_V137),
           readReg(GUC_MISC_CONTROL));
+    IOLog("(FakeIrisXE) [GuC][Regs] %s GUC_HEADER_INFO=0x%08X SCR0_AUTH=0x%08X SCR1_KEY=0x%08X SCR2=0x%08X SCR3=0x%08X SCR4=0x%08X SCR5=0x%08X SCR6=0x%08X ME_C0F4=0x%08X GFX_RESET_941C=0x%08X SPRINGBOARD_C1B8=0x%08X\n",
+          snapshotLabel,
+          readReg(GUC_HEADER_INFO_V170),
+          readReg(GUC_SOFT_SCRATCH_V170(0)),
+          readReg(GUC_SOFT_SCRATCH_V170(1)),
+          readReg(GUC_SOFT_SCRATCH_V170(2)),
+          readReg(GUC_SOFT_SCRATCH_V170(3)),
+          readReg(GUC_SOFT_SCRATCH_V170(4)),
+          readReg(GUC_SOFT_SCRATCH_V170(5)),
+          readReg(GUC_SOFT_SCRATCH_V170(6)),
+          readReg(APPLE_TGL_ME_FW_STATUS_V173),
+          readReg(APPLE_TGL_GUC_RESET_CTRL_V173),
+          readReg(APPLE_TGL_SPRINGBOARD_PTR_V173));
+    IOLog("(FakeIrisXE) [GuC][Regs] %s RSA0=0x%08X RSA1=0x%08X RSA62=0x%08X RSA63=0x%08X\n",
+          snapshotLabel,
+          readReg(UOS_RSA_SCRATCH_BASE_V137 + 0),
+          readReg(UOS_RSA_SCRATCH_BASE_V137 + 4),
+          readReg(UOS_RSA_SCRATCH_BASE_V137 + ((UOS_RSA_SCRATCH_COUNT_V137 - 2) * 4)),
+          readReg(UOS_RSA_SCRATCH_BASE_V137 + ((UOS_RSA_SCRATCH_COUNT_V137 - 1) * 4)));
+}
+
+bool FakeIrisXEGuC::writeAppleBootParams(GuCStage stage)
+{
+    if (!fOwner) {
+        return false;
+    }
+
+    if (fGuCPublicKeyGem) {
+        fGuCPublicKeyGem->unpin();
+        fGuCPublicKeyGem->release();
+        fGuCPublicKeyGem = nullptr;
+    }
+
+    const size_t keyAllocSize = (sizeof(kTglAppleGuCPublicKey) + 4095U) & ~4095U;
+    fGuCPublicKeyGem = FakeIrisXEGEM::withSize(keyAllocSize, 0);
+    if (!fGuCPublicKeyGem) {
+        IOLog("(FakeIrisXE) [GuC][Apple] failed to allocate public-key GEM size=%zu\n",
+              keyAllocSize);
+        return false;
+    }
+
+    IOBufferMemoryDescriptor* md = fGuCPublicKeyGem->memoryDescriptor();
+    void* cpuPtr = md ? md->getBytesNoCopy() : nullptr;
+    if (!cpuPtr) {
+        IOLog("(FakeIrisXE) [GuC][Apple] failed to map public-key GEM on CPU\n");
+        fGuCPublicKeyGem->release();
+        fGuCPublicKeyGem = nullptr;
+        return false;
+    }
+
+    bzero(cpuPtr, keyAllocSize);
+    memcpy(cpuPtr, kTglAppleGuCPublicKey, sizeof(kTglAppleGuCPublicKey));
+    producerCoherencyBarrier("copied Apple TGL public key blob");
+
+    fGuCPublicKeyGem->pin();
+    uint64_t keyGpuAddr = fOwner->ggttMap(fGuCPublicKeyGem);
+    if (!keyGpuAddr || (keyGpuAddr >> 32) != 0U) {
+        IOLog("(FakeIrisXE) [GuC][Apple] invalid public-key GGTT=0x%016llX\n",
+              (unsigned long long)keyGpuAddr);
+        fGuCPublicKeyGem->unpin();
+        fGuCPublicKeyGem->release();
+        fGuCPublicKeyGem = nullptr;
+        return false;
+    }
+
+    const uint32_t* keyDw = reinterpret_cast<const uint32_t*>(kTglAppleGuCPublicKey);
+    IOLog("(FakeIrisXE) [GuC][Apple] public-key blob ggtt=0x%08X size=%zu first=0x%08X/0x%08X last=0x%08X/0x%08X\n",
+          (uint32_t)keyGpuAddr,
+          sizeof(kTglAppleGuCPublicKey),
+          keyDw[0],
+          keyDw[1],
+          keyDw[(sizeof(kTglAppleGuCPublicKey) / sizeof(uint32_t)) - 2],
+          keyDw[(sizeof(kTglAppleGuCPublicKey) / sizeof(uint32_t)) - 1]);
+
+    struct AuthRegWrite {
+        const char* name;
+        uint32_t reg;
+        uint32_t value;
+    } writes[] = {
+        {"SOFT_SCRATCH1_KEY_LO", GUC_SOFT_SCRATCH_V170(1), (uint32_t)keyGpuAddr},
+        {"SOFT_SCRATCH2_ZERO", GUC_SOFT_SCRATCH_V170(2), 0},
+        {"SOFT_SCRATCH3_ZERO", GUC_SOFT_SCRATCH_V170(3), 0},
+        {"SOFT_SCRATCH4_ZERO", GUC_SOFT_SCRATCH_V170(4), 0},
+        {"SOFT_SCRATCH5_ZERO", GUC_SOFT_SCRATCH_V170(5), 0},
+        {"SOFT_SCRATCH6_ZERO", GUC_SOFT_SCRATCH_V170(6), 0},
+    };
+
+    for (size_t i = 0; i < sizeof(writes) / sizeof(writes[0]); ++i) {
+        uint32_t readback = 0;
+        writeRegWithReadback(stage, writes[i].name, writes[i].reg, writes[i].value, &readback);
+        if (readback != writes[i].value) {
+            IOLog("(FakeIrisXE) [GuC][Apple] auth block mismatch reg=0x%05X write=0x%08X read=0x%08X\n",
+                  writes[i].reg,
+                  writes[i].value,
+                  readback);
+            return false;
+        }
+    }
+
+    IOLog("(FakeIrisXE) [GuC][Apple] auth block scratch1_key=0x%08X scratch2_6=zero source=DTK-unboxed-tgl-public-key\n",
+          (uint32_t)keyGpuAddr);
+    return true;
+}
+
+bool FakeIrisXEGuC::writeAndPollAppleReg(GuCStage stage, const char* label, uint32_t writeReg,
+                                         uint32_t writeValue, uint32_t pollReg,
+                                         uint32_t pollMask, uint32_t expectedValue,
+                                         uint32_t timeoutMs, uint32_t* outPollValue)
+{
+    uint32_t writeReadback = 0;
+    writeRegWithReadback(stage, label, writeReg, writeValue, &writeReadback);
+
+    uint32_t pollValue = 0xFFFFFFFFU;
+    const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
+    for (uint32_t poll = 0; poll < maxPolls; ++poll) {
+        pollValue = fOwner->safeMMIORead(pollReg);
+        if ((pollValue & pollMask) == expectedValue) {
+            if (outPollValue) {
+                *outPollValue = pollValue;
+            }
+            IOLog("(FakeIrisXE) [GuC][Apple] %s poll_reg=0x%05X write=0x%08X mask=0x%08X expected=0x%08X read=0x%08X polls=%u\n",
+                  label,
+                  pollReg,
+                  writeValue,
+                  pollMask,
+                  expectedValue,
+                  pollValue,
+                  poll + 1U);
+            return true;
+        }
+        IOSleep(1);
+    }
+
+    if (outPollValue) {
+        *outPollValue = pollValue;
+    }
+    IOLog("(FakeIrisXE) [GuC][Apple] %s timeout poll_reg=0x%05X write=0x%08X mask=0x%08X expected=0x%08X read=0x%08X timeout_ms=%u\n",
+          label,
+          pollReg,
+          writeValue,
+          pollMask,
+          expectedValue,
+          pollValue,
+          timeoutMs);
+    return false;
+}
+
+bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32_t reg,
+                                       uint32_t expectedValue, uint32_t timeoutMs,
+                                       uint32_t* outValue)
+{
+    uint32_t value = 0xFFFFFFFFU;
+    const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
+    for (uint32_t poll = 0; poll < maxPolls; ++poll) {
+        value = fOwner->safeMMIORead(reg);
+        if (value == expectedValue) {
+            if (outValue) {
+                *outValue = value;
+            }
+            IOLog("(FakeIrisXE) [GuC][Apple] %s reg=0x%05X expected=0x%08X read=0x%08X polls=%u\n",
+                  label,
+                  reg,
+                  expectedValue,
+                  value,
+                  poll + 1U);
+            return true;
+        }
+        IOSleep(1);
+    }
+
+    if (outValue) {
+        *outValue = value;
+    }
+    IOLog("(FakeIrisXE) [GuC][Apple] %s timeout reg=0x%05X expected=0x%08X read=0x%08X timeout_ms=%u\n",
+          label,
+          reg,
+          expectedValue,
+          value,
+          timeoutMs);
+    return false;
+}
+
+bool FakeIrisXEGuC::safeForceWakeDomain(GuCStage stage, const char* label,
+                                        uint32_t requestReg, uint32_t ackReg,
+                                        uint32_t requestValue, uint32_t ackMask,
+                                        uint32_t expectedAckValue)
+{
+    uint32_t requestReadback = 0;
+
+    writeRegWithReadback(stage, label, requestReg, requestValue, &requestReadback);
+
+    uint32_t ackValue = 0;
+    for (uint32_t retrigger = 0; retrigger <= APPLE_FORCEWAKE_MAX_RETRIGGERS_V175; ++retrigger) {
+        for (uint32_t poll = 0; poll < APPLE_FORCEWAKE_POLLS_PER_TRY_V175; ++poll) {
+            ackValue = fOwner->safeMMIORead(ackReg);
+            if ((ackValue & ackMask) == expectedAckValue) {
+                IOLog("(FakeIrisXE) [GuC][Apple] %s ack=0x%08X mask=0x%08X expected=0x%08X polls=%u retriggers=%u\n",
+                      label,
+                      ackValue,
+                      ackMask,
+                      expectedAckValue,
+                      poll + 1U,
+                      retrigger);
+                return true;
+            }
+            IODelay(APPLE_FORCEWAKE_POLL_DELAY_US_V175);
+        }
+
+        if (retrigger == APPLE_FORCEWAKE_MAX_RETRIGGERS_V175) {
+            break;
+        }
+
+        IOLog("(FakeIrisXE) [GuC][Apple] Retrigger %s read=0x%08X expect=0x%08X retrigger=%u\n",
+              label,
+              ackValue,
+              expectedAckValue,
+              retrigger + 1U);
+        writeRegWithReadback(stage, label, requestReg, requestValue, &requestReadback);
+        IODelay(APPLE_FORCEWAKE_POLL_DELAY_US_V175);
+    }
+
+    IOLog("(FakeIrisXE) [GuC][Apple] %s failed final_ack=0x%08X expected=0x%08X retriggers=%u\n",
+          label,
+          ackValue,
+          expectedAckValue,
+          APPLE_FORCEWAKE_MAX_RETRIGGERS_V175);
+    return false;
+}
+
+bool FakeIrisXEGuC::acquireAppleWakeDomains(GuCStage stage)
+{
+    logForceWakeDiagnostics("apple-domain-pre");
+
+    uint32_t gtPmGtReadback = 0;
+    writeRegWithReadback(stage,
+                         "GT_PM_CONFIG_GT",
+                         TGL_GT_PM_CONFIG_GT,
+                         GT_DOORBELL_ENABLE,
+                         &gtPmGtReadback);
+    if (gtPmGtReadback != GT_DOORBELL_ENABLE) {
+        IOLog("(FakeIrisXE) [GuC][Apple] GT_PM_CONFIG_GT did not latch write=0x%08X read=0x%08X; continuing without using it as a success signal\n",
+              GT_DOORBELL_ENABLE,
+              gtPmGtReadback);
+    }
+
+    if (!safeForceWakeDomain(stage,
+                             "FORCEWAKE_GLOBAL",
+                             FORCEWAKE_REQ,
+                             FORCEWAKE_ACK,
+                             APPLE_TGL_FORCEWAKE_GLOBAL_ENABLE_V176,
+                             APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176,
+                             APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176)) {
+        return false;
+    }
+
+    if (!safeForceWakeDomain(stage,
+                             "FORCEWAKE_RENDER",
+                             GEN11_FORCEWAKE_RENDER,
+                             APPLE_TGL_FORCEWAKE_RENDER_ACK_V176,
+                             APPLE_TGL_FORCEWAKE_RENDER_ENABLE_V176,
+                             APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176,
+                             APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176)) {
+        return false;
+    }
+
+    if (!safeForceWakeDomain(stage,
+                             "FORCEWAKE_MEDIA_VDBOX0",
+                             GEN11_FORCEWAKE_MEDIA_VDBOX0,
+                             GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176)) {
+        return false;
+    }
+
+    if (!safeForceWakeDomain(stage,
+                             "FORCEWAKE_MEDIA_VEBOX0",
+                             GEN11_FORCEWAKE_MEDIA_VEBOX0,
+                             GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176,
+                             APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176)) {
+        return false;
+    }
+
+    logForceWakeDiagnostics("apple-domain-post");
+    return true;
+}
+
+bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage)
+{
+    uint32_t pollValue = 0;
+
+    if (!writeAndPollAppleReg(stage,
+                              "GFX_RESET_PREAUTH_1",
+                              APPLE_TGL_GUC_RESET_CTRL_V173,
+                              APPLE_TGL_GUC_RESET_BIT_V173,
+                              APPLE_TGL_GUC_RESET_CTRL_V173,
+                              APPLE_TGL_GUC_RESET_BIT_V173,
+                              0,
+                              1500,
+                              &pollValue)) {
+        return false;
+    }
+
+    if (!writeAndPollAppleReg(stage,
+                              "ME_WAKE_PREAUTH",
+                              APPLE_TGL_ME_FW_STATUS_V173,
+                              APPLE_TGL_ME_WAKE_REQ_V173,
+                              APPLE_TGL_ME_FW_STATUS_V173,
+                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                              1500,
+                              &pollValue)) {
+        return false;
+    }
+
+    if (!writeAndPollAppleReg(stage,
+                              "GFX_RESET_PREAUTH_2",
+                              APPLE_TGL_GUC_RESET_CTRL_V173,
+                              APPLE_TGL_GUC_RESET_BIT_V173,
+                              APPLE_TGL_GUC_RESET_CTRL_V173,
+                              APPLE_TGL_GUC_RESET_BIT_V173,
+                              0,
+                              1500,
+                              &pollValue)) {
+        return false;
+    }
+
+    if (!writeAndPollAppleReg(stage,
+                              "ME_HASH_REQUEST",
+                              APPLE_TGL_ME_FW_STATUS_V173,
+                              0,
+                              APPLE_TGL_ME_FW_STATUS_V173,
+                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                              1500,
+                              &pollValue)) {
+        return false;
+    }
+
+    if (!pollAppleRegEquals(stage,
+                            "ME_HASH_READY",
+                            APPLE_TGL_ME_FW_STATUS_V173,
+                            APPLE_TGL_ME_HASH_READY_V173,
+                            1500,
+                            &pollValue)) {
+        return false;
+    }
+
+    IOLog("(FakeIrisXE) [GuC][Apple] pre-auth handshake complete me_c0f4=0x%08X reset_941c=0x%08X\n",
+          fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
+          fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+    return true;
 }
 
 void FakeIrisXEGuC::issueGuCTlbInvalidate() const
@@ -1030,7 +1543,7 @@ void FakeIrisXEGuC::emitStageReport(GuCStage stage, uint64_t startNs, uint32_t r
         default: break;
     }
 
-    IOLog("(FakeIrisXE) [GuC][Stage] stage=%s retry=%u elapsed_us=%llu raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X valid=%u\n",
+    IOLog("(FakeIrisXE) [GuC][Stage] stage=%s retry=%u elapsed_us=%llu raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X auth=0x%X valid=%u\n",
           stageName,
           report.retry_index,
           (unsigned long long)report.elapsed_us,
@@ -1038,7 +1551,7 @@ void FakeIrisXEGuC::emitStageReport(GuCStage stage, uint64_t startNs, uint32_t r
           report.decoded_status.bootrom,
           report.decoded_status.ukernel,
           report.decoded_status.mia,
-          report.decoded_status.appleStatus,
+          report.decoded_status.authStatus,
           report.decoded_status.valid ? 1U : 0U);
 
     fLastReportedStage = stage;
@@ -1055,7 +1568,7 @@ void FakeIrisXEGuC::logLinuxBaselineCorrelation(bool bootSuccess)
     bool submissionEnabled = bootSuccess &&
                              (((gtPmConfig & GT_DOORBELL_ENABLE) != 0) ||
                               ((doorbellCtrl & GT_DOORBELL_ENABLE) != 0));
-    bool slpcEnabled = bootSuccess && (decoded.ukernel == 0xFFU || decoded.appleStatus == 0xF0U);
+    bool slpcEnabled = bootSuccess && (decoded.ukernel == 0xFFU || decoded.ukernel == 0xF0U);
     bool rcEnabled = ((rcCtl & 0x1U) != 0);
 
     IOLog("(FakeIrisXE) [GuC][Baseline] expected: submission=enabled slpc=enabled rc=enabled\n");
@@ -1094,8 +1607,8 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
         if (status == lastStatus) {
             stableCount++;
         } else {
-            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u raw=0x%08X status changed bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X\n",
-                  pollCount, status, decoded.bootrom, decoded.ukernel, decoded.mia, decoded.appleStatus);
+            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u raw=0x%08X status changed bootrom=0x%02X ukernel=0x%02X mia=0x%X auth=0x%X\n",
+                  pollCount, status, decoded.bootrom, decoded.ukernel, decoded.mia, decoded.authStatus);
             stableCount = 0;
             lastStatus = status;
         }
@@ -1106,10 +1619,13 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
         }
 
         if (decoded.failure) {
-            IOLog("(FakeIrisXE) [GuC] GuC reported FAILURE raw=0x%08X bootrom=0x%02X apple=0x%02X valid=%u\n",
+            IOLog("(FakeIrisXE) [GuC] GuC reported FAILURE raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X auth=%s(0x%X) valid=%u\n",
                   status,
                   decoded.bootrom,
-                  decoded.appleStatus,
+                  decoded.ukernel,
+                  decoded.mia,
+                  authStatusName(decoded.authStatus),
+                  decoded.authStatus,
                   decoded.valid);
             IOLog("(FakeIrisXE) [GuC]   >>> FAILURE DETECTED AT POLL %u <<<\n", pollCount);
             return false;
@@ -1128,12 +1644,12 @@ bool FakeIrisXEGuC::pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, ui
         }
 
         if ((stableCount % 64U) == 0U) {
-            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u stable=%u raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X apple=0x%02X\n",
+            IOLog("(FakeIrisXE) [GuC][BootPoll] poll=%u stable=%u raw=0x%08X bootrom=0x%02X ukernel=0x%02X mia=0x%X auth=0x%X\n",
                   pollCount, stableCount, status,
                   decoded.bootrom,
                   decoded.ukernel,
                   decoded.mia,
-                  decoded.appleStatus);
+                  decoded.authStatus);
         }
 
         IOSleep(1);
@@ -1529,6 +2045,15 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     logForceWakeDiagnostics("apple-boot-forcewake");
     logAppleBootAudit("apple-pre-shim");
 
+    if (!acquireAppleWakeDomains(kGuCStageForceWake)) {
+        return failAppleBoot("forcewake-domains");
+    }
+
+    if (!runApplePreAuthHandshake(kGuCStageForceWake)) {
+        return failAppleBoot("preauth-handshake");
+    }
+    logAppleRegisterWindow("apple-after-preauth-handshake");
+
     const uint32_t gtPmReg = selectGtPmConfigReg();
     const uint32_t gtPmReadback = fOwner->isMMIOOffsetValid(gtPmReg)
                                 ? fOwner->safeMMIORead(gtPmReg)
@@ -1576,8 +2101,21 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
                          layout.dma_copy_size, 0);
     logAppleRegisterWindow("apple-after-dma-programming");
 
-    writeGuCParams();
+    if (!writeAppleBootParams(kGuCStageDmaProgram)) {
+        return failAppleBoot("params");
+    }
+    logAppleRegisterWindow("apple-after-auth-programming");
     issueGuCTlbInvalidate();
+
+    uint32_t authKickReadback = 0;
+    writeRegWithReadback(kGuCStageDmaTrigger, "SOFT_SCRATCH0_AUTH", GUC_SOFT_SCRATCH_V170(0),
+                         0x00000001U, &authKickReadback);
+    if (authKickReadback != 0x00000001U) {
+        IOLog("(FakeIrisXE) [GuC][Apple] SOFT_SCRATCH0 auth kick did not latch write=0x00000001 read=0x%08X\n",
+              authKickReadback);
+        return failAppleBoot("auth-kick");
+    }
+    logAppleRegisterWindow("apple-after-auth-kick");
 
     uint32_t miscReadback = 0;
     writeRegWithReadback(kGuCStageDmaTrigger, "GUC_MISC_CONTROL", GUC_MISC_CONTROL,
@@ -1768,6 +2306,12 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
         fGuCFwGem->unpin();
         fGuCFwGem->release();
         fGuCFwGem = nullptr;
+    }
+
+    if (fGuCPublicKeyGem) {
+        fGuCPublicKeyGem->unpin();
+        fGuCPublicKeyGem->release();
+        fGuCPublicKeyGem = nullptr;
     }
 
     fGuCVersion = *(const uint32_t*)fwData;
@@ -2546,8 +3090,12 @@ void FakeIrisXEGuC::dumpGuCStatusEx(const char* label) const
     IOLog("  GUC_STATUS:        0x%08X\n", status);
     
     GuCStatusDecoded dec = decodeStatus(status);
-    IOLog("    bootrom: 0x%02X ukernel: 0x%02X mia: 0x%X apple: 0x%02X\n",
-          dec.bootrom, dec.ukernel, dec.mia, dec.appleStatus);
+    IOLog("    bootrom: 0x%02X ukernel: 0x%02X mia: 0x%X auth: %s(0x%X)\n",
+          dec.bootrom,
+          dec.ukernel,
+          dec.mia,
+          authStatusName(dec.authStatus),
+          dec.authStatus);
     IOLog("    valid: %u success: %u failure: %u\n", dec.valid, dec.success ? 1 : 0, dec.failure ? 1 : 0);
     
     uint32_t ctl = fOwner->safeMMIORead(GUC_CTL_V137);
@@ -2675,6 +3223,12 @@ bool FakeIrisXEGuC::acquireForceWake()
 void FakeIrisXEGuC::releaseForceWake()
 {
     IOLog("(FakeIrisXE) [V134] Releasing ForceWake...\n");
+
+    fOwner->safeMMIOWrite(GEN11_FORCEWAKE_RENDER, APPLE_TGL_FORCEWAKE_RENDER_DISABLE_V176);
+    fOwner->safeMMIOWrite(GEN11_FORCEWAKE_MEDIA_VDBOX0, APPLE_TGL_FORCEWAKE_MEDIA_DISABLE_V176);
+    fOwner->safeMMIOWrite(GEN11_FORCEWAKE_MEDIA_VEBOX0, APPLE_TGL_FORCEWAKE_MEDIA_DISABLE_V176);
+    fOwner->safeMMIOWrite(FORCEWAKE_REQ, APPLE_TGL_FORCEWAKE_GLOBAL_DISABLE_V176);
+    IOSleep(1);
     
     // Write 0 to release ForceWake
     fOwner->safeMMIOWrite(FORCEWAKE_REQ, 0x00000000);
@@ -2683,7 +3237,14 @@ void FakeIrisXEGuC::releaseForceWake()
     
     // V115: Verify release
     uint32_t after_release = fOwner->safeMMIORead(FORCEWAKE_ACK);
-    IOLog("(FakeIrisXE) [V134] After release: ACK=0x%08X\n", after_release);
+    uint32_t render_ack = fOwner->safeMMIORead(APPLE_TGL_FORCEWAKE_RENDER_ACK_V176);
+    uint32_t media_vdbox_ack = fOwner->safeMMIORead(GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK);
+    uint32_t media_vebox_ack = fOwner->safeMMIORead(GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK);
+    IOLog("(FakeIrisXE) [V134] After release: MT_ACK=0x%08X RENDER_ACK=0x%08X MEDIA_VDBOX_ACK=0x%08X MEDIA_VEBOX_ACK=0x%08X\n",
+          after_release,
+          render_ack,
+          media_vdbox_ack,
+          media_vebox_ack);
 }
 
 // ============================================================================
@@ -3096,12 +3657,9 @@ void FakeIrisXEGuC::initGTPreWorkaround()
     uint32_t shim_ctrl = fOwner->safeMMIORead(GUC_SHIM_CONTROL);
     IOLog("(FakeIrisXE) [V136] GUC_SHIM_CONTROL (0xC064): 0x%08X\n", shim_ctrl);
     
-    // Try to write to GUC_SHIM_CONTROL with Apple's value (0x8617)
-    IOLog("(FakeIrisXE) [V136] Attempting Apple SHIM write (0x8617)...\n");
-    fOwner->safeMMIOWrite(GUC_SHIM_CONTROL, 0x00008617);
-    IOSleep(10);
-    uint32_t shim_after = fOwner->safeMMIORead(GUC_SHIM_CONTROL);
-    IOLog("(FakeIrisXE) [V136] After Apple write: 0x%08X\n", shim_after);
+    // Apple-only phase: do not pre-program SHIM here.
+    // The active boot path owns the single SHIM write and uses 0x00208617.
+    IOLog("(FakeIrisXE) [V136] Apple-only phase: pre-init SHIM write disabled; active boot path will program 0x00208617\n");
     
     IOLog("(FakeIrisXE) [V136] ============================================\n");
     IOLog("(FakeIrisXE) [V136] GT PRE-INIT COMPLETE\n");
@@ -3525,7 +4083,7 @@ struct GuCCssHeader {
     uint32_t key_size_dw;
     uint32_t modulus_size_dw;
     uint32_t exponent_size_dw;
-    uint32_t reserved[52];
+    uint32_t reserved[22];
 } __attribute__((packed));
 #pragma pack(pop)
 
@@ -3558,8 +4116,16 @@ bool FakeIrisXEGuC::parseGuCFirmwareV139(const uint8_t* fwData, size_t fwSize, G
     }
     
     uint32_t header_size = (css->header_size_dw - css->modulus_size_dw - css->key_size_dw - css->exponent_size_dw) * 4;
+    const uint32_t expected_header_size = (uint32_t)sizeof(GuCCssHeader);
     
-    IOLog("(FakeIrisXE) [V139] Computed header_size=%u bytes\n", header_size);
+    IOLog("(FakeIrisXE) [V139] Computed header_size=%u bytes expected=%u bytes\n",
+          header_size, expected_header_size);
+
+    if (header_size != expected_header_size) {
+        IOLog("(FakeIrisXE) [V139] ❌ CSS header_size mismatch computed=%u expected=%u\n",
+              header_size, expected_header_size);
+        return false;
+    }
     
     uint32_t ucode_offset = 0 + header_size;
     uint32_t ucode_size = (css->size_dw - css->header_size_dw) * 4;
@@ -3594,12 +4160,54 @@ bool FakeIrisXEGuC::parseGuCFirmwareV139(const uint8_t* fwData, size_t fwSize, G
 // ============================================================================
 bool FakeIrisXEGuC::writeRsaScratchV139(const uint8_t* fwData, const GuCFwLayout& layout)
 {
-    IOLog("(FakeIrisXE) [V139] Writing RSA scratch from offset 0x%x\n", layout.rsa_offset);
+    IOLog("(FakeIrisXE) [V139] Writing RSA scratch from offset 0x%x size=%u\n",
+          layout.rsa_offset, layout.rsa_size);
+
+    if (!fwData) {
+        IOLog("(FakeIrisXE) [V139] ❌ RSA scratch source is null\n");
+        return false;
+    }
+
+    if (layout.rsa_size != (UOS_RSA_SCRATCH_COUNT_V137 * sizeof(uint32_t))) {
+        IOLog("(FakeIrisXE) [V139] ❌ RSA scratch size mismatch layout=%u expected=%zu\n",
+              layout.rsa_size,
+              (size_t)(UOS_RSA_SCRATCH_COUNT_V137 * sizeof(uint32_t)));
+        return false;
+    }
     
     const uint32_t* rsaDw = reinterpret_cast<const uint32_t*>(fwData + layout.rsa_offset);
+    uint32_t firstDw0 = rsaDw[0];
+    uint32_t firstDw1 = rsaDw[1];
+    uint32_t lastDw0 = rsaDw[UOS_RSA_SCRATCH_COUNT_V137 - 2];
+    uint32_t lastDw1 = rsaDw[UOS_RSA_SCRATCH_COUNT_V137 - 1];
+    bool hasNonZero = false;
+    for (uint32_t i = 0; i < UOS_RSA_SCRATCH_COUNT_V137; ++i) {
+        if (rsaDw[i] != 0U) {
+            hasNonZero = true;
+            break;
+        }
+    }
+
+    IOLog("(FakeIrisXE) [V139] RSA scratch source first=0x%08X/0x%08X last=0x%08X/0x%08X nonzero=%u\n",
+          firstDw0, firstDw1, lastDw0, lastDw1, hasNonZero ? 1U : 0U);
+    if (!hasNonZero) {
+        IOLog("(FakeIrisXE) [V139] ❌ RSA scratch source is all zeros\n");
+        return false;
+    }
     
     for (uint32_t i = 0; i < 64; i++) {
         fOwner->safeMMIOWrite(UOS_RSA_SCRATCH_BASE_V137 + (i * 4), rsaDw[i]);
+    }
+
+    uint32_t rbFirst0 = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + 0);
+    uint32_t rbFirst1 = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + 4);
+    uint32_t rbLast0 = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + ((UOS_RSA_SCRATCH_COUNT_V137 - 2) * 4));
+    uint32_t rbLast1 = fOwner->safeMMIORead(UOS_RSA_SCRATCH_BASE_V137 + ((UOS_RSA_SCRATCH_COUNT_V137 - 1) * 4));
+    IOLog("(FakeIrisXE) [V139] RSA scratch readback first=0x%08X/0x%08X last=0x%08X/0x%08X\n",
+          rbFirst0, rbFirst1, rbLast0, rbLast1);
+    if (rbFirst0 != firstDw0 || rbFirst1 != firstDw1 || rbLast0 != lastDw0 || rbLast1 != lastDw1) {
+        IOLog("(FakeIrisXE) [V139] ❌ RSA scratch readback mismatch\n");
+        return false;
     }
     
     IOLog("(FakeIrisXE) [V139] ✅ Wrote 64 dwords to UOS_RSA_SCRATCH\n");

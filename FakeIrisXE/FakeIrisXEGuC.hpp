@@ -20,6 +20,7 @@ class FakeIrisXEGuC : public OSObject {
 private:
     FakeIrisXEFramebuffer* fOwner;
     FakeIrisXEGEM* fGuCFwGem;
+    FakeIrisXEGEM* fGuCPublicKeyGem;
     FakeIrisXEGEM* fHuCFwGem;
     FakeIrisXEGEM* fDmcFwGem;
     
@@ -51,7 +52,7 @@ private:
         uint8_t bootrom;
         uint8_t ukernel;
         uint8_t mia;
-        uint8_t appleStatus;
+        uint8_t authStatus;
         bool valid;
         bool success;
         bool failure;
@@ -100,6 +101,7 @@ private:
     bool bootGuCFirmware(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr);
     GuCFirmwareMode selectFirmwareMode() const;
     const char* firmwareModeName(GuCFirmwareMode mode) const;
+    const char* authStatusName(uint8_t authStatus) const;
     void logBootFailureSignature(const char* reason, uint64_t startNs, uint32_t retryIndex,
                                  uint32_t rawStatusOverride = 0xFFFFFFFFU);
     bool prepareAppleWopcm(GuCStage stage, uint32_t desiredSizeValue, uint32_t desiredOffsetValue);
@@ -120,6 +122,19 @@ private:
     void logForceWakeDiagnostics(const char* label) const;
     void logAppleBootAudit(const char* label) const;
     void logAppleRegisterWindow(const char* label) const;
+    bool writeAndPollAppleReg(GuCStage stage, const char* label, uint32_t writeReg,
+                              uint32_t writeValue, uint32_t pollReg, uint32_t pollMask,
+                              uint32_t expectedValue, uint32_t timeoutMs,
+                              uint32_t* outPollValue = nullptr);
+    bool pollAppleRegEquals(GuCStage stage, const char* label, uint32_t reg,
+                            uint32_t expectedValue, uint32_t timeoutMs,
+                            uint32_t* outValue = nullptr);
+    bool safeForceWakeDomain(GuCStage stage, const char* label, uint32_t requestReg,
+                             uint32_t ackReg, uint32_t requestValue,
+                             uint32_t ackMask, uint32_t expectedAckValue);
+    bool acquireAppleWakeDomains(GuCStage stage);
+    bool runApplePreAuthHandshake(GuCStage stage);
+    bool writeAppleBootParams(GuCStage stage);
     void issueGuCTlbInvalidate() const;
     void logDoorbellSnapshot(const char* label) const;
     bool programDoorbellEnable(GuCStage stage);

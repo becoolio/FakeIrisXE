@@ -2074,12 +2074,18 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     // Initialize GuC system with Intel PRM-compliant sequence
     if (!initGuCSystem()) {
-        IOLog("(FakeIrisXE) [V45] ⚠️ GuC init failed, falling back to legacy execlist\n");
+        IOLog("(FakeIrisXE) [V45] ❌ GuC init failed; phase-1 safety mode disables legacy execlist and accelerator bring-up\n");
         fGuCEnabled = false;
+        setProperty("FakeIrisXEGuCFailureTerminal", kOSBooleanTrue);
+        setProperty("IOFBAccelerated", kOSBooleanFalse);
+        setProperty("IOFBAccelerator", kOSBooleanFalse);
+        setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
     } else {
         fGuCEnabled = true;
         IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
     }
+
+    if (fGuCEnabled) {
 
     //enabling interrupts:
     // Create / obtain a workloop (safe)
@@ -2404,6 +2410,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         iter->release();
     }
 
+    } else {
+        IOLog("(FakeIrisXE) [V45] Apple-only phase: skipping IRQ, execlist, ring, GPU execution test, and accelerator link after GuC auth failure\n");
+        displayOnline = true;
+        setProperty("IOFBDisplayOnline", kOSBooleanTrue);
+    }
+
     
     
     
@@ -2498,13 +2510,17 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  WINDOWSERVER INTEGRATION                                    ║\n");
     IOLog("║  Aperture Range:  ✅ CONFIGURED\n");
-    IOLog("║  Client Memory:   ✅ SUPPORTED (Types 0,1,2)\n");
-    IOLog("║  Surface Mapping: ✅ READY\n");
+    IOLog("║  Client Memory:   %s\n", fGuCEnabled ? "✅ SUPPORTED (Types 0,1,2)" : "⚠️ SKIPPED (phase-1 safety mode)");
+    IOLog("║  Surface Mapping: %s\n", fGuCEnabled ? "✅ READY" : "⚠️ SKIPPED (phase-1 safety mode)");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
-    IOLog("[V131] WindowServer should now be able to render to this framebuffer\n");
-    IOLog("[V131] Look for color bars on screen (V81 test pattern)\n");
+    if (fGuCEnabled) {
+        IOLog("[V131] WindowServer should now be able to render to this framebuffer\n");
+        IOLog("[V131] Look for color bars on screen (V81 test pattern)\n");
+    } else {
+        IOLog("[V131] Published framebuffer in Apple-only GuC safety mode; acceleration paths remain disabled after GuC failure\n");
+    }
     IOLog("\n");
     
     closeCurrentStage();

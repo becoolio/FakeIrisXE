@@ -173,6 +173,10 @@ protected:
             return pciDevice ? pciDevice->configRead16(kIOPCIConfigDeviceID) : 0;
         }
 
+        uint8_t getPCIRevisionID() const {
+            return pciDevice ? pciDevice->configRead8(kIOPCIConfigRevisionID) : 0;
+        }
+
         uint32_t getBAR0ConfigLow() const {
             return pciDevice ? pciDevice->configRead32(kIOPCIConfigBaseAddress0) : 0;
         }
