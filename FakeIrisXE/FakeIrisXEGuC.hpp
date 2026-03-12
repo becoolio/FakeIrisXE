@@ -81,6 +81,7 @@ private:
     GuCStage fLastReportedStage;
     GuCFirmwareMode fFirmwareMode;
     bool fApplePinnedAccessActive;
+    AppleRegisterDomain fApplePinnedDomain;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -159,7 +160,7 @@ private:
     void consumerCoherencyBarrier(const char* reason);
     void logLinuxBaselineCorrelation(bool bootSuccess);
 
-    // V52.1: ForceWake helpers (matching Apple's SafeForceWake)
+    // V52.1: ForceWake helpers
     bool acquireForceWake();
     void releaseForceWake();
     

@@ -138,11 +138,12 @@ protected:
     
     
      public:
-    
-    
-      // Safe MMIO access methods
-    uint32_t safeMMIORead(uint32_t offset);
-    void safeMMIOWrite(uint32_t offset, uint32_t value);
+
+        uint32_t safeMMIORead(uint32_t offset);
+        void safeMMIOWrite(uint32_t offset, uint32_t value);
+        uint32_t safeReadRegister32(uint32_t offset);
+        void safeWriteRegister32(uint32_t offset, uint32_t value);
+        void initializeForceWakeSystem(void);
 
         uint16_t getPCIVendorID() const {
             return pciDevice ? pciDevice->configRead16(kIOPCIConfigVendorID) : 0;
@@ -171,6 +172,11 @@ protected:
         uint64_t getMMIOMapLength() const {
             return mmioMap ? mmioMap->getLength() : 0;
         }
+
+        volatile UInt8* getMMIOBase() const {
+            return mmioBase;
+        }
+
 
         bool isMMIOOffsetValid(uint32_t offset) const {
             return mmioMap && mmioMap->getLength() >= sizeof(uint32_t) &&

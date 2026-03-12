@@ -341,4 +341,4 @@ dependencies: \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEBacklight.hpp \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/i915_reg.h \
   /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEGuCTGLPublicKey.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/SafeRegisterAccess.hpp
+  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/AppleSafeRegisterAccess.hpp

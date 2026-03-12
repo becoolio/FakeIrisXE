@@ -9,8 +9,8 @@
 #include "FakeIrisXEGuC.hpp"
 #include "i915_reg.h"
 #include "FakeIrisXEGuCTGLPublicKey.hpp"
+#include "AppleSafeRegisterAccess.hpp"
 #include <libkern/c++/OSBoolean.h>
-#include "SafeRegisterAccess.hpp"
 
 extern "C" void OSSynchronizeIO(void);
 
@@ -672,6 +672,7 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
     obj->fLastReportedStage = kGuCStageIdle;
     obj->fFirmwareMode = kGuCFirmwareModeAppleOnly;
     obj->fApplePinnedAccessActive = false;
+    obj->fApplePinnedDomain = kAppleRegisterDomainNone;
     obj->fGuCPublicKeyGem = nullptr;
     return obj;
 }
@@ -804,8 +805,8 @@ bool FakeIrisXEGuC::writeRegWithReadback(GuCStage stage, const char* regName,
                                          uint32_t reg, uint32_t value,
                                          uint32_t* outReadback)
 {
-    uint32_t readback = 0;
-    safeWrite32Apple(reg, value, regName, &readback);
+    fOwner->safeWriteRegister32(reg, value);
+    uint32_t readback = fOwner->safeReadRegister32(reg);
 
     if (outReadback) {
         *outReadback = readback;
@@ -942,65 +943,62 @@ bool FakeIrisXEGuC::beginAppleRegisterAccess(AppleRegisterDomain domain, const c
         *outAcquiredSession = false;
     }
 
-    if (!fOwner || domain == kAppleRegisterDomainNone || fApplePinnedAccessActive) {
+    if (!fOwner || domain == kAppleRegisterDomainNone) {
         return true;
     }
 
-    if (!acquireForceWake()) {
-        IOLog("(FakeIrisXE) [GuC][AppleAccess] acquire failed label=%s domain=%s reason=mt-forcewake\n",
-              label ? label : "unknown",
-              appleRegisterDomainName(domain));
+    if (fApplePinnedAccessActive) {
+        if (domain == fApplePinnedDomain || domain == kAppleRegisterDomainNone) {
+            return true;
+        }
+        IOLog("(FakeIrisXE) [GuC][AppleAccess] nested domain mismatch requested=%s active=%s label=%s\n",
+              appleRegisterDomainName(domain),
+              appleRegisterDomainName(fApplePinnedDomain),
+              label ? label : "unknown");
         return false;
     }
 
-    bool domainOk = true;
+    uint32_t accessDomain = AppleSafeRegisterAccess::kDomainGlobal;
     switch (domain) {
         case kAppleRegisterDomainGlobal:
-            domainOk = safeForceWakeDomain(kGuCStageForceWake,
-                                           "APPLE_ACCESS_GLOBAL",
-                                           FORCEWAKE_REQ,
-                                           FORCEWAKE_ACK,
-                                           APPLE_TGL_FORCEWAKE_GLOBAL_ENABLE_V176,
-                                           APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176,
-                                           APPLE_TGL_FORCEWAKE_GLOBAL_ACK_MASK_V176);
+            accessDomain = AppleSafeRegisterAccess::kDomainGlobal;
             break;
         case kAppleRegisterDomainRender:
-            domainOk = safeForceWakeDomain(kGuCStageForceWake,
-                                           "APPLE_ACCESS_RENDER",
-                                           GEN11_FORCEWAKE_RENDER,
-                                           APPLE_TGL_FORCEWAKE_RENDER_ACK_V176,
-                                           APPLE_TGL_FORCEWAKE_RENDER_ENABLE_V176,
-                                           APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176,
-                                           APPLE_TGL_FORCEWAKE_RENDER_ACK_MASK_V176);
+            accessDomain = AppleSafeRegisterAccess::kDomainRender;
             break;
         case kAppleRegisterDomainMedia:
-            domainOk = safeForceWakeDomain(kGuCStageForceWake,
-                                           "APPLE_ACCESS_MEDIA_VDBOX0",
-                                           GEN11_FORCEWAKE_MEDIA_VDBOX0,
-                                           GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176) &&
-                       safeForceWakeDomain(kGuCStageForceWake,
-                                           "APPLE_ACCESS_MEDIA_VEBOX0",
-                                           GEN11_FORCEWAKE_MEDIA_VEBOX0,
-                                           GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ENABLE_V176,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176,
-                                           APPLE_TGL_FORCEWAKE_MEDIA_ACK_MASK_V176);
+            accessDomain = AppleSafeRegisterAccess::kDomainMediaVdbox0;
             break;
         case kAppleRegisterDomainNone:
+        default:
+            accessDomain = AppleSafeRegisterAccess::kDomainGlobal;
             break;
     }
 
-    if (!domainOk) {
-        IOLog("(FakeIrisXE) [GuC][AppleAccess] acquire failed label=%s domain=%s reason=domain-wake\n",
+    const uint32_t mmioLength = static_cast<uint32_t>(fOwner->getMMIOMapLength());
+    volatile UInt8* mmioBase = fOwner->getMMIOBase();
+    if (!AppleSafeRegisterAccess::beginSession(mmioBase, mmioLength, accessDomain, label)) {
+        IOLog("(FakeIrisXE) [GuC][AppleAccess] acquire failed label=%s domain=%s reason=session\n",
               label ? label : "unknown",
               appleRegisterDomainName(domain));
-        releaseForceWake();
         return false;
     }
 
+    if (domain == kAppleRegisterDomainMedia) {
+        if (!AppleSafeRegisterAccess::beginSession(mmioBase,
+                                                   mmioLength,
+                                                   AppleSafeRegisterAccess::kDomainMediaVebox0,
+                                                   "MEDIA_VEBOX0")) {
+            AppleSafeRegisterAccess::endSession(mmioBase, mmioLength, accessDomain, label);
+            IOLog("(FakeIrisXE) [GuC][AppleAccess] acquire failed label=%s domain=%s reason=vebox-session\n",
+                  label ? label : "unknown",
+                  appleRegisterDomainName(domain));
+            return false;
+        }
+    }
+
+    fApplePinnedAccessActive = true;
+    fApplePinnedDomain = domain;
     if (outAcquiredSession) {
         *outAcquiredSession = true;
     }
@@ -1009,9 +1007,38 @@ bool FakeIrisXEGuC::beginAppleRegisterAccess(AppleRegisterDomain domain, const c
 
 void FakeIrisXEGuC::endAppleRegisterAccess(bool acquiredSession)
 {
-    if (acquiredSession && !fApplePinnedAccessActive) {
-        releaseForceWake();
+    if (!acquiredSession || !fOwner || !fApplePinnedAccessActive) {
+        return;
     }
+
+    const uint32_t mmioLength = static_cast<uint32_t>(fOwner->getMMIOMapLength());
+    volatile UInt8* mmioBase = fOwner->getMMIOBase();
+    switch (fApplePinnedDomain) {
+        case kAppleRegisterDomainGlobal:
+            AppleSafeRegisterAccess::endSession(mmioBase, mmioLength,
+                                                AppleSafeRegisterAccess::kDomainGlobal,
+                                                "AppleAccessEndGlobal");
+            break;
+        case kAppleRegisterDomainRender:
+            AppleSafeRegisterAccess::endSession(mmioBase, mmioLength,
+                                                AppleSafeRegisterAccess::kDomainRender,
+                                                "AppleAccessEndRender");
+            break;
+        case kAppleRegisterDomainMedia:
+            AppleSafeRegisterAccess::endSession(mmioBase, mmioLength,
+                                                AppleSafeRegisterAccess::kDomainMediaVdbox0,
+                                                "AppleAccessEndMediaVdbox0");
+            AppleSafeRegisterAccess::endSession(mmioBase, mmioLength,
+                                                AppleSafeRegisterAccess::kDomainMediaVebox0,
+                                                "AppleAccessEndMediaVebox0");
+            break;
+        case kAppleRegisterDomainNone:
+        default:
+            break;
+    }
+
+    fApplePinnedAccessActive = false;
+    fApplePinnedDomain = kAppleRegisterDomainNone;
 }
 
 uint32_t FakeIrisXEGuC::safeRead32Apple(uint32_t offset, const char* label, bool* outOk)
@@ -1025,7 +1052,7 @@ uint32_t FakeIrisXEGuC::safeRead32Apple(uint32_t offset, const char* label, bool
         return 0xFFFFFFFFU;
     }
 
-    uint32_t value = fOwner->safeMMIORead(offset);
+    uint32_t value = fOwner->safeReadRegister32(offset);
     endAppleRegisterAccess(acquiredSession);
 
     if (outOk) {
@@ -1046,8 +1073,8 @@ bool FakeIrisXEGuC::safeWrite32Apple(uint32_t offset, uint32_t value, const char
         return false;
     }
 
-    fOwner->safeMMIOWrite(offset, value);
-    uint32_t readback = fOwner->safeMMIORead(offset);
+    fOwner->safeWriteRegister32(offset, value);
+    uint32_t readback = fOwner->safeReadRegister32(offset);
     endAppleRegisterAccess(acquiredSession);
 
     if (outReadback) {
@@ -1063,7 +1090,7 @@ void FakeIrisXEGuC::logForceWakeDiagnostics(const char* label) const
     }
 
     auto readAudit = [&](uint32_t reg) -> uint32_t {
-        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeMMIORead(reg) : 0xFFFFFFFFU;
+        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeReadRegister32(reg) : 0xFFFFFFFFU;
     };
 
     const uint32_t gtPmReg = selectGtPmConfigReg();
@@ -1132,7 +1159,7 @@ void FakeIrisXEGuC::logAppleBootAudit(const char* label) const
 
     for (size_t i = 0; i < sizeof(regs) / sizeof(regs[0]); ++i) {
         const bool mapped = fOwner->isMMIOOffsetValid(regs[i].reg);
-        const uint32_t value = mapped ? fOwner->safeMMIORead(regs[i].reg) : 0xFFFFFFFFU;
+        const uint32_t value = mapped ? fOwner->safeReadRegister32(regs[i].reg) : 0xFFFFFFFFU;
         IOLog("(FakeIrisXE) [GuC][Audit] %s %s(0x%05X) mapped=%u value=0x%08X\n",
               auditLabel,
               regs[i].name,
@@ -1149,7 +1176,7 @@ void FakeIrisXEGuC::logAppleRegisterWindow(const char* label) const
     }
 
     auto readReg = [&](uint32_t reg) -> uint32_t {
-        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeMMIORead(reg) : 0xFFFFFFFFU;
+        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeReadRegister32(reg) : 0xFFFFFFFFU;
     };
 
     const char* snapshotLabel = label ? label : "snapshot";
@@ -1297,15 +1324,30 @@ bool FakeIrisXEGuC::writeAndPollAppleReg(GuCStage stage, const char* label, uint
                                          uint32_t pollMask, uint32_t expectedValue,
                                          uint32_t timeoutMs, uint32_t* outPollValue)
 {
+    AppleRegisterDomain writeDomain = determinePowerDomainForOffset(writeReg);
+    AppleRegisterDomain pollDomain = determinePowerDomainForOffset(pollReg);
+    bool acquiredSession = false;
+
+    if (writeDomain == pollDomain && writeDomain != kAppleRegisterDomainNone) {
+        if (!beginAppleRegisterAccess(writeDomain, label, &acquiredSession)) {
+            if (outPollValue) {
+                *outPollValue = 0xFFFFFFFFU;
+            }
+            IOLog("(FakeIrisXE) [GuC][Apple] %s failed to pin access domain=%s\n",
+                  label,
+                  appleRegisterDomainName(writeDomain));
+            return false;
+        }
+    }
+
     uint32_t writeReadback = 0;
-    safeWrite32Apple(writeReg, writeValue, label, &writeReadback);
-    IOLog("(FakeIrisXE) [GuC][RW] stage=%u %s(0x%04X) write=0x%08X read=0x%08X\n",
-          (uint32_t)stage, label, writeReg, writeValue, writeReadback);
+    writeRegWithReadback(stage, label, writeReg, writeValue, &writeReadback);
 
     uint32_t pollValue = 0xFFFFFFFFU;
     const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
     for (uint32_t poll = 0; poll < maxPolls; ++poll) {
-        pollValue = safeRead32Apple(pollReg, label, 0);
+        pollValue = acquiredSession ? fOwner->safeReadRegister32(pollReg)
+                                    : safeRead32Apple(pollReg, label, nullptr);
         if ((pollValue & pollMask) == expectedValue) {
             if (outPollValue) {
                 *outPollValue = pollValue;
@@ -1318,6 +1360,7 @@ bool FakeIrisXEGuC::writeAndPollAppleReg(GuCStage stage, const char* label, uint
                   expectedValue,
                   pollValue,
                   poll + 1U);
+            endAppleRegisterAccess(acquiredSession);
             return true;
         }
         IOSleep(1);
@@ -1334,6 +1377,7 @@ bool FakeIrisXEGuC::writeAndPollAppleReg(GuCStage stage, const char* label, uint
           expectedValue,
           pollValue,
           timeoutMs);
+    endAppleRegisterAccess(acquiredSession);
     return false;
 }
 
@@ -1341,10 +1385,24 @@ bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32
                                        uint32_t expectedValue, uint32_t timeoutMs,
                                        uint32_t* outValue)
 {
+    (void)stage;
+    AppleRegisterDomain domain = determinePowerDomainForOffset(reg);
+    bool acquiredSession = false;
+    if (domain != kAppleRegisterDomainNone && !beginAppleRegisterAccess(domain, label, &acquiredSession)) {
+        if (outValue) {
+            *outValue = 0xFFFFFFFFU;
+        }
+        IOLog("(FakeIrisXE) [GuC][Apple] %s failed to pin access domain=%s\n",
+              label,
+              appleRegisterDomainName(domain));
+        return false;
+    }
+
     uint32_t value = 0xFFFFFFFFU;
     const uint32_t maxPolls = timeoutMs ? timeoutMs : 1U;
     for (uint32_t poll = 0; poll < maxPolls; ++poll) {
-        value = safeRead32Apple(reg, label, 0);
+        value = acquiredSession ? fOwner->safeReadRegister32(reg)
+                                : safeRead32Apple(reg, label, nullptr);
         if (value == expectedValue) {
             if (outValue) {
                 *outValue = value;
@@ -1355,6 +1413,7 @@ bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32
                   expectedValue,
                   value,
                   poll + 1U);
+            endAppleRegisterAccess(acquiredSession);
             return true;
         }
         IOSleep(1);
@@ -1369,6 +1428,7 @@ bool FakeIrisXEGuC::pollAppleRegEquals(GuCStage stage, const char* label, uint32
           expectedValue,
           value,
           timeoutMs);
+    endAppleRegisterAccess(acquiredSession);
     return false;
 }
 
@@ -1378,8 +1438,8 @@ bool FakeIrisXEGuC::safeForceWakeDomain(GuCStage stage, const char* label,
                                          uint32_t expectedAckValue)
 {
     if (!fOwner) {
-        IOLog("(FakeIrisXE) [GuC][stage=%u] ERROR: No fOwner for safeForceWakeDomain\n",
-              (uint32_t)stage);
+        IOLog("(FakeIrisXE) [GuC][%s] ERROR: No fOwner for safeForceWakeDomain\n",
+              stageToString(stage));
         return false;
     }
 
@@ -1388,8 +1448,8 @@ bool FakeIrisXEGuC::safeForceWakeDomain(GuCStage stage, const char* label,
     // Use safe register access for the request register write
     fOwner->safeMMIOWrite(requestReg, requestValue);
     requestReadback = fOwner->safeMMIORead(requestReg);
-    IOLog("(FakeIrisXE) [GuC][stage=%u] %s: wrote 0x%08X to 0x%08X (readback 0x%08X)\n",
-          (uint32_t)stage, label, requestValue, requestReg, requestReadback);
+    IOLog("(FakeIrisXE) [GuC][%s] %s: wrote 0x%08X to 0x%08X (readback 0x%08X)\n",
+          stageToString(stage), label, requestValue, requestReg, requestReadback);
 
     uint32_t ackValue = 0;
     for (uint32_t retrigger = 0; retrigger <= APPLE_FORCEWAKE_MAX_RETRIGGERS_V175; ++retrigger) {
@@ -1567,120 +1627,116 @@ bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFre
                   attempt,
                   lastMeValue,
                   lastResetValue);
-        } else {
-            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-reset1 me=0x%08X reset=0x%08X\n",
-                  attempt,
-                  fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
-                  fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+            continue;
+        }
 
-            if (!writeAndPollAppleReg(stage,
-                                      "ME_WAKE_PREAUTH",
-                                      APPLE_TGL_ME_FW_STATUS_V173,
-                                      APPLE_TGL_ME_WAKE_REQ_V173,
-                                      APPLE_TGL_ME_FW_STATUS_V173,
-                                      APPLE_TGL_ME_WAKE_ACK_MASK_V173,
-                                      APPLE_TGL_ME_WAKE_ACK_MASK_V173,
-                                      APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179,
-                                      &pollValue)) {
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-reset1 me=0x%08X reset=0x%08X\n",
+              attempt,
+              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
+              fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+
+        if (!writeAndPollAppleReg(stage,
+                                  "ME_WAKE_PREAUTH",
+                                  APPLE_TGL_ME_FW_STATUS_V173,
+                                  APPLE_TGL_ME_WAKE_REQ_V173,
+                                  APPLE_TGL_ME_FW_STATUS_V173,
+                                  APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                                  APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                                  APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179,
+                                  &pollValue)) {
             lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
             lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
             IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u wake-fail me=0x%08X reset=0x%08X\n",
                   attempt,
                   lastMeValue,
                   lastResetValue);
-            
-            // Additional diagnostic logging for ME wake failure
-            IOLog("(FakeIrisXE) [GuC][Apple] ME wake diagnostics: 0xC0F4 write=0x%08X, expected ack mask=0x%08X, timeout=%ums\n",
+
+            uint32_t meWakeVals[5] = {0, 0, 0, 0, 0};
+            for (int i = 0; i < 5; ++i) {
+                meWakeVals[i] = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+                IODelay(1000);
+            }
+            IOLog("(FakeIrisXE) [GuC][Apple] ME wake diagnostics write=0x%08X ackMask=0x%08X timeout=%ums samples=[0x%08X 0x%08X 0x%08X 0x%08X 0x%08X]\n",
                   APPLE_TGL_ME_WAKE_REQ_V173,
                   APPLE_TGL_ME_WAKE_ACK_MASK_V173,
-                  APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179);
-                  
-            // Read the register multiple times to see if it's changing
-            uint32_t meWakeVals[5];
-            for (int i = 0; i < 5; i++) {
-                meWakeVals[i] = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
-                IODelay(1000); // 1ms between reads
-            }
-            IOLog("(FakeIrisXE) [GuC][Apple] ME wake register 0xC0F4 values over time: ");
-            for (int i = 0; i < 5; i++) {
-                IOLog("0x%08X ", meWakeVals[i]);
-            }
-            IOLog("\n");
-        } else {
-            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-wake me=0x%08X reset=0x%08X\n",
+                  APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179,
+                  meWakeVals[0], meWakeVals[1], meWakeVals[2], meWakeVals[3], meWakeVals[4]);
+            continue;
+        }
+
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-wake me=0x%08X reset=0x%08X\n",
+              attempt,
+              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
+              fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+
+        if (!writeAndPollAppleReg(stage,
+                                  "GFX_RESET_PREAUTH_2",
+                                  APPLE_TGL_GUC_RESET_CTRL_V173,
+                                  APPLE_TGL_GUC_RESET_BIT_V173,
+                                  APPLE_TGL_GUC_RESET_CTRL_V173,
+                                  APPLE_TGL_GUC_RESET_BIT_V173,
+                                  0,
+                                  APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177,
+                                  &pollValue)) {
+            lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+            lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
+            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u reset2-fail me=0x%08X reset=0x%08X\n",
+                  attempt,
+                  lastMeValue,
+                  lastResetValue);
+            continue;
+        }
+
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-reset2 me=0x%08X reset=0x%08X\n",
+              attempt,
+              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
+              fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
+
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u before-hash-request me=0x%08X\n",
+              attempt,
+              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173));
+
+        if (!writeAndPollAppleReg(stage,
+                                  "ME_HASH_REQUEST",
+                                  APPLE_TGL_ME_FW_STATUS_V173,
+                                  0,
+                                  APPLE_TGL_ME_FW_STATUS_V173,
+                                  APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                                  APPLE_TGL_ME_WAKE_ACK_MASK_V173,
+                                  APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177,
+                                  &pollValue)) {
+            lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+            lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
+            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u hash-request-fail me=0x%08X reset=0x%08X\n",
+                  attempt,
+                  lastMeValue,
+                  lastResetValue);
+            continue;
+        }
+
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u before-hash-ready me=0x%08X\n",
+              attempt,
+              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173));
+
+        if (pollAppleRegEquals(stage,
+                               "ME_HASH_READY",
+                               APPLE_TGL_ME_FW_STATUS_V173,
+                               APPLE_TGL_ME_HASH_READY_V173,
+                               APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179,
+                               &pollValue)) {
+            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth handshake complete attempts=%u me_c0f4=0x%08X reset_941c=0x%08X\n",
                   attempt,
                   fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
                   fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
-
-                if (!writeAndPollAppleReg(stage,
-                                          "GFX_RESET_PREAUTH_2",
-                                          APPLE_TGL_GUC_RESET_CTRL_V173,
-                                          APPLE_TGL_GUC_RESET_BIT_V173,
-                                          APPLE_TGL_GUC_RESET_CTRL_V173,
-                                          APPLE_TGL_GUC_RESET_BIT_V173,
-                                          0,
-                                          APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177,
-                                          &pollValue)) {
-                    lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
-                    lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
-                    IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u reset2-fail me=0x%08X reset=0x%08X\n",
-                          attempt,
-                          lastMeValue,
-                          lastResetValue);
-                } else {
-                    IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u after-reset2 me=0x%08X reset=0x%08X\n",
-                          attempt,
-                          fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
-                          fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
-
-                    IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u before-hash-request me=0x%08X\n",
-                          attempt,
-                          fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173));
-
-                    if (!writeAndPollAppleReg(stage,
-                                              "ME_HASH_REQUEST",
-                                              APPLE_TGL_ME_FW_STATUS_V173,
-                                              0,
-                                              APPLE_TGL_ME_FW_STATUS_V173,
-                                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
-                                              APPLE_TGL_ME_WAKE_ACK_MASK_V173,
-                                              APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177,
-                                              &pollValue)) {
-                        lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
-                        lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
-                        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u hash-request-fail me=0x%08X reset=0x%08X\n",
-                              attempt,
-                              lastMeValue,
-                              lastResetValue);
-                    } else {
-                        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u before-hash-ready me=0x%08X\n",
-                              attempt,
-                              fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173));
-
-                        if (pollAppleRegEquals(stage,
-                                               "ME_HASH_READY",
-                                               APPLE_TGL_ME_FW_STATUS_V173,
-                                               APPLE_TGL_ME_HASH_READY_V173,
-                                               APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179,
-                                               &pollValue)) {
-                            IOLog("(FakeIrisXE) [GuC][Apple] pre-auth handshake complete attempts=%u me_c0f4=0x%08X reset_941c=0x%08X\n",
-                                  attempt,
-                                  fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173),
-                                  fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173));
-                            return true;
-                        }
-
-                        lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
-                        lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
-                        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u hash-ready-fail me=0x%08X reset=0x%08X\n",
-                              attempt,
-                              lastMeValue,
-                              lastResetValue);
-                    }
-                }
-            }
+            return true;
         }
 
+        lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+        lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
+        IOLog("(FakeIrisXE) [GuC][Apple] pre-auth attempt=%u hash-ready-fail me=0x%08X reset=0x%08X\n",
+              attempt,
+              lastMeValue,
+              lastResetValue);
     }
 
     IOLog("(FakeIrisXE) [GuC][Apple] pre-auth handshake exhausted attempts=%u last_me=0x%08X last_reset=0x%08X\n",
@@ -2437,7 +2493,6 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         logAppleRegisterWindow("apple-fail-snapshot");
         logForceWakeDiagnostics("apple-fail");
         logAppleBootAudit("apple-fail");
-        fApplePinnedAccessActive = false;
         if (freqOverrideArmed) {
             if (!changeAppleLoadFrequency("RESTORE_LOAD_FREQ", savedFreqToken)) {
                 IOLog("(FakeIrisXE) [GuC][Apple] restore frequency warning token=0x%08X after failure\n",
@@ -2458,7 +2513,6 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return failAppleBoot("forcewake");
     }
     forceWakeHeld = true;
-    fApplePinnedAccessActive = true;
     logForceWakeDiagnostics("apple-boot-forcewake");
     logAppleBootAudit("apple-pre-shim");
 
@@ -2587,7 +2641,6 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         freqOverrideArmed = false;
     }
 
-    fApplePinnedAccessActive = false;
     releaseForceWake();
     forceWakeHeld = false;
     return true;
