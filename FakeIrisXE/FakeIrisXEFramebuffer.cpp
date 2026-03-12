@@ -175,6 +175,8 @@ static void setDataProperty32(IORegistryEntry *entry, const char *key, uint32_t 
     data->release();
 }
 
+static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent, uint32_t raw);
+
 static void publishNormalizedMemoryModel(FakeIrisXEFramebuffer *fb,
                                          IOPCIDevice *pci,
                                          uint64_t reportedBytes)
@@ -710,6 +712,9 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
         IOLog("❌ initPowerManagement(): PCI device not open - aborting\n");
         return false;
     }
+    
+    // Initialize backlight table from Apple AGDC defaults.
+    initBacklightTable();
     
     // --- PCI Power Management (Force D0) ---
     uint16_t pmcsr = pciDevice->configRead16(0x84);
@@ -1742,6 +1747,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V167: Additional backlight
     setProperty("AAPL01-internal-panel", kOSBooleanTrue);
     setProperty("AAPL00,PanelPowerOn", kOSBooleanTrue);
+    publishBrightnessProperties(this, 100, 0xFFFEu);
 
     
     //optional
@@ -4584,6 +4590,153 @@ static inline uint32_t clamp_u32(uint32_t v, uint32_t lo, uint32_t hi) {
     return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
+static const uint32_t kAppleBacklightPercentMin = 0;
+static const uint32_t kAppleBacklightPercentMax = 100;
+static const uint32_t kAppleBacklightRawMax = 0xFFFEu;
+
+static OSDictionary* makeBrightnessParameter(uint32_t value, uint32_t min, uint32_t max)
+{
+    OSDictionary* dict = OSDictionary::withCapacity(3);
+    if (!dict) {
+        return nullptr;
+    }
+
+    OSNumber* valueNum = OSNumber::withNumber(value, 32);
+    OSNumber* minNum = OSNumber::withNumber(min, 32);
+    OSNumber* maxNum = OSNumber::withNumber(max, 32);
+    if (!valueNum || !minNum || !maxNum) {
+        if (valueNum) valueNum->release();
+        if (minNum) minNum->release();
+        if (maxNum) maxNum->release();
+        dict->release();
+        return nullptr;
+    }
+
+    dict->setObject("value", valueNum);
+    dict->setObject("min", minNum);
+    dict->setObject("max", maxNum);
+    valueNum->release();
+    minNum->release();
+    maxNum->release();
+    return dict;
+}
+
+static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent, uint32_t raw)
+{
+    if (!entry) {
+        return;
+    }
+
+    percent = clamp_u32(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
+    raw = clamp_u32(raw, 0, kAppleBacklightRawMax);
+
+    setNumberProperty(entry, "brightness-level", percent, 32);
+    setNumberProperty(entry, "brightness-min", kAppleBacklightPercentMin, 32);
+    setNumberProperty(entry, "brightness-max", kAppleBacklightPercentMax, 32);
+    setNumberProperty(entry, "brightness-default", 75, 32);
+    setNumberProperty(entry, "ApplePanelRawBrightness", raw, 32);
+    setNumberProperty(entry, "AppleMaxBrightness", kAppleBacklightRawMax, 32);
+    setNumberProperty(entry, "AppleNumBrightLevels", kAppleBacklightPercentMax, 32);
+    setNumberProperty(entry, "AppleBacklightAtBoot", raw, 32);
+    setNumberProperty(entry, "IOBacklightHandlerID", 436849163854938112ULL, 64);
+    entry->setProperty("AppleRestoreBacklight", kOSBooleanTrue);
+
+    OSDictionary* params = OSDictionary::withCapacity(6);
+    if (!params) {
+        return;
+    }
+
+    OSDictionary* brightness = makeBrightnessParameter(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
+    OSDictionary* linear = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
+    OSDictionary* usableLinear = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
+    OSDictionary* fade = makeBrightnessParameter(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
+    OSDictionary* power = makeBrightnessParameter(2, 0, 2);
+    OSDictionary* commit = OSDictionary::withCapacity(1);
+
+    if (brightness) {
+        params->setObject("brightness", brightness);
+        brightness->release();
+    }
+    if (linear) {
+        params->setObject("linear-brightness", linear);
+        linear->release();
+    }
+    if (usableLinear) {
+        params->setObject("usable-linear-brightness", usableLinear);
+        usableLinear->release();
+    }
+    if (fade) {
+        params->setObject("brightness-fade", fade);
+        fade->release();
+    }
+    if (power) {
+        params->setObject("power-state", power);
+        power->release();
+    }
+    if (commit) {
+        OSNumber* reg = OSNumber::withNumber(static_cast<uint64_t>(0), 32);
+        if (reg) {
+            commit->setObject("reg", reg);
+            reg->release();
+        }
+        params->setObject("commit", commit);
+        commit->release();
+    }
+
+    entry->setProperty("IODisplayParameters", params);
+    params->release();
+}
+
+static bool extractBrightnessPercent(OSObject* object,
+                                     uint32_t defaultMax,
+                                     bool treatAsRaw,
+                                     uint32_t* outPercent)
+{
+    if (!object || !outPercent) {
+        return false;
+    }
+
+    uint32_t value = 0;
+    uint32_t minValue = 0;
+    uint32_t maxValue = defaultMax;
+
+    if (OSNumber* number = OSDynamicCast(OSNumber, object)) {
+        value = number->unsigned32BitValue();
+        if (treatAsRaw && value > kAppleBacklightPercentMax) {
+            *outPercent = clamp_u32(static_cast<uint32_t>((static_cast<uint64_t>(value) * 100u) / kAppleBacklightRawMax), 0, 100);
+        } else {
+            *outPercent = clamp_u32(value, 0, 100);
+        }
+        return true;
+    }
+
+    OSDictionary* dict = OSDynamicCast(OSDictionary, object);
+    if (!dict) {
+        return false;
+    }
+
+    if (OSNumber* n = OSDynamicCast(OSNumber, dict->getObject("value"))) {
+        value = n->unsigned32BitValue();
+    } else {
+        return false;
+    }
+    if (OSNumber* n = OSDynamicCast(OSNumber, dict->getObject("min"))) {
+        minValue = n->unsigned32BitValue();
+    }
+    if (OSNumber* n = OSDynamicCast(OSNumber, dict->getObject("max"))) {
+        maxValue = n->unsigned32BitValue();
+    }
+
+    if (maxValue <= minValue) {
+        maxValue = defaultMax;
+        minValue = 0;
+    }
+
+    value = clamp_u32(value, minValue, maxValue);
+    *outPercent = static_cast<uint32_t>((static_cast<uint64_t>(value - minValue) * 100u) / (maxValue - minValue));
+    return true;
+}
+
 // Initialize backlight PWM hardware (call once from enableController)
 void FakeIrisXEFramebuffer::initBacklightHardware()
 {
@@ -4597,6 +4750,7 @@ void FakeIrisXEFramebuffer::initBacklightHardware()
 
     // Set PWM period (low 16 bits typically)
     wr(BXT_BLC_PWM_FREQ1, period);
+    fPwmMax = period & 0xFFFFu;
 
     // Set initial duty (low 16 bits)
     wr(BXT_BLC_PWM_DUTY1, duty50);
@@ -4609,56 +4763,144 @@ void FakeIrisXEFramebuffer::initBacklightHardware()
     IOLog("[FB] initBacklightHardware: period=0x%04x duty=0x%04x CTL=0x%08x\n", period & 0xFFFFu, duty50, ctl);
 }
 
-// Set brightness 0..100
-bool FakeIrisXEFramebuffer::setBacklightPercent(uint32_t percent)
+// Initialize backlight table for interpolation
+void FakeIrisXEFramebuffer::initBacklightTable()
 {
-    auto rd = [&](uint32_t off) { return safeMMIORead(off); };
-    auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
-
-
-    percent = clamp_u32(percent, 0, 100);
-
-    // Read period / max from FREQ1 low 16 bits if available
-    uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
-    uint32_t pwmMax = freq & 0xFFFFu;
-    if (pwmMax == 0) {
-        // fallback to a sane default (match initBacklightHardware)
-        pwmMax = 0xFFFFu;
+    // Seed a default curve from the AGDCBacklightControl Default panel data
+    // in the DTK rootfs: 0x0000, 0x0740, 0x0AF7, 0xFFFE.
+    // Apple synthesizes a full LUT from these anchors; we use a simple
+    // piecewise interpolation across 0%, 25%, 75%, and 100%.
+    fBacklightTableSize = 11;
+    for (int i = 0; i < fBacklightTableSize; i++) {
+        fBacklightLevelIn[i] = i * 10;
     }
 
-    // compute duty (0..pwmMax)
-    uint32_t duty = (uint64_t)percent * pwmMax / 100u; // 64-bit to avoid overflow
-    duty &= 0xFFFFu;
+    static const uint32_t kAnchorPct[4] = { 0, 25, 75, 100 };
+    static const uint32_t kAnchorValue[4] = { 0x0000u, 0x0740u, 0x0AF7u, 0xFFFEu };
 
-    // Write duty (some implementations place duty in low 16 bits)
-    // Some HW expects combined value (period<<16 | duty) — we only write duty because your snippet wrote 0x7FFF directly.
-    wr(BXT_BLC_PWM_DUTY1, duty);
+    for (int i = 0; i < fBacklightTableSize; i++) {
+        uint32_t pct = static_cast<uint32_t>(fBacklightLevelIn[i]);
+        uint32_t segment = 0;
+        while (segment < 3 && pct > kAnchorPct[segment + 1]) {
+            ++segment;
+        }
 
-    // Ensure PWM enabled
-    uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
-    if (!(ctl & (1u << 31))) {
-        ctl |= (1u << 31);
-        wr(BXT_BLC_PWM_CTL1, ctl);
+        uint32_t loPct = kAnchorPct[segment];
+        uint32_t hiPct = kAnchorPct[segment + 1];
+        uint32_t loVal = kAnchorValue[segment];
+        uint32_t hiVal = kAnchorValue[segment + 1];
+        uint32_t interp = loVal;
+        if (hiPct > loPct) {
+            interp = loVal + static_cast<uint32_t>((static_cast<uint64_t>(hiVal - loVal) * (pct - loPct)) / (hiPct - loPct));
+        }
+        fBacklightLevelOut[i] = static_cast<uint16_t>(interp);
     }
 
-    IOLog("[FB] setBacklightPercent: %u%% -> duty=0x%04x (pwmMax=0x%04x)\n", percent, duty, pwmMax);
-    return true;
+    fHasBacklightTable = true;
+    IOLog("[FB] Backlight table initialized with %d entries\n", fBacklightTableSize);
 }
+
+    // Set brightness 0..100
+    bool FakeIrisXEFramebuffer::setBacklightPercent(uint32_t percent)
+    {
+        auto rd = [&](uint32_t off) { return safeMMIORead(off); };
+        auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
+        
+        
+        percent = clamp_u32(percent, 0, 100);
+        
+        // Read period / max from FREQ1 low 16 bits if available
+        uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
+        uint32_t pwmMax = freq & 0xFFFFu;
+        if (pwmMax == 0) {
+            pwmMax = fPwmMax ? fPwmMax : 0xFFFFu;
+        }
+        fPwmMax = pwmMax;
+        
+        uint32_t duty;
+        uint32_t rawLevel;
+        if (fHasBacklightTable && fBacklightTableSize >= 2) {
+            if (percent == 0) {
+                rawLevel = 0;
+            } else if (percent == 100) {
+                rawLevel = kAppleBacklightRawMax;
+            } else {
+                int index = percent / 10;   // 0..9
+                int nextIndex = index + 1;
+                uint32_t fraction = percent % 10;   // 0..9
+                uint32_t lower = fBacklightLevelOut[index];
+                uint32_t upper = fBacklightLevelOut[nextIndex];
+                rawLevel = lower + static_cast<uint32_t>((static_cast<uint64_t>(upper - lower) * fraction) / 10u);
+            }
+        } else {
+            rawLevel = static_cast<uint32_t>((static_cast<uint64_t>(percent) * kAppleBacklightRawMax) / 100u);
+        }
+
+        duty = static_cast<uint32_t>((static_cast<uint64_t>(rawLevel) * pwmMax) / kAppleBacklightRawMax);
+        if (percent && !duty) {
+            duty = 1;
+        }
+        
+        duty &= 0xFFFFu;   // Ensure we are within 16 bits
+        
+        wr(BXT_BLC_PWM_DUTY1, duty);
+
+        // Ensure PWM enabled
+        uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
+        if (!(ctl & (1u << 31))) {
+            ctl |= (1u << 31);
+            wr(BXT_BLC_PWM_CTL1, ctl);
+        }
+
+        publishBrightnessProperties(this, percent, rawLevel);
+        
+        IOLog("[FB] setBacklightPercent: %u%% -> raw=0x%04x duty=0x%04x (pwmMax=0x%04x)\n",
+              percent, rawLevel, duty, pwmMax);
+        return true;
+    }
 
 // Read current backlight as percent (0..100)
 uint32_t FakeIrisXEFramebuffer::getBacklightPercent()
 {
-    
     auto rd = [&](uint32_t off) { return safeMMIORead(off); };
-    auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
-
     uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
     uint32_t pwmMax = freq & 0xFFFFu;
     if (pwmMax == 0) pwmMax = 0xFFFFu;
     uint32_t duty = rd(BXT_BLC_PWM_DUTY1) & 0xFFFFu;
 
-    uint32_t percent = (uint64_t)duty * 100u / pwmMax;
+    uint32_t percent = static_cast<uint32_t>((static_cast<uint64_t>(duty) * 100u) / pwmMax);
     return clamp_u32(percent, 0, 100);
+}
+
+IOReturn FakeIrisXEFramebuffer::setProperties(OSObject* properties)
+{
+    OSDictionary* dict = OSDynamicCast(OSDictionary, properties);
+    if (!dict) {
+        return super::setProperties(properties);
+    }
+
+    uint32_t percent = 0;
+    if (extractBrightnessPercent(dict->getObject("brightness"), 100, false, &percent) ||
+        extractBrightnessPercent(dict->getObject("linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
+        extractBrightnessPercent(dict->getObject("brightness-fade"), 100, false, &percent)) {
+        return setBacklightPercent(percent) ? kIOReturnSuccess : kIOReturnError;
+    }
+
+    OSDictionary* params = OSDynamicCast(OSDictionary, dict->getObject("IODisplayParameters"));
+    if (params) {
+        if (extractBrightnessPercent(params->getObject("brightness"), 100, false, &percent) ||
+            extractBrightnessPercent(params->getObject("linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
+            extractBrightnessPercent(params->getObject("usable-linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
+            extractBrightnessPercent(params->getObject("brightness-fade"), 100, false, &percent)) {
+            return setBacklightPercent(percent) ? kIOReturnSuccess : kIOReturnError;
+        }
+
+        if (params->getObject("commit")) {
+            return kIOReturnSuccess;
+        }
+    }
+
+    return super::setProperties(properties);
 }
 
 

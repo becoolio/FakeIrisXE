@@ -53,18 +53,14 @@
 			</data>
 			<key>AAPL,HasPanel</key>
 			<true/>
-			<key>AAPL,ig-platform-id</key>
-			<data>
-			AABSig==
-			</data>
 			<key>AAPL,slot-name</key>
 			<string>Internal@0,2,0</string>
 			<key>AAPL00,override-no-connect</key>
 			<data>
-			AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAAB
-			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
-			H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5T
-			EQAKICAgICAgAIY=
+			AP///////wAJ5XQLAAAAAB4fAQSlHxF4Aw1VpCknmicSUFQAAAAB
+			AQEBAQEBAQEBAQEBAQEBW0EAoKBAHmAwIDYANa0QAAAYAAAA/QA8
+			PE5OEQAKICAgICAgAAAA/gBDb2xvciBMQ0QKICAgAAAA/ABCT0Ug
+			Q1EKICAgICAgAM8=
 			</data>
 			<key>AAPL01-int-cmn-overrides</key>
 			<dict>
@@ -86,15 +82,6 @@
 			<integer>1552</integer>
 			<key>IOClass</key>
 			<string>FakeIrisXEFramebuffer</string>
-			<key>IODisplayEDID</key>
-			<data>
-			AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAAB
-			AQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4
-			H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5T
-			EQAKICAgICAgAIY=
-			</data>
-			<key>IODisplayPrefsKey</key>
-			<string>DEL:0x9C7C</string>
 			<key>IOGPUTargetPerformanceLevel</key>
 			<integer>3</integer>
 			<key>IOKitDebug</key>
@@ -137,18 +124,6 @@
 			<string>VGA compatible controller</string>
 			<key>disable-agdc</key>
 			<true/>
-			<key>enable-cdclk-frequency-fix</key>
-			<data>
-			AQAAAA==
-			</data>
-			<key>enable-dbuf-early-optimizer</key>
-			<data>
-			AQAAAA==
-			</data>
-			<key>enable-dvmt-calc-fix</key>
-			<data>
-			AQAAAA==
-			</data>
 			<key>force-online</key>
 			<data>
 			AQAAAA==
@@ -213,7 +188,7 @@
 			<key>IOProviderMergeProperties</key>
 			<dict>
 				<key>DisplayProductID</key>
-				<integer>40178</integer>
+				<integer>40980</integer>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
 				<key>IOClass</key>

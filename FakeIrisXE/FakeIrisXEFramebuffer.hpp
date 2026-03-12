@@ -157,13 +157,15 @@ protected:
                 return;
             }
             *(volatile uint32_t*)(mmioBase + offset) = value;
-                  #ifdef OSMemoryBarrier
-                  OSMemoryBarrier();
-                  #else
-                  __asm__ volatile("mfence" ::: "memory"); // x86 specific
-                  #endif
-
+                   #ifdef OSMemoryBarrier
+                   OSMemoryBarrier();
+                   #else
+                   __asm__ volatile("mfence" ::: "memory"); // x86 specific
+                   #endif
         }
+
+        // Backlight table initialization
+        void initBacklightTable();
 
         uint16_t getPCIVendorID() const {
             return pciDevice ? pciDevice->configRead16(kIOPCIConfigVendorID) : 0;
@@ -202,11 +204,18 @@ protected:
     
     
     
-    bool fNeedFlush = false;   // <-- REQUIRED (you were missing this)
+      bool fNeedFlush = false;   // <-- REQUIRED (you were missing this)
     bool fFlushInProgress = false;
     bool fFlushDeferred = false;
     uint64_t fLastFlushAbsTime = 0;
     static constexpr uint64_t kMinFlushIntervalNs = 16ULL * 1000ULL * 1000ULL;
+
+    // Backlight table derived from Apple AGDC defaults.
+    bool fHasBacklightTable = false;
+    uint16_t fBacklightLevelIn[11] = {};
+    uint16_t fBacklightLevelOut[11] = {};
+    int fBacklightTableSize = 0;
+    uint32_t fPwmMax = 0xFFFFu;
 
     
     IOCommandGate* commandGate;
@@ -249,6 +258,7 @@ protected:
     bool start(IOService* provider) override;
     void stop(IOService* provider) override;
     virtual bool           init(OSDictionary* dict) override;
+    virtual IOReturn       setProperties(OSObject* properties) override;
     bool   setupWorkLoop();
 
 
