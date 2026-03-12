@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V168 - PCI Device IDs + Enhanced AGPM</string>
+	<string>FakeIrisXe V173 - BAR0 Fix + Execlist Ring Audit</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.168</string>
+	<string>1.0.173</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.168</string>
+	<string>1.0.173</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>
@@ -76,10 +76,16 @@
 			</dict>
 			<key>AGXSelectedPowerProfile</key>
 			<string>MacBookPro16,2</string>
+			<key>DisplayHorizontalImageSize</key>
+			<integer>286</integer>
 			<key>DisplayProductID</key>
-			<integer>40178</integer>
+			<integer>41008</integer>
+			<key>DisplayProductName</key>
+			<string>Color LCD</string>
 			<key>DisplayVendorID</key>
 			<integer>1552</integer>
+			<key>DisplayVerticalImageSize</key>
+			<integer>179</integer>
 			<key>IOClass</key>
 			<string>FakeIrisXEFramebuffer</string>
 			<key>IOGPUTargetPerformanceLevel</key>
@@ -122,8 +128,6 @@
 			</data>
 			<key>device_type</key>
 			<string>VGA compatible controller</string>
-			<key>disable-agdc</key>
-			<true/>
 			<key>force-online</key>
 			<data>
 			AQAAAA==
@@ -163,10 +167,16 @@
 			<string>AppleBacklightDisplay</string>
 			<key>IOProviderMergeProperties</key>
 			<dict>
+				<key>DisplayHorizontalImageSize</key>
+				<integer>286</integer>
 				<key>DisplayProductID</key>
-				<integer>40178</integer>
+				<integer>41008</integer>
+				<key>DisplayProductName</key>
+				<string>Color LCD</string>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
+				<key>DisplayVerticalImageSize</key>
+				<integer>179</integer>
 				<key>IODisplayGUID</key>
 				<integer>436849163854938112</integer>
 			</dict>
@@ -187,10 +197,16 @@
 			<string>AppleDisplay</string>
 			<key>IOProviderMergeProperties</key>
 			<dict>
+				<key>DisplayHorizontalImageSize</key>
+				<integer>286</integer>
 				<key>DisplayProductID</key>
-				<integer>40980</integer>
+				<integer>41008</integer>
+				<key>DisplayProductName</key>
+				<string>Color LCD</string>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
+				<key>DisplayVerticalImageSize</key>
+				<integer>179</integer>
 				<key>IOClass</key>
 				<string>AppleBacklightDisplay</string>
 				<key>IODisplayGUID</key>

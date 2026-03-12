@@ -415,6 +415,7 @@ protected:
 
     FakeIrisXEExeclist* getExeclist() const { return fExeclist; }
     FakeIrisXERing* getRcsRing() const { return fRcsRing; }
+    bool isCommandSubmissionReady() const { return fCommandSubmissionReady; }
     FakeIrisXERing* getBltRing() const { return fBltRing; }
     
     
@@ -475,11 +476,14 @@ protected:
     
     bool waitForExeclistEvent(uint32_t timeoutMs);
     void* fSleepToken = (void*)0x12345678; // any unique pointer
-    FakeIrisXERing* fRcsRing;   // render ring
+    FakeIrisXERing* fRcsRing = nullptr;   // render ring
     FakeIrisXERing* fBltRing;   // BLT ring (for 2D operations)
     FakeIrisXEGEM* createTinyBatchGem();
     FakeIrisXERing* createBltRing(size_t bytes);
     bool testGPUExecution();  // V150: GPU execution test
+    bool validateRcsRingState(const char* phase, bool delayedCheck = true);
+    void destroyRcsRingState();
+    void updateExecutionState(bool ready, const char* reason);
 
     
     // GGTT mapping area (aperture)
@@ -662,7 +666,6 @@ protected:
     // RCS Ring + GGTT + BAR0
     // ===========================
     volatile uint32_t* fBar0 = nullptr;       // MMIO BAR0 virtual mapping
-    FakeIrisXERing*    fRingRCS = nullptr;    // Render Command Streamer ring
 
     uint64_t fGGTTBase = 0;                   // Base GGTT physical address
     uint32_t fGTTMMIOOffset = 0;              // from config space
@@ -696,11 +699,13 @@ protected:
     bool completePendingSubmission(uint32_t seq);
     void cleanupAllPendingSubmissions();
 
-    bool setBacklightPercent(uint32_t percent);
+    bool setBacklightPercent(uint32_t percent, const char* source = "direct");
     
     uint32_t getBacklightPercent();
 
     void initBacklightHardware();
+    void applyBacklightPresetForIdentity(uint32_t vendorID, uint32_t productID);
+    void ensureBacklightHardwareState(const char* reason);
 
     FakeIrisXEGEM* createSimpleUserBatch();
     
@@ -764,7 +769,9 @@ private:
     
     // Firmware data storage
      
-      bool fGuCEnabled;
+      bool fGuCEnabled = false;
+      bool fRcsRingValidated = false;
+      bool fCommandSubmissionReady = false;
       
       // GuC manager instance (if you create one)
       class FakeIrisXEGuC* fGuC;

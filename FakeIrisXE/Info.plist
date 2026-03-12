@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.168</string>
+	<string>1.0.173</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.168</string>
+	<string>1.0.173</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V168 - PCI Device IDs + Enhanced AGPM</string>
+	<string>FakeIrisXe V173 - BAR0 Fix + Execlist Ring Audit</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
@@ -86,7 +86,13 @@
 			<key>DisplayVendorID</key>
 			<integer>1552</integer>
 			<key>DisplayProductID</key>
-			<integer>40178</integer>
+			<integer>41008</integer>
+			<key>DisplayProductName</key>
+			<string>Color LCD</string>
+			<key>DisplayHorizontalImageSize</key>
+			<integer>286</integer>
+			<key>DisplayVerticalImageSize</key>
+			<integer>179</integer>
 			<key>AAPL00,override-no-connect</key>
 			<data>AP///////wAJ5XQLAAAAAB4fAQSlHxF4Aw1VpCknmicSUFQAAAABAQEBAQEBAQEBAQEBAQEBW0EAoKBAHmAwIDYANa0QAAAYAAAA/QA8PE5OEQAKICAgICAgAAAA/gBDb2xvciBMQ0QKICAgAAAA/ABCT0UgQ1EKICAgICAgAM8=</data>
 			<key>complete-modeset</key>
@@ -97,8 +103,6 @@
 			<string>MacBookPro16,2</string>
 			<key>IOGPUTargetPerformanceLevel</key>
 			<integer>3</integer>
-			<key>disable-agdc</key>
-			<true/>
 			<key>AAPL01-int-cmn-overrides</key>
 			<dict>
 				<key>CAIL,CAILGfxDisablePowerGating</key>
@@ -143,9 +147,15 @@
 			<key>IOProviderMergeProperties</key>
 			<dict>
 				<key>DisplayProductID</key>
-				<integer>40178</integer>
+				<integer>41008</integer>
+				<key>DisplayProductName</key>
+				<string>Color LCD</string>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
+				<key>DisplayHorizontalImageSize</key>
+				<integer>286</integer>
+				<key>DisplayVerticalImageSize</key>
+				<integer>179</integer>
 				<key>IODisplayGUID</key>
 				<integer>436849163854938112</integer>
 			</dict>
@@ -167,9 +177,15 @@
 			<key>IOProviderMergeProperties</key>
 			<dict>
 				<key>DisplayProductID</key>
-				<integer>40980</integer>
+				<integer>41008</integer>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
+				<key>DisplayProductName</key>
+				<string>Color LCD</string>
+				<key>DisplayHorizontalImageSize</key>
+				<integer>286</integer>
+				<key>DisplayVerticalImageSize</key>
+				<integer>179</integer>
 				<key>IODisplayGUID</key>
 				<integer>436849163854938112</integer>
 				<key>IOClass</key>

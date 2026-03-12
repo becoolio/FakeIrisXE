@@ -21,6 +21,11 @@
 
 OSDefineMetaClassAndStructors(FakeIrisXEExeclist, OSObject);
 
+static const uint32_t kExecRingTailReg  = RCS0_RING_TAIL;
+static const uint32_t kExecRingHeadReg  = RCS0_RING_HEAD;
+static const uint32_t kExecRingStartReg = RCS0_RING_START;
+static const uint32_t kExecRingCtlReg   = RCS0_RING_CTL;
+
 // FACTORY
 FakeIrisXEExeclist* FakeIrisXEExeclist::withOwner(FakeIrisXEFramebuffer* owner)
 {
@@ -84,7 +89,7 @@ uint32_t FakeIrisXEExeclist::mmioRead32(uint32_t off) {
     uint32_t val = *(volatile uint32_t*)((uint8_t*)fOwner->fBar0 + off);
     // V57: Optional verbose logging for critical registers
     #ifdef V57_VERBOSE_MMIO
-    if (off == RING_CTL || off == RING_HEAD || off == RING_TAIL || 
+    if (off == kExecRingCtlReg || off == kExecRingHeadReg || off == kExecRingTailReg || 
         off == RING_EXECLIST_STATUS_LO || off == RING_EXECLIST_STATUS_HI) {
         IOLog("[V57] MMIO READ [0x%04X] = 0x%08X\n", off, val);
     }
@@ -98,7 +103,7 @@ void FakeIrisXEExeclist::mmioWrite32(uint32_t off, uint32_t val) {
     (void)*p; // posted write ordering
     // V57: Optional verbose logging
     #ifdef V57_VERBOSE_MMIO
-    if (off == RING_CTL || off == RING_TAIL || off == RING_EXECLIST_SUBMIT_LO || 
+    if (off == kExecRingCtlReg || off == kExecRingTailReg || off == RING_EXECLIST_SUBMIT_LO || 
         off == RING_EXECLIST_SUBMIT_HI) {
         IOLog("[V57] MMIO WRITE [0x%04X] = 0x%08X\n", off, val);
     }
@@ -112,16 +117,15 @@ void FakeIrisXEExeclist::dumpRingBufferStatus(const char* label) {
     IOLog("[V57] === Ring Buffer Status: %s ===\n", label);
     
     // Read all critical ring registers
-    uint32_t ring_base_lo = mmioRead32(RING_BASE_LO);
-    uint32_t ring_base_hi = mmioRead32(RING_BASE_HI);
-    uint32_t ring_head  = mmioRead32(RING_HEAD);
-    uint32_t ring_tail  = mmioRead32(RING_TAIL);
-    uint32_t ring_ctl   = mmioRead32(RING_CTL);
+    uint32_t ring_start = mmioRead32(kExecRingStartReg);
+    uint32_t ring_head  = mmioRead32(kExecRingHeadReg);
+    uint32_t ring_tail  = mmioRead32(kExecRingTailReg);
+    uint32_t ring_ctl   = mmioRead32(kExecRingCtlReg);
     // V57: Use alternative register names if ACTHD/BBADDR not defined
     uint32_t ring_acthd = mmioRead32(0x2074);  // ACTHD - Active Head
     uint32_t ring_bbaddr = mmioRead32(0x2080); // BBADDR - Batch Buffer Address
     
-    IOLog("[V57] RING_BASE:   0x%08X%08X (GGTT base)\n", ring_base_hi, ring_base_lo);
+    IOLog("[V57] RING_START:  0x%08X (GGTT base)\n", ring_start);
     IOLog("[V57] RING_HEAD:   0x%04X (GPU read position)\n", ring_head & 0xFFFF);
     IOLog("[V57] RING_TAIL:   0x%04X (driver write position)\n", ring_tail & 0xFFFF);
     IOLog("[V57] RING_CTL:    0x%08X (size=%dKB, %s)\n",
@@ -320,12 +324,11 @@ bool FakeIrisXEExeclist::createHwContext()
 
     // 2) Conservative ring disable/reset (do minimal writes)
     IOLog("(FakeIrisXE) [Exec] resetting RCS ring (base/head/tail/ctl)\n");
-    safeWrite(RING_CTL, 0x0);          // disable ring
-    safeWrite(RING_TAIL, 0x0);
-    safeWrite(RING_HEAD, 0x0);
-    safeWrite(RING_BASE_HI, 0x0);
-    safeWrite(RING_BASE_LO, 0x0);
-    (void)safeRead(RING_CTL); // posting read
+    safeWrite(kExecRingCtlReg, 0x0);          // disable ring
+    safeWrite(kExecRingTailReg, 0x0);
+    safeWrite(kExecRingHeadReg, 0x0);
+    safeWrite(kExecRingStartReg, 0x0);
+    (void)safeRead(kExecRingCtlReg); // posting read
     IOSleep(5); // let HW settle
 
     // Avoid massive mmio clearing loops here — prefer clearing via an allocated CSB GEM
@@ -926,7 +929,7 @@ bool FakeIrisXEExeclist::programRcsForContext(
 
     IOLog("✅ programRcsForContext: ELSP descriptor write OK\n");
 
-    mmioWrite32(RING_HEAD, 0);
+    mmioWrite32(kExecRingHeadReg, 0);
 
     
     // --------------------------------------------------
@@ -2237,13 +2240,12 @@ void FakeIrisXEExeclist::dumpRcsRingStatus(const char* label)
 {
     IOLog("[V139] === RCS Ring Status: %s ===\n", label);
     
-    uint32_t ring_head = mmioRead32(RING_HEAD);
-    uint32_t ring_tail = mmioRead32(RING_TAIL);
-    uint32_t ring_ctl = mmioRead32(RING_CTL);
-    uint32_t ring_base_lo = mmioRead32(RING_BASE_LO);
-    uint32_t ring_base_hi = mmioRead32(RING_BASE_HI);
+    uint32_t ring_head = mmioRead32(kExecRingHeadReg);
+    uint32_t ring_tail = mmioRead32(kExecRingTailReg);
+    uint32_t ring_ctl = mmioRead32(kExecRingCtlReg);
+    uint32_t ring_start = mmioRead32(kExecRingStartReg);
     
-    IOLog("[V139] RING_BASE: 0x%08X%08X\n", ring_base_hi, ring_base_lo);
+    IOLog("[V139] RING_START: 0x%08X\n", ring_start);
     IOLog("[V139] RING_HEAD: 0x%04X\n", ring_head & 0xFFFF);
     IOLog("[V139] RING_TAIL: 0x%04X\n", ring_tail & 0xFFFF);
     IOLog("[V139] RING_CTL:  0x%08X (size=%dKB, %s)\n",

@@ -9,7 +9,7 @@ class FakeIrisXEFramebuffer;
 
 class FakeIrisXERing {
 public:
-    FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOffset = 0x2000);
+    FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOffset = 0x2C000);
     ~FakeIrisXERing();
 
     // Allocate CPU-visible ring memory
@@ -17,6 +17,7 @@ public:
 
     // GPU address provided by GGTT mapping
     void attachRingGPUAddress(uint64_t gpuAddr);
+    void attachRingCPUAddress(void* cpuAddr);
 
     // Program MMIO registers (ring base, enable ring)
     void programRingBaseToHW();
@@ -44,8 +45,9 @@ public:
 
 private:
     volatile uint32_t* mMMIO;   // BAR0 base
-    uint32_t           mRingBaseOffset;  // Ring base offset (0x2000 for RCS, 0x22000 for BLT)
+    uint32_t           mRingBaseOffset;  // Engine base offset (0x2C000 for RCS0 on TGL)
     uint32_t*          mRingCPU;
+    bool               mOwnsRingCPU;
     size_t             mRingSize;
     uint64_t           mRingWriteOffset;
     uint64_t           mRingGPUAddr;

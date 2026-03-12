@@ -176,6 +176,12 @@ static void setDataProperty32(IORegistryEntry *entry, const char *key, uint32_t 
 }
 
 static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent, uint32_t raw);
+static uint32_t percentToVBLMultiplier(uint32_t percent);
+static uint32_t vblMultiplierToPercent(uint32_t vblm);
+static void logBrightnessTransaction(const char* origin,
+                                     const char* key,
+                                     uint32_t inputValue,
+                                     uint32_t percent);
 
 static void publishNormalizedMemoryModel(FakeIrisXEFramebuffer *fb,
                                          IOPCIDevice *pci,
@@ -289,7 +295,36 @@ static void applyDisplayMergeOverrides(IOService *service)
         return;
     }
 
-    static constexpr uint64_t kMergedDisplayProductID = 40178ULL;
+    static const uint8_t kScale3840x2400[] = {0x00,0x00,0x0F,0x00,0x00,0x00,0x09,0x60,0x00};
+    static const uint8_t kScale3360x2100[] = {0x00,0x00,0x0D,0x20,0x00,0x00,0x08,0x34,0x00};
+    static const uint8_t kScale2880x1800[] = {0x00,0x00,0x0B,0x40,0x00,0x00,0x07,0x08,0x00};
+    static const uint8_t kScale2560x1600[] = {0x00,0x00,0x0A,0x00,0x00,0x00,0x06,0x40,0x00};
+    static const uint8_t kScale2048x1280[] = {0x00,0x00,0x08,0x00,0x00,0x00,0x05,0x00,0x00};
+    static const uint8_t kScale2560x1440[] = {0x00,0x00,0x0A,0x00,0x00,0x00,0x05,0xA0,0x00,0x00,0x00,0x01,0x00,0x20,0x00,0x00};
+    static const uint8_t kScale1920x1200[] = {0x00,0x00,0x07,0x80,0x00,0x00,0x04,0xB0,0x00,0x00,0x00,0x01,0x00,0x20,0x00,0x00};
+    static const uint8_t kScale1920x1080[] = {0x00,0x00,0x07,0x80,0x00,0x00,0x04,0x38,0x00,0x00,0x00,0x01,0x00,0x20,0x00,0x00};
+    static const uint8_t kScale1280x720[]  = {0x00,0x00,0x05,0x00,0x00,0x00,0x02,0xD0,0x00,0x00,0x00,0x01,0x00,0x20,0x00,0x00};
+    static const uint8_t kScale1680x1050[] = {0x00,0x00,0x06,0x72,0x00,0x00,0x04,0x1A,0x00,0x00,0x00,0x01};
+    static const uint8_t kScale1440x900[]  = {0x00,0x00,0x05,0xA0,0x00,0x00,0x03,0x84,0x00,0x00,0x00,0x01};
+    static const uint8_t kScale1280x800[]  = {0x00,0x00,0x05,0x00,0x00,0x00,0x03,0x20,0x00,0x00,0x00,0x01};
+
+    struct ScaleBlob { const uint8_t* bytes; size_t len; };
+    static const ScaleBlob kScaleBlobs[] = {
+        { kScale3840x2400, sizeof(kScale3840x2400) },
+        { kScale3360x2100, sizeof(kScale3360x2100) },
+        { kScale2880x1800, sizeof(kScale2880x1800) },
+        { kScale2560x1600, sizeof(kScale2560x1600) },
+        { kScale2048x1280, sizeof(kScale2048x1280) },
+        { kScale2560x1440, sizeof(kScale2560x1440) },
+        { kScale1920x1200, sizeof(kScale1920x1200) },
+        { kScale1920x1080, sizeof(kScale1920x1080) },
+        { kScale1280x720,  sizeof(kScale1280x720) },
+        { kScale1680x1050, sizeof(kScale1680x1050) },
+        { kScale1440x900,  sizeof(kScale1440x900) },
+        { kScale1280x800,  sizeof(kScale1280x800) },
+    };
+
+    static constexpr uint64_t kMergedDisplayProductID = 41008ULL;
     static constexpr uint64_t kMergedDisplayVendorID = 1552ULL;
     static constexpr uint64_t kMergedDisplayGUID = 436849163854938112ULL;
     static constexpr uint64_t kOriginalDisplayProductID = 1815ULL;
@@ -298,9 +333,27 @@ static void applyDisplayMergeOverrides(IOService *service)
     setNumberProperty(service, "DisplayProductID", kMergedDisplayProductID, 32);
     setNumberProperty(service, "DisplayVendorID", kMergedDisplayVendorID, 32);
     setNumberProperty(service, "IODisplayGUID", kMergedDisplayGUID, 64);
+    service->setProperty("DisplayProductName", "Color LCD");
+    service->setProperty("IODisplayName", "Color LCD");
+    setNumberProperty(service, "IOGFlags", 4, 32);
+    setNumberProperty(service, kDisplayHorizontalImageSize, 286, 32);
+    setNumberProperty(service, kDisplayVerticalImageSize, 179, 32);
     setNumberProperty(service, "DisplayProductIDOld", kOriginalDisplayProductID, 32);
     setNumberProperty(service, "DisplayVendorIDOld", kOriginalDisplayVendorID, 32);
     service->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+
+    OSArray *scaleModes = OSArray::withCapacity(static_cast<unsigned int>(sizeof(kScaleBlobs) / sizeof(kScaleBlobs[0])));
+    if (scaleModes) {
+        for (size_t i = 0; i < sizeof(kScaleBlobs) / sizeof(kScaleBlobs[0]); ++i) {
+            OSData *blob = OSData::withBytes(kScaleBlobs[i].bytes, static_cast<unsigned int>(kScaleBlobs[i].len));
+            if (blob) {
+                scaleModes->setObject(blob);
+                blob->release();
+            }
+        }
+        service->setProperty("scale-resolutions", scaleModes);
+        scaleModes->release();
+    }
 
     const char *name = service->getName();
     if (name && !strcmp(name, "AppleDisplay")) {
@@ -314,6 +367,10 @@ static void applyDisplayMergeOverrides(IOService *service)
             setNumberProperty(provider, "DisplayProductID", kMergedDisplayProductID, 32);
             setNumberProperty(provider, "DisplayVendorID", kMergedDisplayVendorID, 32);
             setNumberProperty(provider, "IODisplayGUID", kMergedDisplayGUID, 64);
+            provider->setProperty("DisplayProductName", "Color LCD");
+            setNumberProperty(provider, "IOGFlags", 4, 32);
+            setNumberProperty(provider, kDisplayHorizontalImageSize, 286, 32);
+            setNumberProperty(provider, kDisplayVerticalImageSize, 179, 32);
             provider->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
         }
     }
@@ -346,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║         FAKEIRISXE V168 - PCI Device IDs + Enhanced AGPM    ║\n");
+    IOLog("║       FAKEIRISXE V173 - BAR0 Fix + Execlist Ring Audit     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -855,15 +912,15 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  FAKEIRISXE V168 - PCI Device IDs + Enhanced AGPM         ║\n");
+    IOLog("║        FAKEIRISXE V173 - BAR0 Fix + Execlist Ring Audit    ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
     if (!super::start(provider)) {
-        IOLog("❌ [V168] super::start() failed\n");
+        IOLog("❌ [V170] super::start() failed\n");
         return false;
     }
-    IOLog("✅ [V168] super::start() succeeded\n");
+    IOLog("✅ [V170] super::start() succeeded\n");
 
     // V149: Add GEM/GTT Diagnostics
     IOLog("(FakeIrisXE)[V149] ============================================\n");
@@ -1439,18 +1496,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V167: Metal/Hardware Rendering verification properties
     setProperty("MetalPluginClassName", OSString::withCString("FakeIrisXEAccelerator"));
     setProperty("MetalPluginBundleID", OSString::withCString("com.anomy.driver.FakeIrisXEFramebuffer"));
-    setProperty("MetalSupported", kOSBooleanTrue);
-    setProperty("MetalDevice", kOSBooleanTrue);
     setProperty("MetalRenderer", OSString::withCString("Intel Iris Xe Graphics"));
     setProperty("MetalFamilyID", OSNumber::withNumber(1ULL, 32));
     setProperty("MetalVendorID", OSNumber::withNumber(0x8086, 32));
     setProperty("MetalDeviceID", OSNumber::withNumber(0x9A49, 32));
-    
-    // V167: Hardware acceleration verification
-    setProperty("IOFBAccelerator", kOSBooleanTrue);
-    setProperty("IOFBAcceleratorLinked", kOSBooleanTrue);
-    setProperty("HardwareAccelerated", kOSBooleanTrue);
-    setProperty("GPURendering", kOSBooleanTrue);
+    updateExecutionState(false, "startup");
     
     IOLog("[V167] Connector/framebuffer patch properties published\n");
     IOLog("[V167] - Port 0: eDP (internal panel)\n");
@@ -1540,8 +1590,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     
     
-    // === V161: LG Display EDID - defined here for access throughout function ===
-    static const uint8_t lgDisplayEDID[128] = {
+    // === V170: fallback EDID if no Apple internal override is available ===
+    static const uint8_t fallbackDisplayEDID[128] = {
         0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
         0x30, 0xE4, 0x1E, 0x07, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x1F, 0x01, 0x04, 0x95, 0x22, 0x13, 0x78,
@@ -1560,69 +1610,71 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
     
-    // === V170: Display Identity Injection (MacBookAir-like) ===
-    // Use boot-arg: -fakeirisxe-display=air10_1, pro16_1, pro13_1, or lg
+    // === V170: Display Identity Injection (Apple internal panel) ===
+    // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
     {
-        // Default to MacBook Air identity for better macOS compatibility
-        uint32_t displayVendorID = 0xE430;    // LG Display
-        uint32_t displayProductID = 0x071E;   // LGD panel
-        const char* displayName = "AppleBacklightDisplay";
-        const char* displayPrefsKey = "LGD:0x071E";
-        uint32_t displaySerial = 0;
+        uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
+        uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
+        const char* displayName = "Color LCD";
+        uint32_t displaySerial = 0x00000001;
         
         char displayArgBuf[32] = {0};
         if (PE_parse_boot_argn("-fakeirisxe-display", displayArgBuf, sizeof(displayArgBuf))) {
             IOLog("[V170] Display identity boot-arg: '%s'\n", displayArgBuf);
             
-            if (strncmp(displayArgBuf, "air10_1", 7) == 0) {
-                // MacBook Air (M1, 2020) - 13.3" 2560x1600
-                displayVendorID = 0x0610;    // Apple vendor ID
-                displayProductID = 0x8601;   // MacBook Air product ID
-                displayName = "MacBook Air";
-                displayPrefsKey = "apple";
+            if (strncmp(displayArgBuf, "mbp16_2", 7) == 0 || strncmp(displayArgBuf, "a030", 4) == 0) {
+                displayVendorID = 0x0610;
+                displayProductID = 0xA030;
+                displayName = "Color LCD";
                 displaySerial = 0x00000001;
-                IOLog("[V170] Using MacBook Air (M1, 2020) display identity\n");
+                IOLog("[V170] Using MacBookPro16,2 / F16Ta030 display identity\n");
+            } else if (strncmp(displayArgBuf, "a014", 4) == 0) {
+                displayVendorID = 0x0610;
+                displayProductID = 0xA014;
+                displayName = "Color LCD";
+                displaySerial = 0x00000001;
+                IOLog("[V170] Using Apple internal display identity A014\n");
+            } else if (strncmp(displayArgBuf, "air10_1", 7) == 0) {
+                displayVendorID = 0x0610;
+                displayProductID = 0xA030;
+                displayName = "Color LCD";
+                displaySerial = 0x00000001;
+                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Air IDs\n");
             } else if (strncmp(displayArgBuf, "pro16_1", 7) == 0) {
-                // MacBook Pro 16" (2019) - 3072x1920
                 displayVendorID = 0x0610;
-                displayProductID = 0x8612;
-                displayName = "MacBook Pro";
-                displayPrefsKey = "apple";
-                displaySerial = 0x00000002;
-                IOLog("[V170] Using MacBook Pro 16\" display identity\n");
+                displayProductID = 0xA030;
+                displayName = "Color LCD";
+                displaySerial = 0x00000001;
+                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Pro 16,1 IDs\n");
             } else if (strncmp(displayArgBuf, "pro13_1", 7) == 0) {
-                // MacBook Pro 13" (Intel) - 2560x1600
                 displayVendorID = 0x0610;
-                displayProductID = 0x8603;
-                displayName = "MacBook Pro";
-                displayPrefsKey = "apple";
-                displaySerial = 0x00000003;
-                IOLog("[V170] Using MacBook Pro 13\" display identity\n");
+                displayProductID = 0xA014;
+                displayName = "Color LCD";
+                displaySerial = 0x00000001;
+                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Pro 13 IDs\n");
             } else if (strncmp(displayArgBuf, "lg", 2) == 0) {
-                // Original LG panel
+                displayVendorID = 0xE430;
+                displayProductID = 0x071E;
+                displayName = "LG Display";
+                displaySerial = 0x00000000;
                 IOLog("[V170] Using LG Display panel identity\n");
             } else {
-                IOLog("[V170] Unknown display identity, using MacBook Air\n");
-                displayVendorID = 0x0610;
-                displayProductID = 0x8601;
-                displayName = "MacBook Air";
-                displayPrefsKey = "apple";
-                displaySerial = 0x00000001;
+                IOLog("[V170] Unknown display identity, defaulting to MacBookPro16,2 / F16Ta030\n");
             }
         } else {
-            // Default to MacBook Air identity for better macOS compatibility
-            displayVendorID = 0x0610;
-            displayProductID = 0x8601;
-            displayName = "MacBook Air";
-            displayPrefsKey = "apple";
-            displaySerial = 0x00000001;
-            IOLog("[V170] No display identity specified, defaulting to MacBook Air\n");
+            IOLog("[V170] No display identity specified, defaulting to MacBookPro16,2 / F16Ta030\n");
         }
         
         // Apply display properties
-        OSData *edidData = OSData::withBytes(lgDisplayEDID, sizeof(lgDisplayEDID));
+        OSData *edidData = OSDynamicCast(OSData, getProperty("AAPL00,override-no-connect"));
+        if (!edidData) {
+            edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
+        } else {
+            edidData->retain();
+        }
         if (edidData) {
             setProperty("IODisplayEDID", edidData);
+            setProperty("AAPL00,PanelEDID", edidData);
             edidData->release();
             IOLog("[V170] EDID published\n");
         }
@@ -1631,8 +1683,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)displaySerial, 32));
         setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)displayVendorID, 16));
         setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)displayProductID, 16));
+        setProperty("DisplayVendorID", OSNumber::withNumber((uint64_t)displayVendorID, 32));
+        setProperty("DisplayProductID", OSNumber::withNumber((uint64_t)displayProductID, 32));
         setProperty("IODisplayName", OSString::withCString(displayName));
-        setProperty("IODisplayPrefsKey", OSString::withCString(displayPrefsKey));
+        setProperty("DisplayProductName", OSString::withCString(displayName));
+        setNumberProperty(this, kDisplayHorizontalImageSize, 286, 32);
+        setNumberProperty(this, kDisplayVerticalImageSize, 179, 32);
         
         // Set Apple-specific properties for MacBook identity
         if (displayVendorID == 0x0610) {
@@ -1645,6 +1701,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         // Internal panel properties
         setProperty("AAPL,slot-name", OSString::withCString("Internal@0,2,0"));
         setProperty("built-in", kOSBooleanTrue);
+        applyBacklightPresetForIdentity(displayVendorID, displayProductID);
         
         IOLog("[V170] Display identity applied: Vendor=0x%04X, Product=0x%04X\n", displayVendorID, displayProductID);
     }
@@ -1889,11 +1946,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("AGPMFullControl", kOSBooleanTrue);
     setProperty("IOGPUPowerControl", kOSBooleanTrue);
     
-    IOLog("[V168] ✅ AGPM power management properties set\n");
-    IOLog("[V168]    Target profile: MacBookPro16,2\n");
-    IOLog("[V168]    Power states: low, medium, high, turbo\n");
-    IOLog("[V168]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
-    IOLog("[V168]    Initial state: high performance\n");
+    IOLog("[V170] ✅ AGPM power management properties set\n");
+    IOLog("[V170]    Target profile: MacBookPro16,2\n");
+    IOLog("[V170]    Power states: low, medium, high, turbo\n");
+    IOLog("[V170]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
+    IOLog("[V170]    Initial state: high performance\n");
     
     // Quartz Extreme requirements
     
@@ -1994,48 +2051,30 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // ================================================
     logStage(4, "GGTT/ring/command submission bring-up");
     IOLog("(FakeIrisXE) [V48] Initializing GGTT aperture...\n");
-    
-    // ---- GGTT Aperture Mapping ----
 
-    // 1. Read BAR0 (GTTMMADR)
-    uint64_t bar0Phys = pciDevice->configRead32(kIOPCIConfigBaseAddress0);
-    bar0Phys &= ~0xFULL;    // clear PCI flags
-
-    uint64_t gttSize2 = 2 * 1024 * 1024; // 2MB GGTT
-
-    // 2. Create mapping for GGTT table
-    IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(
-        bar0Phys,
-        gttSize2,
-        kIODirectionOutIn
-    );
-
-    if (!desc) {
-        logSoftFail(4, "Failed to create GGTT descriptor");
-    }
-
-    IOMemoryMap* map = desc ? desc->map() : nullptr;
-    if (!map) {
-        logSoftFail(4, "Failed to map GGTT");
-        OSSafeReleaseNULL(desc);
-    }
-
-    if (map) {
-        fGGTT = (volatile uint32_t*)map->getVirtualAddress();
-        fBar0 = (volatile uint32_t*)map->getVirtualAddress();
-        fGGTTSize = gttSize2;
+    // Reuse the full BAR0 mapping from stage 1 instead of remapping BAR0 from the
+    // low 32 bits only. The previous code mapped 0x10000000 instead of the actual
+    // 64-bit BAR0 (for example 0x4010000000), which made stage-4 direct MMIO writes
+    // and later validation read from different physical regions.
+    const uint64_t gttSize2 = 2ULL * 1024ULL * 1024ULL;
+    if (mmioBase && mmioMap) {
+        fGGTT = reinterpret_cast<volatile uint32_t*>(const_cast<volatile UInt8*>(mmioBase));
+        fBar0 = reinterpret_cast<volatile uint32_t*>(const_cast<volatile UInt8*>(mmioBase));
+        fGGTTSize = mmioMap->getLength() < gttSize2 ? mmioMap->getLength() : gttSize2;
         fGGTTBaseGPU = 0x00000000;
         fNextGGTTOffset = 0x00100000;
-        IOLog("FakeIrisXEFramebuffer: GGTT/BAR0 mapped at %p\n", fGGTT);
-    }
-
-    if (!map) {
+        IOLog("FakeIrisXEFramebuffer: GGTT/BAR0 reusing stage1 BAR0 mapping phys=0x%llx va=%p len=0x%llx\n",
+              static_cast<unsigned long long>(bar0Phys),
+              fGGTT,
+              static_cast<unsigned long long>(fGGTTSize));
+    } else {
         logSoftFail(4, "BAR0/GGTT map missing; skipping ring init");
     }
 
     // map BAR0 into fBar0 — done above
     // map GGTT into fGGTT — done above
     fNextGGTTOffset = 0x00100000; // choose appropriate base
+    updateExecutionState(false, "stage4-begin");
 
     // Create ring
     if (!createRcsRing(256 * 1024)) {
@@ -2083,9 +2122,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("(FakeIrisXE) [V45] ❌ GuC init failed; phase-1 safety mode disables legacy execlist and accelerator bring-up\n");
         fGuCEnabled = false;
         setProperty("FakeIrisXEGuCFailureTerminal", kOSBooleanTrue);
-        setProperty("IOFBAccelerated", kOSBooleanFalse);
-        setProperty("IOFBAccelerator", kOSBooleanFalse);
-        setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
+        updateExecutionState(false, "guc-failure");
+        IOLog("(FakeIrisXE) [V45] Stage4 fallback: ring=%p validated=%u commandReady=%u\n",
+              fRcsRing,
+              fRcsRingValidated ? 1U : 0U,
+              fCommandSubmissionReady ? 1U : 0U);
     } else {
         fGuCEnabled = true;
         IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
@@ -2212,8 +2253,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
         
             // Create / init RCS ring (existing helper returns bool)
-            fRcsRing = createRcsRing(256 * 1024);
-            if (fRcsRing) {
+            if (createRcsRing(256 * 1024)) {
                 IOLog("FakeIrisXEFramebuffer: RCS ring initialization complete. fRcsRing=%p\n", fRcsRing);
             } else {
                 IOLog("FakeIrisXEFramebuffer: FAILED creating RCS ring\n");
@@ -2235,6 +2275,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             } else {
                 IOLog("(FakeIrisXE)[V150] ❌ GPU EXECUTION TEST FAILED\n");
             }
+            fCommandSubmissionReady = gpuWorking && fRcsRingValidated;
+            updateExecutionState(fCommandSubmissionReady, gpuWorking ? "gpu-test-pass" : "gpu-test-fail");
 
             if (runBootDiagFull) {
                 IOLog("\n");
@@ -2300,8 +2342,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             setProperty("IOFBTransform", OSNumber::withNumber((unsigned long long)0, 32));
             setProperty("IOFBSignal", OSNumber::withNumber((unsigned long long)0, 32));
             
-            // Enable acceleration hints
-            setProperty("IOFBAccelerated", kOSBooleanTrue);
             setProperty("IOFBHWCursor", kOSBooleanTrue);
             setProperty("IOFBAlphaCursor", kOSBooleanTrue);
             
@@ -2381,7 +2421,6 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             setProperty("IOFBDisplayOnline", kOSBooleanTrue);
             
             // Expose V93 status for user-space tools
-            setProperty("IOFBAccelerator", kOSBooleanTrue);
             setProperty("IOFBAccelRevision", OSNumber::withNumber(93, 32));
             
             IOLog("[V93] Display verification complete. Ready for integration testing.\n");
@@ -2406,10 +2445,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             {
                 IOLog("🔗 Found Accelerator child %p — linking…\n", accel);
                 accel->linkFromFramebuffer(this);
-                setProperty("IOFBAccelerator", kOSBooleanTrue);
-                setProperty("IOFBAcceleratorLinked", kOSBooleanTrue);
-                setProperty("IOAccelServiceRegistryID", accel->getRegistryEntryID(), 64);
-                IOLog("🟢 LINK SUCCESS — FB → Accelerator\n");
+                if (fCommandSubmissionReady) {
+                    setProperty("IOAccelServiceRegistryID", accel->getRegistryEntryID(), 64);
+                    IOLog("🟢 LINK SUCCESS — FB → Accelerator\n");
+                } else {
+                    IOLog("⚠️ LINK DEFERRED — execution path not ready yet\n");
+                }
                 break;  // Important — only 1 accelerator
             }
         }
@@ -2440,7 +2481,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // Keep display graph ownership with IOGraphicsFamily.
     // Synthetic IODisplayConnect / backlight nodes caused unstable CoreDisplay routing
     // and user-space property parsing crashes.
-    IOLog("[V169] Skipping synthetic IODisplayConnect/backlight publication\n");
+    IOLog("[V170] Skipping synthetic IODisplayConnect/backlight publication\n");
 
 
 
@@ -2495,7 +2536,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V131: Final initialization diagnostics with WindowServer info
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║  V168 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
+    IOLog("║  V170 INITIALIZATION COMPLETE - STATUS REPORT                 ║\n");
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  FRAMEBUFFER STATUS                                          ║\n");
     IOLog("║  Framebuffer:     %s\n", framebufferMemory ? "✅ ALLOCATED" : "❌ MISSING");
@@ -2512,7 +2553,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("║  DISPLAY CONFIGURATION                                       ║\n");
     IOLog("║  Current Mode:    %u (%ux%u)\n", currentMode, H_ACTIVE, V_ACTIVE);
     IOLog("║  Available Modes: %u\n", kNumDisplayModes);
-    IOLog("║  Display:         Dell Latitude 5520\n");
+    IOLog("║  Display:         Apple Color LCD (MacBookPro16,2)\n");
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  WINDOWSERVER INTEGRATION                                    ║\n");
     IOLog("║  Aperture Range:  ✅ CONFIGURED\n");
@@ -2536,7 +2577,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V168)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V173)\n");
     return true;
 
 }
@@ -3005,14 +3046,15 @@ void FakeIrisXEFramebuffer::scheduleFlushFromAccelerator()
 
 // Backlight
 #define BXT_BLC_PWM_CTL1    0xC8250
-#define BXT_BLC_PWM_CTL2    0xC8254
+#define BXT_BLC_PWM_FREQ_REG 0xC8254
+#define BXT_BLC_PWM_DUTY_REG 0xC8258
 
 #define PLANE_OFFSET_1_A 0x00000000
 #define PIPECONF_A      0x70008
 
-// Tiger Lake / BXT backlight PWM registers (as used in your working snippet)
-static constexpr uint32_t BXT_BLC_PWM_FREQ1 = 0x000C8250;  // period / max PWM value in low 16 bits
-static constexpr uint32_t BXT_BLC_PWM_DUTY1 = 0x000C8254;  // duty (maybe low 16 bits)
+// Tiger Lake / Apple backlight PWM registers from DTK traces.
+static constexpr uint32_t BXT_BLC_PWM_FREQ1 = 0x000C8254;
+static constexpr uint32_t BXT_BLC_PWM_DUTY1 = 0x000C8258;
 
 
 
@@ -3269,21 +3311,33 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
-    const uint32_t PP_CONTROL = 0x00064004;
-    const uint32_t PP_STATUS  = 0x00064024;
+    const uint32_t panelControlNew = PP_CONTROL_NEW;
+    const uint32_t panelStatusNew  = PP_STATUS_NEW;
+    const uint32_t panelControlOld = PP_CONTROL_OLD;
+    const uint32_t panelStatusOld  = PP_STATUS_OLD;
     
     // Step 1: Power up panel
     IOLog("[V131] Step 1: Powering up eDP panel...\n");
-    wr(PP_CONTROL, (1u << 31) | (1u << 30));
+    if (rd(PP_ON_DELAYS_NEW) == 0) {
+        wr(PP_ON_DELAYS_NEW, 0x01900190u);
+    }
+    if (rd(PP_OFF_DELAYS_NEW) == 0) {
+        wr(PP_OFF_DELAYS_NEW, 0x01900190u);
+    }
+    wr(panelControlNew, rd(panelControlNew) | (1u << 31) | (1u << 30) | 0x8u);
+    wr(panelControlOld, rd(panelControlOld) | (1u << 31) | (1u << 30));
     IOSleep(100);  // Longer delay for panel power
     
     // Step 2: Wait for panel power ready (CRITICAL)
     IOLog("[V131] Step 2: Waiting for panel power ready...\n");
     bool panelReady = false;
     for (int i = 0; i < 200; i++) {  // Increased timeout
-        uint32_t status = rd(PP_STATUS);
-        if (status & (1u << 31)) {
-            IOLog("[V131] ✅ Panel power ready (PP_STATUS=0x%08X)\n", status);
+        uint32_t statusNew = rd(panelStatusNew);
+        uint32_t statusOld = rd(panelStatusOld);
+        if ((statusNew & (1u << 31)) || (statusOld & (1u << 31))) {
+            IOLog("[V131] ✅ Panel power ready (PP_STATUS_NEW=0x%08X PP_STATUS_OLD=0x%08X)\n",
+                  statusNew,
+                  statusOld);
             panelReady = true;
             break;
         }
@@ -3291,7 +3345,9 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     }
     
     if (!panelReady) {
-        IOLog("[V131] ⚠️ Panel power timeout - continuing anyway\n");
+        IOLog("[V131] ⚠️ Panel power timeout - new=0x%08X old=0x%08X\n",
+              rd(panelStatusNew),
+              rd(panelStatusOld));
     }
     
     IOSleep(200);  // Extra delay after panel power
@@ -3335,6 +3391,8 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     
     // --- Enable backlight ---
     initBacklightHardware();
+    ensureBacklightHardwareState("enableController");
+    setBacklightPercent(100, "enableController-init");
 
     // V81: Write test pattern to framebuffer to verify panel output
     IOLog("\n");
@@ -3441,10 +3499,11 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     IOLog("[V81] PLANE_SURF_1_A = 0x%08X (GGTT offset)\n", surfAddrV81);
     
     // Check PP (Panel Power) status
-    const uint32_t PP_STATUS_V81 = 0x00064024;
-    uint32_t ppStatusV81 = rd(PP_STATUS_V81);
-    IOLog("[V81] PP_STATUS = 0x%08X\n", ppStatusV81);
-    IOLog("       Panel Power: %s\n", (ppStatusV81 & (1u << 31)) ? "ON ✅" : "OFF ❌");
+    uint32_t ppStatusNewV81 = rd(PP_STATUS_NEW);
+    uint32_t ppStatusOldV81 = rd(PP_STATUS_OLD);
+    IOLog("[V81] PP_STATUS_NEW = 0x%08X\n", ppStatusNewV81);
+    IOLog("[V81] PP_STATUS_OLD = 0x%08X\n", ppStatusOldV81);
+    IOLog("       Panel Power: %s\n", ((ppStatusNewV81 | ppStatusOldV81) & (1u << 31)) ? "ON ✅" : "OFF ❌");
     
     IOLog("\n");
     IOLog("[V81] Panel Output Test Complete\n");
@@ -3973,7 +4032,7 @@ IOReturn FakeIrisXEFramebuffer::performFlushNow()
                     this,
                     batchGem,
                     0,          // batchSize ignored now
-                    fRingRCS,
+                    fRcsRing,
                     2000))
             {
                 IOLog("Flush: Real batch submitted — waiting on GPU fence\n");
@@ -4493,7 +4552,7 @@ IOReturn FakeIrisXEFramebuffer::getAttributeForConnection(
 
         // ---- Parameter count ----
         case kConnectionDisplayParameterCount:  // 'pcnt'
-            *value = 1;   // at least one param
+            *value = 2;   // brightness + vblm
             return kIOReturnSuccess;
 
         // ---- Connection flags (built-in DP) ----
@@ -4504,6 +4563,10 @@ IOReturn FakeIrisXEFramebuffer::getAttributeForConnection(
         // ---- Online / enabled ----
         case kConnectionIsOnline:              // 'ionl' if asked
             *value = 1;   // panel is online
+            return kIOReturnSuccess;
+
+        case kConnectionVBLMultiplier:
+            *value = percentToVBLMultiplier(getBacklightPercent());
             return kIOReturnSuccess;
 
         default:
@@ -4522,10 +4585,13 @@ IOReturn FakeIrisXEFramebuffer::setAttributeForConnection(
     IOSelect attribute,
     uintptr_t value)
 {
-    IOLog("[FakeIrisXEFramebuffer] setAttributeForConnection(conn=%u, attr=0x%08x, value=0x%lx)\n",
-          (unsigned)connect, (unsigned)attribute, (unsigned long)value);
+    if (attribute == kConnectionVBLMultiplier) {
+        const uint32_t vblm = static_cast<uint32_t>(value);
+        const uint32_t percent = vblMultiplierToPercent(vblm);
+        logBrightnessTransaction("setAttributeForConnection", "vblm", vblm, percent);
+        return setBacklightPercent(percent, "conn-vblm") ? kIOReturnSuccess : kIOReturnError;
+    }
 
-    // Ignore everything for now and don’t touch hardware / properties here.
     return kIOReturnSuccess;
 }
 
@@ -4592,7 +4658,141 @@ static inline uint32_t clamp_u32(uint32_t v, uint32_t lo, uint32_t hi) {
 
 static const uint32_t kAppleBacklightPercentMin = 0;
 static const uint32_t kAppleBacklightPercentMax = 100;
+static const uint32_t kAppleBacklightUserMin = 40;
+static const uint32_t kAppleBacklightUserMax = 255;
 static const uint32_t kAppleBacklightRawMax = 0xFFFEu;
+static const uint32_t kAppleBacklightVBLMOne = 0x10000u;
+static const uint32_t kAppleBacklightVBLMMax = 0x30000u;
+static const uint32_t kTglRcsRingTail = 0x2C030u;
+static const uint32_t kTglRcsRingHead = 0x2C034u;
+static const uint32_t kTglRcsRingStart = 0x2C038u;
+static const uint32_t kTglRcsRingCtl = 0x2C03Cu;
+
+struct FakeIrisXEBacklightPreset {
+    const char* name;
+    const uint16_t* values;
+    uint32_t count;
+    bool anchors;
+    uint32_t appleSense;
+};
+
+static const uint16_t kBacklightCurveDefault[] = { 0x0000u, 0x0740u, 0x0AF7u, 0xFFFEu };
+static const uint16_t kBacklightCurveF14Ta02e[] = {
+    0x0000u, 0x0010u, 0x001Bu, 0x0028u, 0x0039u, 0x004Fu, 0x0069u, 0x008Au, 0x00B2u,
+    0x00E2u, 0x011Du, 0x0163u, 0x01B8u, 0x021Fu, 0x029Bu, 0x0331u, 0x03E1u
+};
+static const uint16_t kBacklightCurveF15Ta044[] = {
+    0x0000u, 0x000Au, 0x000Cu, 0x0010u, 0x0015u, 0x001Cu, 0x0026u, 0x0033u, 0x0044u,
+    0x005Du, 0x007Fu, 0x00AFu, 0x00F1u, 0x014Eu, 0x01D0u, 0x0287u, 0x038Au
+};
+static const uint16_t kBacklightCurveF16Ta030[] = {
+    0x0000u, 0x000Au, 0x000Eu, 0x0012u, 0x0018u, 0x0020u, 0x002Cu, 0x003Bu, 0x0050u,
+    0x006Du, 0x0095u, 0x00CCu, 0x0117u, 0x017Eu, 0x020Du, 0x02D2u, 0x03F5u
+};
+
+static const FakeIrisXEBacklightPreset kBacklightPresets[] = {
+    { "Default",  kBacklightCurveDefault, 4,  true,  0x0000u },
+    { "F14Ta02e", kBacklightCurveF14Ta02e, 17, false, 0xA02Eu },
+    { "F15Ta044", kBacklightCurveF15Ta044, 17, false, 0xA044u },
+    { "F16Ta030", kBacklightCurveF16Ta030, 17, false, 0xA030u },
+    { "F16Ta031", kBacklightCurveF16Ta030, 17, false, 0xA031u },
+};
+
+static const FakeIrisXEBacklightPreset* findBacklightPresetByName(const char* name)
+{
+    if (!name || !name[0]) {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < sizeof(kBacklightPresets) / sizeof(kBacklightPresets[0]); ++i) {
+        if (strcmp(kBacklightPresets[i].name, name) == 0) {
+            return &kBacklightPresets[i];
+        }
+    }
+    return nullptr;
+}
+
+static const FakeIrisXEBacklightPreset* selectBacklightPresetOverride()
+{
+    char panelArg[32] = {0};
+    if (PE_parse_boot_argn("-fakeirisxe-panel", panelArg, sizeof(panelArg))) {
+        if (const FakeIrisXEBacklightPreset* preset = findBacklightPresetByName(panelArg)) {
+            return preset;
+        }
+    }
+
+    return nullptr;
+}
+
+static const FakeIrisXEBacklightPreset* selectBacklightPresetForIdentity(uint32_t vendorID, uint32_t productID)
+{
+    if (const FakeIrisXEBacklightPreset* preset = selectBacklightPresetOverride()) {
+        return preset;
+    }
+
+    if (vendorID == 0x0610u) {
+        switch (productID) {
+            case 0x8601u:
+                return findBacklightPresetByName("F16Ta030");
+            case 0x8612u:
+                return findBacklightPresetByName("F15Ta044");
+            case 0x8603u:
+                return findBacklightPresetByName("F14Ta02e");
+            default:
+                break;
+        }
+    }
+
+    if (vendorID == 0xE430u && productID == 0x071Eu) {
+        return findBacklightPresetByName("Default");
+    }
+
+    return findBacklightPresetByName("F16Ta030");
+}
+
+static uint32_t percentToUserBrightness(uint32_t percent)
+{
+    percent = clamp_u32(percent, 0, 100);
+    return kAppleBacklightUserMin + static_cast<uint32_t>((static_cast<uint64_t>(percent) * (kAppleBacklightUserMax - kAppleBacklightUserMin)) / 100u);
+}
+
+static uint32_t percentToVBLMultiplier(uint32_t percent)
+{
+    percent = clamp_u32(percent, 0, 100);
+    return static_cast<uint32_t>((static_cast<uint64_t>(percent) * kAppleBacklightVBLMOne) / 100u);
+}
+
+static uint32_t vblMultiplierToPercent(uint32_t vblm)
+{
+    if (vblm <= 100u) {
+        return clamp_u32(vblm, 0, 100);
+    }
+
+    vblm = clamp_u32(vblm, 0, kAppleBacklightVBLMMax);
+    if (vblm >= kAppleBacklightVBLMOne) {
+        return 100u;
+    }
+
+    return static_cast<uint32_t>((static_cast<uint64_t>(vblm) * 100u) / kAppleBacklightVBLMOne);
+}
+
+static uint32_t rawBrightnessToPercent(uint32_t raw)
+{
+    raw = clamp_u32(raw, 0, kAppleBacklightRawMax);
+    return static_cast<uint32_t>((static_cast<uint64_t>(raw) * 100u) / kAppleBacklightRawMax);
+}
+
+static void logBrightnessTransaction(const char* origin,
+                                     const char* key,
+                                     uint32_t inputValue,
+                                     uint32_t percent)
+{
+    IOLog("[BLTX] %s key=%s input=0x%08X -> %u%%\n",
+          origin ? origin : "unknown",
+          key ? key : "unknown",
+          inputValue,
+          percent);
+}
 
 static OSDictionary* makeBrightnessParameter(uint32_t value, uint32_t min, uint32_t max)
 {
@@ -4630,26 +4830,35 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
     percent = clamp_u32(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
     raw = clamp_u32(raw, 0, kAppleBacklightRawMax);
 
-    setNumberProperty(entry, "brightness-level", percent, 32);
-    setNumberProperty(entry, "brightness-min", kAppleBacklightPercentMin, 32);
-    setNumberProperty(entry, "brightness-max", kAppleBacklightPercentMax, 32);
-    setNumberProperty(entry, "brightness-default", 75, 32);
+    const uint32_t userBrightness = percentToUserBrightness(percent);
+    const uint32_t vblm = percentToVBLMultiplier(percent);
+
+    setNumberProperty(entry, "brightness", userBrightness, 32);
+    setNumberProperty(entry, "brightness-level", userBrightness, 32);
+    setNumberProperty(entry, "brightness-min", kAppleBacklightUserMin, 32);
+    setNumberProperty(entry, "brightness-max", kAppleBacklightUserMax, 32);
+    setNumberProperty(entry, "brightness-default", percentToUserBrightness(75), 32);
+    setNumberProperty(entry, "linear-brightness", raw, 32);
+    setNumberProperty(entry, "vblm", vblm, 32);
     setNumberProperty(entry, "ApplePanelRawBrightness", raw, 32);
     setNumberProperty(entry, "AppleMaxBrightness", kAppleBacklightRawMax, 32);
-    setNumberProperty(entry, "AppleNumBrightLevels", kAppleBacklightPercentMax, 32);
+    setNumberProperty(entry, "AppleNumBrightLevels", kAppleBacklightUserMax, 32);
     setNumberProperty(entry, "AppleBacklightAtBoot", raw, 32);
     setNumberProperty(entry, "IOBacklightHandlerID", 436849163854938112ULL, 64);
     entry->setProperty("AppleRestoreBacklight", kOSBooleanTrue);
 
-    OSDictionary* params = OSDictionary::withCapacity(6);
+    OSDictionary* params = OSDictionary::withCapacity(9);
     if (!params) {
         return;
     }
 
-    OSDictionary* brightness = makeBrightnessParameter(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
+    OSDictionary* brightness = makeBrightnessParameter(userBrightness, kAppleBacklightUserMin, kAppleBacklightUserMax);
     OSDictionary* linear = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
     OSDictionary* usableLinear = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
-    OSDictionary* fade = makeBrightnessParameter(percent, kAppleBacklightPercentMin, kAppleBacklightPercentMax);
+    OSDictionary* vblmParam = makeBrightnessParameter(vblm, 0, kAppleBacklightVBLMMax);
+    OSDictionary* fade = makeBrightnessParameter(userBrightness, kAppleBacklightUserMin, kAppleBacklightUserMax);
+    OSDictionary* brightnessProbe = makeBrightnessParameter(userBrightness, kAppleBacklightUserMin, kAppleBacklightUserMax);
+    OSDictionary* linearProbe = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
     OSDictionary* power = makeBrightnessParameter(2, 0, 2);
     OSDictionary* commit = OSDictionary::withCapacity(1);
 
@@ -4665,9 +4874,21 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
         params->setObject("usable-linear-brightness", usableLinear);
         usableLinear->release();
     }
+    if (vblmParam) {
+        params->setObject("vblm", vblmParam);
+        vblmParam->release();
+    }
     if (fade) {
         params->setObject("brightness-fade", fade);
         fade->release();
+    }
+    if (brightnessProbe) {
+        params->setObject("brightness-probe", brightnessProbe);
+        brightnessProbe->release();
+    }
+    if (linearProbe) {
+        params->setObject("linear-brightness-probe", linearProbe);
+        linearProbe->release();
     }
     if (power) {
         params->setObject("power-state", power);
@@ -4687,7 +4908,61 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
     params->release();
 }
 
+static bool extractNumericValue(OSObject* object, uint32_t* outValue)
+{
+    if (!object || !outValue) {
+        return false;
+    }
+
+    if (OSNumber* number = OSDynamicCast(OSNumber, object)) {
+        *outValue = number->unsigned32BitValue();
+        return true;
+    }
+
+    OSDictionary* dict = OSDynamicCast(OSDictionary, object);
+    if (!dict) {
+        return false;
+    }
+
+    OSNumber* valueNum = OSDynamicCast(OSNumber, dict->getObject("value"));
+    if (!valueNum) {
+        return false;
+    }
+
+    *outValue = valueNum->unsigned32BitValue();
+    return true;
+}
+
+static bool extractVBLPercent(OSObject* object, uint32_t* outPercent)
+{
+    if (!object || !outPercent) {
+        return false;
+    }
+
+    uint32_t value = 0;
+    if (OSNumber* number = OSDynamicCast(OSNumber, object)) {
+        value = number->unsigned32BitValue();
+        *outPercent = vblMultiplierToPercent(value);
+        return true;
+    }
+
+    OSDictionary* dict = OSDynamicCast(OSDictionary, object);
+    if (!dict) {
+        return false;
+    }
+
+    OSNumber* valueNum = OSDynamicCast(OSNumber, dict->getObject("value"));
+    if (!valueNum) {
+        return false;
+    }
+
+    value = valueNum->unsigned32BitValue();
+    *outPercent = vblMultiplierToPercent(value);
+    return true;
+}
+
 static bool extractBrightnessPercent(OSObject* object,
+                                     uint32_t defaultMin,
                                      uint32_t defaultMax,
                                      bool treatAsRaw,
                                      uint32_t* outPercent)
@@ -4697,13 +4972,20 @@ static bool extractBrightnessPercent(OSObject* object,
     }
 
     uint32_t value = 0;
-    uint32_t minValue = 0;
+    uint32_t minValue = defaultMin;
     uint32_t maxValue = defaultMax;
 
     if (OSNumber* number = OSDynamicCast(OSNumber, object)) {
         value = number->unsigned32BitValue();
         if (treatAsRaw && value > kAppleBacklightPercentMax) {
             *outPercent = clamp_u32(static_cast<uint32_t>((static_cast<uint64_t>(value) * 100u) / kAppleBacklightRawMax), 0, 100);
+        } else if (defaultMax > 100 || defaultMin > 0) {
+            if (value <= 100U) {
+                *outPercent = clamp_u32(value, 0, 100);
+            } else {
+                value = clamp_u32(value, defaultMin, defaultMax);
+                *outPercent = static_cast<uint32_t>((static_cast<uint64_t>(value - defaultMin) * 100u) / (defaultMax - defaultMin));
+            }
         } else {
             *outPercent = clamp_u32(value, 0, 100);
         }
@@ -4729,7 +5011,7 @@ static bool extractBrightnessPercent(OSObject* object,
 
     if (maxValue <= minValue) {
         maxValue = defaultMax;
-        minValue = 0;
+        minValue = defaultMin;
     }
 
     value = clamp_u32(value, minValue, maxValue);
@@ -4763,51 +5045,132 @@ void FakeIrisXEFramebuffer::initBacklightHardware()
     IOLog("[FB] initBacklightHardware: period=0x%04x duty=0x%04x CTL=0x%08x\n", period & 0xFFFFu, duty50, ctl);
 }
 
-// Initialize backlight table for interpolation
-void FakeIrisXEFramebuffer::initBacklightTable()
+void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
 {
-    // Seed a default curve from the AGDCBacklightControl Default panel data
-    // in the DTK rootfs: 0x0000, 0x0740, 0x0AF7, 0xFFFE.
-    // Apple synthesizes a full LUT from these anchors; we use a simple
-    // piecewise interpolation across 0%, 25%, 75%, and 100%.
+    auto rd = [&](uint32_t off) { return safeMMIORead(off); };
+    auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
+
+    uint32_t statusNew = rd(PP_STATUS_NEW);
+    uint32_t statusOld = rd(PP_STATUS_OLD);
+    bool panelReady = ((statusNew | statusOld) & (1u << 31)) != 0;
+
+    if (!panelReady) {
+        wr(PP_CONTROL_NEW, rd(PP_CONTROL_NEW) | (1u << 31) | (1u << 30) | 0x8u);
+        wr(PP_CONTROL_OLD, rd(PP_CONTROL_OLD) | (1u << 31) | (1u << 30));
+
+        for (int i = 0; i < 20; ++i) {
+            IOSleep(10);
+            statusNew = rd(PP_STATUS_NEW);
+            statusOld = rd(PP_STATUS_OLD);
+            panelReady = ((statusNew | statusOld) & (1u << 31)) != 0;
+            if (panelReady) {
+                break;
+            }
+        }
+    }
+
+    uint32_t freq = rd(BXT_BLC_PWM_FREQ1) & 0xFFFFu;
+    if (!freq) {
+        freq = fPwmMax ? fPwmMax : 0xFFFFu;
+        wr(BXT_BLC_PWM_FREQ1, freq);
+    }
+    fPwmMax = freq;
+
+    uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
+    if (!(ctl & (1u << 31))) {
+        ctl |= (1u << 31);
+        wr(BXT_BLC_PWM_CTL1, ctl);
+        ctl = rd(BXT_BLC_PWM_CTL1);
+    }
+
+    IOLog("[BLTX] ensure reason=%s pp_new=0x%08X pp_old=0x%08X pwm_ctl=0x%08X pwm_freq=0x%04X\n",
+          reason ? reason : "unknown",
+          statusNew,
+          statusOld,
+          ctl,
+          freq & 0xFFFFu);
+}
+
+void FakeIrisXEFramebuffer::applyBacklightPresetForIdentity(uint32_t vendorID, uint32_t productID)
+{
+    const FakeIrisXEBacklightPreset* preset = selectBacklightPresetForIdentity(vendorID, productID);
+    if (!preset) {
+        preset = &kBacklightPresets[0];
+    }
+
     fBacklightTableSize = 11;
     for (int i = 0; i < fBacklightTableSize; i++) {
         fBacklightLevelIn[i] = i * 10;
     }
 
-    static const uint32_t kAnchorPct[4] = { 0, 25, 75, 100 };
-    static const uint32_t kAnchorValue[4] = { 0x0000u, 0x0740u, 0x0AF7u, 0xFFFEu };
-
     for (int i = 0; i < fBacklightTableSize; i++) {
         uint32_t pct = static_cast<uint32_t>(fBacklightLevelIn[i]);
-        uint32_t segment = 0;
-        while (segment < 3 && pct > kAnchorPct[segment + 1]) {
-            ++segment;
+        uint32_t interp = 0;
+
+        if (preset->anchors) {
+            static const uint32_t kAnchorPct[4] = { 0, 25, 75, 100 };
+            uint32_t segment = 0;
+            while (segment < 3 && pct > kAnchorPct[segment + 1]) {
+                ++segment;
+            }
+
+            uint32_t loPct = kAnchorPct[segment];
+            uint32_t hiPct = kAnchorPct[segment + 1];
+            uint32_t loVal = preset->values[segment];
+            uint32_t hiVal = preset->values[segment + 1];
+            interp = loVal;
+            if (hiPct > loPct) {
+                interp = loVal + static_cast<uint32_t>((static_cast<uint64_t>(hiVal - loVal) * (pct - loPct)) / (hiPct - loPct));
+            }
+        } else {
+            const uint32_t loIndex = (pct * (preset->count - 1U)) / 100U;
+            const uint32_t hiIndex = (loIndex + 1U < preset->count) ? (loIndex + 1U) : loIndex;
+            const uint32_t loPct = (loIndex * 100U) / (preset->count - 1U);
+            const uint32_t hiPct = (hiIndex * 100U) / (preset->count - 1U);
+            const uint32_t loVal = preset->values[loIndex];
+            const uint32_t hiVal = preset->values[hiIndex];
+            interp = loVal;
+            if (hiPct > loPct) {
+                interp = loVal + static_cast<uint32_t>((static_cast<uint64_t>(hiVal - loVal) * (pct - loPct)) / (hiPct - loPct));
+            }
         }
 
-        uint32_t loPct = kAnchorPct[segment];
-        uint32_t hiPct = kAnchorPct[segment + 1];
-        uint32_t loVal = kAnchorValue[segment];
-        uint32_t hiVal = kAnchorValue[segment + 1];
-        uint32_t interp = loVal;
-        if (hiPct > loPct) {
-            interp = loVal + static_cast<uint32_t>((static_cast<uint64_t>(hiVal - loVal) * (pct - loPct)) / (hiPct - loPct));
-        }
         fBacklightLevelOut[i] = static_cast<uint16_t>(interp);
     }
 
     fHasBacklightTable = true;
-    IOLog("[FB] Backlight table initialized with %d entries\n", fBacklightTableSize);
+    setProperty("ApplePanelProfile", OSString::withCString(preset->name));
+    setNumberProperty(this, "AppleSense", preset->appleSense, 32);
+    IOLog("[FB] Backlight table initialized with preset %s (%d entries, vendor=0x%04X product=0x%04X)\n",
+          preset->name,
+          fBacklightTableSize,
+          vendorID,
+          productID);
+}
+
+// Initialize backlight table for interpolation
+void FakeIrisXEFramebuffer::initBacklightTable()
+{
+    uint32_t vendorID = 0;
+    uint32_t productID = 0;
+    if (OSNumber* vendor = OSDynamicCast(OSNumber, getProperty("IODisplayVendorID"))) {
+        vendorID = vendor->unsigned32BitValue();
+    }
+    if (OSNumber* product = OSDynamicCast(OSNumber, getProperty("IODisplayProductID"))) {
+        productID = product->unsigned32BitValue();
+    }
+
+    applyBacklightPresetForIdentity(vendorID, productID);
 }
 
     // Set brightness 0..100
-    bool FakeIrisXEFramebuffer::setBacklightPercent(uint32_t percent)
+    bool FakeIrisXEFramebuffer::setBacklightPercent(uint32_t percent, const char* source)
     {
         auto rd = [&](uint32_t off) { return safeMMIORead(off); };
         auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
         
-        
         percent = clamp_u32(percent, 0, 100);
+        ensureBacklightHardwareState(source);
         
         // Read period / max from FREQ1 low 16 bits if available
         uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
@@ -4850,12 +5213,20 @@ void FakeIrisXEFramebuffer::initBacklightTable()
         if (!(ctl & (1u << 31))) {
             ctl |= (1u << 31);
             wr(BXT_BLC_PWM_CTL1, ctl);
+            ctl = rd(BXT_BLC_PWM_CTL1);
         }
 
         publishBrightnessProperties(this, percent, rawLevel);
         
-        IOLog("[FB] setBacklightPercent: %u%% -> raw=0x%04x duty=0x%04x (pwmMax=0x%04x)\n",
-              percent, rawLevel, duty, pwmMax);
+        IOLog("[BLTX] apply source=%s percent=%u raw=0x%04x duty=0x%04x vblm=0x%05x pp_new=0x%08X pp_old=0x%08X ctl=0x%08X\n",
+              source ? source : "direct",
+              percent,
+              rawLevel,
+              duty,
+              percentToVBLMultiplier(percent),
+              rd(PP_STATUS_NEW),
+              rd(PP_STATUS_OLD),
+              ctl);
         return true;
     }
 
@@ -4880,24 +5251,86 @@ IOReturn FakeIrisXEFramebuffer::setProperties(OSObject* properties)
     }
 
     uint32_t percent = 0;
-    if (extractBrightnessPercent(dict->getObject("brightness"), 100, false, &percent) ||
-        extractBrightnessPercent(dict->getObject("linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
-        extractBrightnessPercent(dict->getObject("brightness-fade"), 100, false, &percent)) {
-        return setBacklightPercent(percent) ? kIOReturnSuccess : kIOReturnError;
+    uint32_t inputValue = 0;
+
+    if (extractNumericValue(dict->getObject("brightness"), &inputValue) &&
+        extractBrightnessPercent(dict->getObject("brightness"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+        logBrightnessTransaction("setProperties", "brightness", inputValue, percent);
+        return setBacklightPercent(percent, "prop-brightness") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (extractNumericValue(dict->getObject("linear-brightness"), &inputValue) &&
+        extractBrightnessPercent(dict->getObject("linear-brightness"), 0, kAppleBacklightRawMax, true, &percent)) {
+        logBrightnessTransaction("setProperties", "linear-brightness", inputValue, percent);
+        return setBacklightPercent(percent, "prop-linear") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (extractNumericValue(dict->getObject("vblm"), &inputValue) &&
+        extractVBLPercent(dict->getObject("vblm"), &percent)) {
+        logBrightnessTransaction("setProperties", "vblm", inputValue, percent);
+        return setBacklightPercent(percent, "prop-vblm") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (extractNumericValue(dict->getObject("brightness-fade"), &inputValue) &&
+        extractBrightnessPercent(dict->getObject("brightness-fade"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+        logBrightnessTransaction("setProperties", "brightness-fade", inputValue, percent);
+        return setBacklightPercent(percent, "prop-fade") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (extractNumericValue(dict->getObject("brightness-probe"), &inputValue) &&
+        extractBrightnessPercent(dict->getObject("brightness-probe"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+        logBrightnessTransaction("setProperties", "brightness-probe", inputValue, percent);
+        return setBacklightPercent(percent, "prop-brightness-probe") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (extractNumericValue(dict->getObject("linear-brightness-probe"), &inputValue) &&
+        extractBrightnessPercent(dict->getObject("linear-brightness-probe"), 0, kAppleBacklightRawMax, true, &percent)) {
+        logBrightnessTransaction("setProperties", "linear-brightness-probe", inputValue, percent);
+        return setBacklightPercent(percent, "prop-linear-probe") ? kIOReturnSuccess : kIOReturnError;
     }
 
     OSDictionary* params = OSDynamicCast(OSDictionary, dict->getObject("IODisplayParameters"));
     if (params) {
-        if (extractBrightnessPercent(params->getObject("brightness"), 100, false, &percent) ||
-            extractBrightnessPercent(params->getObject("linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
-            extractBrightnessPercent(params->getObject("usable-linear-brightness"), kAppleBacklightRawMax, true, &percent) ||
-            extractBrightnessPercent(params->getObject("brightness-fade"), 100, false, &percent)) {
-            return setBacklightPercent(percent) ? kIOReturnSuccess : kIOReturnError;
+        if (extractNumericValue(params->getObject("brightness"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("brightness"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "brightness", inputValue, percent);
+            return setBacklightPercent(percent, "params-brightness") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("linear-brightness"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("linear-brightness"), 0, kAppleBacklightRawMax, true, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "linear-brightness", inputValue, percent);
+            return setBacklightPercent(percent, "params-linear") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("usable-linear-brightness"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("usable-linear-brightness"), 0, kAppleBacklightRawMax, true, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "usable-linear-brightness", inputValue, percent);
+            return setBacklightPercent(percent, "params-usable-linear") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("vblm"), &inputValue) &&
+            extractVBLPercent(params->getObject("vblm"), &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "vblm", inputValue, percent);
+            return setBacklightPercent(percent, "params-vblm") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("brightness-fade"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("brightness-fade"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "brightness-fade", inputValue, percent);
+            return setBacklightPercent(percent, "params-fade") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("brightness-probe"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("brightness-probe"), kAppleBacklightUserMin, kAppleBacklightUserMax, false, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "brightness-probe", inputValue, percent);
+            return setBacklightPercent(percent, "params-brightness-probe") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (extractNumericValue(params->getObject("linear-brightness-probe"), &inputValue) &&
+            extractBrightnessPercent(params->getObject("linear-brightness-probe"), 0, kAppleBacklightRawMax, true, &percent)) {
+            logBrightnessTransaction("setProperties.IODisplayParameters", "linear-brightness-probe", inputValue, percent);
+            return setBacklightPercent(percent, "params-linear-probe") ? kIOReturnSuccess : kIOReturnError;
         }
 
         if (params->getObject("commit")) {
+            IOLog("[BLTX] setProperties.IODisplayParameters key=commit input=0x00000001 -> %u%%\n", getBacklightPercent());
             return kIOReturnSuccess;
         }
+    }
+
+    if (dict->getObject("commit")) {
+        IOLog("[BLTX] setProperties key=commit input=0x00000001 -> %u%%\n", getBacklightPercent());
+        return kIOReturnSuccess;
     }
 
     return super::setProperties(properties);
@@ -5078,20 +5511,136 @@ void FakeIrisXEFramebuffer::ggttUnmap(uint64_t gpuAddr, uint32_t pages) {
 
 
 
+void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
+{
+    fCommandSubmissionReady = ready;
+    setProperty("FakeIrisXECommandSubmissionReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXERcsRingValidated", fRcsRingValidated ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("IOFBAccelerated", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("IOFBAccelerator", kOSBooleanFalse);
+    setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
+    setProperty("HardwareAccelerated", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("GPURendering", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("MetalSupported", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("MetalDevice", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    IOLog("(FakeIrisXE) [V171] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+          ready ? 1U : 0U,
+          reason ? reason : "unknown",
+          fRcsRingValidated ? 1U : 0U,
+          fExeclist,
+          fRcsRing);
+}
+
+void FakeIrisXEFramebuffer::destroyRcsRingState()
+{
+    if (fRingGpuVA && fRingSize) {
+        const uint32_t pages = static_cast<uint32_t>((fRingSize + 4095U) >> 12);
+        ggttUnmap(fRingGpuVA, pages);
+    }
+    if (fRingGem) {
+        fRingGem->unpin();
+        fRingGem->release();
+        fRingGem = nullptr;
+    }
+    if (fRcsRing) {
+        delete fRcsRing;
+        fRcsRing = nullptr;
+    }
+    fRingGpuVA = 0;
+    fRingSize = 0;
+    fRcsRingValidated = false;
+    setProperty("FakeIrisXERcsRingValidated", kOSBooleanFalse);
+}
+
+bool FakeIrisXEFramebuffer::validateRcsRingState(const char* phase, bool delayedCheck)
+{
+    if (!fRcsRing || !fRingGpuVA || !fRingSize) {
+        IOLog("(FakeIrisXE) [V171] validateRcsRingState(%s): ring missing\n",
+              phase ? phase : "unknown");
+        fRcsRingValidated = false;
+        setProperty("FakeIrisXERcsRingValidated", kOSBooleanFalse);
+        return false;
+    }
+
+    if (!forcewakeRenderHold(5000)) {
+        IOLog("(FakeIrisXE) [V171] validateRcsRingState(%s): forcewake failed\n",
+              phase ? phase : "unknown");
+        fRcsRingValidated = false;
+        setProperty("FakeIrisXERcsRingValidated", kOSBooleanFalse);
+        return false;
+    }
+
+    const uint32_t baseLoExpected = static_cast<uint32_t>(fRingGpuVA & 0xFFFFFFFFULL);
+    const uint32_t baseHiExpected = static_cast<uint32_t>(fRingGpuVA >> 32);
+
+    uint32_t ringStart = safeMMIORead(kTglRcsRingStart);
+    uint32_t head0 = safeMMIORead(kTglRcsRingHead);
+    uint32_t tail0 = safeMMIORead(kTglRcsRingTail);
+    uint32_t ctl0 = safeMMIORead(kTglRcsRingCtl);
+
+    if (delayedCheck) {
+        IODelay(25);
+    }
+
+    uint32_t head1 = safeMMIORead(kTglRcsRingHead);
+    uint32_t tail1 = safeMMIORead(kTglRcsRingTail);
+    uint32_t ctl1 = safeMMIORead(kTglRcsRingCtl);
+
+    forcewakeRenderRelease();
+
+    const bool baseValid = (ringStart == baseLoExpected) && (baseHiExpected == 0);
+    const bool ctlEnabledNow = (ctl0 & 0x1U) != 0;
+    const bool ctlEnabledStable = (ctl1 & 0x1U) != 0;
+    const uint32_t headOffset = head1 & 0x001FFFFCU;
+    const uint32_t tailOffset = tail1 & 0x001FFFFCU;
+    const bool offsetsInRange = (headOffset < fRingSize) && (tailOffset < fRingSize);
+
+    fRcsRingValidated = baseValid && ctlEnabledNow && ctlEnabledStable && offsetsInRange;
+    setProperty("FakeIrisXERcsRingValidated", fRcsRingValidated ? kOSBooleanTrue : kOSBooleanFalse);
+    setNumberProperty(this, "FakeIrisXERingCtlInitial", ctl0, 32);
+    setNumberProperty(this, "FakeIrisXERingCtlStable", ctl1, 32);
+    setNumberProperty(this, "FakeIrisXERingHead", head1, 32);
+    setNumberProperty(this, "FakeIrisXERingTail", tail1, 32);
+
+    setNumberProperty(this, "FakeIrisXERingStart", ringStart, 32);
+
+    IOLog("(FakeIrisXE) [V171] Stage4 ring validation (%s): start=0x%08X base=%s ctl0=0x%08X ctl1=0x%08X head=0x%08X tail=0x%08X size=0x%zX result=%s\n",
+          phase ? phase : "unknown",
+          ringStart,
+          baseValid ? "OK" : "BAD",
+          ctl0,
+          ctl1,
+          head1,
+          tail1,
+          fRingSize,
+          fRcsRingValidated ? "PASS" : "FAIL");
+
+    return fRcsRingValidated;
+}
+
 // create ring: allocate GEM -> pin -> ggttMap -> program registers
 FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 {
     IOLog("(FakeIrisXE) createRcsRing() size=%zu\n", ringBytes);
 
-    // If ring already exists — still call enableRing to ensure it's enabled
-    if (fRingRCS != nullptr) {
-        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p, calling enableRing\n", fRingRCS);
-        fRingRCS->setRingSize(ringBytes);  // V154: Ensure size is set
-        fRingRCS->enableRing();
-        return fRingRCS;
+    if (fRcsRing != nullptr) {
+        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p, re-enabling and validating\n", fRcsRing);
+        if (!forcewakeRenderHold(5000)) {
+            IOLog("❌ createRcsRing — forcewakeRenderHold failed before re-enable\n");
+            destroyRcsRingState();
+            return nullptr;
+        }
+        fRcsRing->setRingSize(ringBytes);
+        fRcsRing->programRingBaseToHW();
+        fRcsRing->enableRing();
+        forcewakeRenderRelease();
+        if (validateRcsRingState("reuse", true)) {
+            return fRcsRing;
+        }
+        IOLog("❌ createRcsRing — existing ring failed validation, rebuilding\n");
+        destroyRcsRingState();
     }
 
-    // Allocate GEM buffer
     FakeIrisXEGEM* ringGem = FakeIrisXEGEM::withSize(ringBytes, 0);
     if (!ringGem) {
         IOLog("❌ createRcsRing — GEM allocation failed\n");
@@ -5100,7 +5649,6 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 
     ringGem->pin();
 
-    // Map into GGTT
     uint64_t ringGpuVA = ggttMap(ringGem);
     if (ringGpuVA == 0) {
         IOLog("❌ createRcsRing — GGTT mapping failed\n");
@@ -5109,45 +5657,52 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
         return nullptr;
     }
 
-    // Create ring object
-    fRingRCS = new FakeIrisXERing(fBar0);   // mmio accessor
-    if (!fRingRCS) {
-        IOLog("❌ createRcsRing — ring object alloc failed\n");
+    IOBufferMemoryDescriptor* ringDesc = ringGem->memoryDescriptor();
+    if (!ringDesc || !ringDesc->getBytesNoCopy()) {
+        IOLog("❌ createRcsRing — ring CPU mapping missing\n");
+        ggttUnmap(ringGpuVA, static_cast<uint32_t>((ringBytes + 4095U) >> 12));
+        ringGem->unpin();
+        ringGem->release();
         return nullptr;
     }
 
-    // Save metadata into ring object
-    fRingRCS->attachRingGPUAddress(ringGpuVA);
-    fRingRCS->setRingSize(ringBytes);  // V154: Set ring size before enableRing
+    fRcsRing = new FakeIrisXERing(fBar0);
+    if (!fRcsRing) {
+        IOLog("❌ createRcsRing — ring object alloc failed\n");
+        ggttUnmap(ringGpuVA, static_cast<uint32_t>((ringBytes + 4095U) >> 12));
+        ringGem->unpin();
+        ringGem->release();
+        return nullptr;
+    }
+
+    bzero(ringDesc->getBytesNoCopy(), ringBytes);
+    fRcsRing->attachRingCPUAddress(ringDesc->getBytesNoCopy());
+    fRcsRing->attachRingGPUAddress(ringGpuVA);
+    fRcsRing->setRingSize(ringBytes);
     fRingSize = ringBytes;
     fRingGpuVA = ringGpuVA;
-    fRingGem = ringGem;      // store GEM (so it doesn't get freed)
+    fRingGem = ringGem;
 
-    // Program registers
-    fRingRCS->programRingBaseToHW();
-    fRingRCS->enableRing();            // RING_CTL = EN | size
+    if (!forcewakeRenderHold(5000)) {
+        IOLog("❌ createRcsRing — forcewakeRenderHold failed before programming ring\n");
+        destroyRcsRingState();
+        return nullptr;
+    }
 
-    // V149: Add ring buffer status diagnostics
-    IOLog("(FakeIrisXE)[V149] RCS Ring Status After Enable:\n");
-    // Keep diagnostics aligned with FakeIrisXERing.cpp offsets.
-    // RENDER_RING_BASE = 0x2000, HEAD = +0x10, TAIL = +0x18, CTL = +0x20
-    uint32_t ringHead = safeMMIORead(0x2010);  // RING_HEAD
-    uint32_t ringTail = safeMMIORead(0x2018);  // RING_TAIL
-    uint32_t ringCtl = safeMMIORead(0x2020);   // RING_CTL
-    
-    IOLog("(FakeIrisXE)[V149]   RING_HEAD:  0x%08X\n", ringHead);
-    IOLog("(FakeIrisXE)[V149]   RING_TAIL:  0x%08X\n", ringTail);
-    IOLog("(FakeIrisXE)[V149]   RING_CTL:   0x%08X\n", ringCtl);
-    
-    bool ringEmpty = (ringHead & 0xFFFF) == (ringTail & 0xFFFF);
-    bool ringRunning = (ringCtl & 0x1) != 0;
-    IOLog("(FakeIrisXE)[V149]   Ring Empty: %s\n", ringEmpty ? "YES ✅" : "NO");
-    IOLog("(FakeIrisXE)[V149]   Ring Running: %s\n", ringRunning ? "YES ✅" : "NO ❌");
-    
+    fRcsRing->programRingBaseToHW();
+    fRcsRing->enableRing();
+    forcewakeRenderRelease();
+
+    if (!validateRcsRingState("stage4", true)) {
+        IOLog("❌ createRcsRing — strict validation failed\n");
+        destroyRcsRingState();
+        return nullptr;
+    }
+
     IOLog("🟢 RCS ring created @ GPUVA=0x%llx size=%zu (ptr %p)\n",
-          (unsigned long long) ringGpuVA, ringBytes, fRingRCS);
+          (unsigned long long) ringGpuVA, ringBytes, fRcsRing);
 
-    return fRingRCS;
+    return fRcsRing;
 }
 
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
@@ -5157,8 +5712,13 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     IOLog("(FakeIrisXE)[V151] GPU EXECUTION TEST - COMPREHENSIVE DIAGNOSTICS\n");
     IOLog("(FakeIrisXE)[V151] ============================================\n");
     
-    if (!fExeclist || !fRingRCS) {
+    if (!fExeclist || !fRcsRing) {
         IOLog("(FakeIrisXE)[V151] ❌ No Execlist or Ring available\n");
+        return false;
+    }
+
+    if (!validateRcsRingState("gpu-test-pre", true)) {
+        IOLog("(FakeIrisXE)[V151] ❌ Ring validation failed before test submission\n");
         return false;
     }
     
@@ -5186,15 +5746,14 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     IOLog("(FakeIrisXE)[V151] --- RING REGISTERS ---\n");
     
     // Read all ring registers
-    uint32_t ringBaseLo = safeMMIORead(0x2000);   // RING_BASE_LO
-    uint32_t ringBaseHi = safeMMIORead(0x2004);   // RING_BASE_HI
-    uint32_t ringHead = safeMMIORead(0x2010);     // RING_HEAD
-    uint32_t ringTail = safeMMIORead(0x2018);     // RING_TAIL
-    uint32_t ringCtl = safeMMIORead(0x2020);      // RING_CTL
-    uint32_t ringStatus = safeMMIORead(0x2038);   // RING_STATUS (diag only)
-    uint32_t ringHWS = safeMMIORead(0x2040);      // RING_HWS
+    uint32_t ringStart = safeMMIORead(kTglRcsRingStart);
+    uint32_t ringHead = safeMMIORead(kTglRcsRingHead);
+    uint32_t ringTail = safeMMIORead(kTglRcsRingTail);
+    uint32_t ringCtl = safeMMIORead(kTglRcsRingCtl);
+    uint32_t ringStatus = safeMMIORead(RCS0_EXECLIST_STATUS_LO);
+    uint32_t ringHWS = 0;
     
-    IOLog("(FakeIrisXE)[V151] BASE:  0x%08X%08X\n", ringBaseHi, ringBaseLo);
+    IOLog("(FakeIrisXE)[V151] START: 0x%08X\n", ringStart);
     IOLog("(FakeIrisXE)[V151] HEAD:  0x%08X (GPU read position)\n", ringHead);
     IOLog("(FakeIrisXE)[V151] TAIL:  0x%08X (CPU write position)\n", ringTail);
     IOLog("(FakeIrisXE)[V151] CTL:   0x%08X (EN=%s SIZE=%dKB)\n", ringCtl,
@@ -5206,7 +5765,7 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     
     // Check if ring is enabled
     bool ringEnabled = (ringCtl & 0x1) != 0;
-    bool ringReady = ringEnabled;
+    bool ringReady = ringEnabled && fRcsRingValidated;
     
     IOLog("(FakeIrisXE)[V151] Ring Enabled: %s\n", ringEnabled ? "✅ YES" : "❌ NO");
     IOLog("(FakeIrisXE)[V151] Ring Ready: %s\n", ringReady ? "✅ YES" : "❌ NO");
@@ -5271,8 +5830,8 @@ bool FakeIrisXEFramebuffer::testGPUExecution()
     IOSleep(50);
     
     // Read final ring state
-    uint32_t ringHeadEnd = safeMMIORead(0x2010);
-    uint32_t ringTailEnd = safeMMIORead(0x2018);
+    uint32_t ringHeadEnd = safeMMIORead(kTglRcsRingHead);
+    uint32_t ringTailEnd = safeMMIORead(kTglRcsRingTail);
     ringStatus = safeMMIORead(0x2038);
     
     IOLog("(FakeIrisXE)[V151] Final:   HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n", 
@@ -5359,8 +5918,13 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createBltRing(size_t ringBytes)
 // - batchSizeBytes: length of the batch
 // Return: sequence number or 0 on failure
 uint32_t FakeIrisXEFramebuffer::submitBatch(FakeIrisXEGEM* batchGem, size_t batchOffsetBytes, size_t batchSizeBytes) {
-    if (!fRingRCS || !batchGem) {
+    if (!fRcsRing || !batchGem) {
         IOLog("FakeIrisXEFramebuffer: submitBatch - bad args\n");
+        return 0;
+    }
+
+    if (!validateRcsRingState("submitBatch", true)) {
+        IOLog("FakeIrisXEFramebuffer: submitBatch - ring validation failed\n");
         return 0;
     }
 
@@ -5405,7 +5969,7 @@ uint32_t FakeIrisXEFramebuffer::submitBatch(FakeIrisXEGEM* batchGem, size_t batc
     // For now: submit batchGpu directly.
 
     // Push batch address into ring: use submitBatch64 (the ring helper we implemented)
-    bool ok = fRingRCS->submitBatch64(batchGpu);
+    bool ok = fRcsRing->submitBatch64(batchGpu);
     if (!ok) {
         IOLog("FakeIrisXEFramebuffer: submitBatch - ring submit failed\n");
         batchGem->unpin();
@@ -5595,8 +6159,13 @@ static FakeIrisXEGEM* createMasterBatchChain(FakeIrisXEFramebuffer* fb, uint64_t
 // - userBatchSizeBytes: size of user batch region (for logging only)
 // Returns sequence number (non-zero) on success, 0 on failure.
 uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem, size_t userBatchOffsetBytes, size_t userBatchSizeBytes) {
-    if (!userBatchGem || !fRingRCS) {
+    if (!userBatchGem || !fRcsRing) {
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - invalid args\n");
+        return 0;
+    }
+
+    if (!validateRcsRingState("appendFenceAndSubmit", true)) {
+        IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - ring validation failed\n");
         return 0;
     }
 
@@ -5669,7 +6238,7 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
     }
 
     // 5) Submit master batch (this will execute user batch then tail in order)
-    bool ok = fRingRCS->submitBatch64(masterGpuAddr);
+    bool ok = fRcsRing->submitBatch64(masterGpuAddr);
     if (!ok) {
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - ring submit failed\n");
         masterGem->unpin(); masterGem->release();
@@ -6080,11 +6649,10 @@ void FakeIrisXEFramebuffer::dumpIRQAndRingRegsSafe() {
     
     
     // Ring registers (RCS)
-    IOLog("RING_HEAD = 0x%08x\n", r(RING_HEAD));
-    IOLog("RING_TAIL = 0x%08x\n", r(RING_TAIL));
-    IOLog("RING_CTL  = 0x%08x\n", r(RING_CTL));
-    IOLog("RING_BASE_LO = 0x%08x\n", r(RING_BASE_LO));
-    IOLog("RING_BASE_HI = 0x%08x\n", r(RING_BASE_HI));
+    IOLog("RCS0_RING_HEAD  = 0x%08x\n", r(kTglRcsRingHead));
+    IOLog("RCS0_RING_TAIL  = 0x%08x\n", r(kTglRcsRingTail));
+    IOLog("RCS0_RING_CTL   = 0x%08x\n", r(kTglRcsRingCtl));
+    IOLog("RCS0_RING_START = 0x%08x\n", r(kTglRcsRingStart));
 
     IOLog("=================================================\n");
 

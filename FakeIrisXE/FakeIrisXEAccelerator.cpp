@@ -111,27 +111,29 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     IOLog("(FakeIrisXEAccelerator)[V148] FAKEIRISXE METAL ACCELERATOR STARTING\n");
     IOLog("(FakeIrisXEAccelerator)[V148] ============================================\n");
     
-    // advertise ourselves to IOAccelFamily / OS
-    setProperty("MetalSupported", true);
-    setProperty("IOAccelFamily", true);
-    setProperty("IOGVA", true);
-    setProperty("MetalPlugin", true);
+    // Publish a pending accelerator personality until the framebuffer proves
+    // the ring and command submission path are actually usable.
+    setProperty("MetalSupported", kOSBooleanFalse);
+    setProperty("IOAccelFamily", kOSBooleanTrue);
+    setProperty("IOGVA", kOSBooleanTrue);
+    setProperty("MetalPlugin", kOSBooleanFalse);
     setProperty("MetalDriver", "FakeIrisXe");
     setProperty("IOAccelerator", kOSBooleanTrue);
     setProperty("IOMatchCategory", "IOAccelerator");
-    setProperty("IOAccelReady", kOSBooleanTrue);
-    setProperty("IOGPU", kOSBooleanTrue);
+    setProperty("IOAccelReady", kOSBooleanFalse);
+    setProperty("IOGPU", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorAttached", kOSBooleanTrue);
+    setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanFalse);
 
     IOLog("(FakeIrisXEAccelerator)[V148] Properties set:\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   MetalSupported = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   MetalSupported = false (pending)\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelFamily = true\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   IOGVA = true\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   MetalPlugin = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   MetalPlugin = false (pending)\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   MetalDriver = FakeIrisXe\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelerator = true\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelReady = true\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   IOGPU = true\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelReady = false (pending)\n");
+    IOLog("(FakeIrisXEAccelerator)[V148]   IOGPU = false (pending)\n");
 
     // framebuffer basics
     fW      = fFB->getWidth();
@@ -981,16 +983,24 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     
     IOLog("(FakeIrisXEFramebuffer) [Accel] link debug: Exec=%p Ring=%p\n", fExeclistFromFB, fRcsRingFromFB);
 
-    if (!fExeclistFromFB || !fRcsRingFromFB)
+    if (!fExeclistFromFB || !fRcsRingFromFB || !fb->isCommandSubmissionReady())
     {
         setProperty("FakeIrisXELinkPending", kOSBooleanTrue);
         setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanFalse);
-        IOLog("(FakeIrisXEFramebuffer) [Accel] link pending: missing RING or EXECLIST\n");
+        setProperty("IOAccelReady", kOSBooleanFalse);
+        setProperty("MetalSupported", kOSBooleanFalse);
+        setProperty("MetalPlugin", kOSBooleanFalse);
+        setProperty("IOGPU", kOSBooleanFalse);
+        IOLog("(FakeIrisXEFramebuffer) [Accel] link pending: missing RING/EXECLIST or framebuffer execution not ready\n");
         return;
     }
 
     setProperty("FakeIrisXELinkPending", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
+    setProperty("IOAccelReady", kOSBooleanTrue);
+    setProperty("MetalSupported", kOSBooleanTrue);
+    setProperty("MetalPlugin", kOSBooleanTrue);
+    setProperty("IOGPU", kOSBooleanTrue);
     setProperty("IOAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
     fFB->setProperty("IOFBAccelerator", kOSBooleanTrue);

@@ -5,25 +5,10 @@
 #include <stdatomic.h>
 #include "FakeIrisXEExeclist.hpp"
 
-#ifndef RENDER_RING_BASE
-#define RENDER_RING_BASE 0x2000
-#endif
-
-#ifndef RENDER_RING_HEAD
-#define RENDER_RING_HEAD (RENDER_RING_BASE + 0x10)
-#endif
-#ifndef RENDER_RING_TAIL
-#define RENDER_RING_TAIL (RENDER_RING_BASE + 0x18)
-#endif
-#ifndef RENDER_RING_CTL
-#define RENDER_RING_CTL  (RENDER_RING_BASE + 0x20)
-#endif
-#ifndef RENDER_RING_BASE_LO
-#define RENDER_RING_BASE_LO (RENDER_RING_BASE + 0x00)
-#endif
-#ifndef RENDER_RING_BASE_HI
-#define RENDER_RING_BASE_HI (RENDER_RING_BASE + 0x04)
-#endif
+static inline uint32_t ringTailReg(uint32_t base)  { return base + 0x30; }
+static inline uint32_t ringHeadReg(uint32_t base)  { return base + 0x34; }
+static inline uint32_t ringStartReg(uint32_t base) { return base + 0x38; }
+static inline uint32_t ringCtlReg(uint32_t base)   { return base + 0x3C; }
 
 static inline void mmio_write32(volatile uint32_t* mmio, uint32_t off, uint32_t val)
 {
@@ -42,6 +27,7 @@ FakeIrisXERing::FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOff
 : mMMIO(mmioBase),
   mRingBaseOffset(ringBaseOffset),
   mRingCPU(nullptr),
+  mOwnsRingCPU(false),
   mRingSize(0),
   mRingWriteOffset(0),
   mRingGPUAddr(0)
@@ -51,7 +37,7 @@ FakeIrisXERing::FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOff
 
 FakeIrisXERing::~FakeIrisXERing()
 {
-    if (mRingCPU)
+    if (mRingCPU && mOwnsRingCPU)
         IOFreeAligned(mRingCPU, mRingSize);
 }
 
@@ -66,6 +52,7 @@ bool FakeIrisXERing::allocateRing(size_t bytes)
     bzero(buf, size);
 
     mRingCPU = (uint32_t*)buf;
+    mOwnsRingCPU = true;
     mRingSize = size;
     mRingWriteOffset = 0;
     return true;
@@ -76,28 +63,33 @@ void FakeIrisXERing::attachRingGPUAddress(uint64_t gpu)
     mRingGPUAddr = gpu;
 }
 
+void FakeIrisXERing::attachRingCPUAddress(void* cpuAddr)
+{
+    mRingCPU = static_cast<uint32_t*>(cpuAddr);
+    mOwnsRingCPU = false;
+    mRingWriteOffset = 0;
+}
+
 void FakeIrisXERing::programRingBaseToHW()
 {
     if (!mMMIO || !mRingGPUAddr) return;
 
-    uint32_t baseLo = mRingBaseOffset + 0x00;
-    uint32_t baseHi = mRingBaseOffset + 0x04;
-    
-    mmio_write32(mMMIO, baseLo, (uint32_t)mRingGPUAddr);
-    mmio_write32(mMMIO, baseHi, (uint32_t)(mRingGPUAddr >> 32));
+    uint32_t baseStart = ringStartReg(mRingBaseOffset);
 
-    (void)mmio_read32(mMMIO, baseLo);
-    IOLog("(FakeIrisXE) Ring base programmed: LO=0x%X HI=0x%X addr=0x%llX\n", 
-          baseLo, baseHi, (unsigned long long)mRingGPUAddr);
+    mmio_write32(mMMIO, baseStart, (uint32_t)mRingGPUAddr);
+
+    (void)mmio_read32(mMMIO, baseStart);
+    IOLog("(FakeIrisXE) Ring base programmed: START=0x%X addr=0x%llX\n",
+          baseStart, (unsigned long long)mRingGPUAddr);
 }
 
 void FakeIrisXERing::enableRing()
 {
     if (!mMMIO) return;
 
-    const uint32_t headReg = mRingBaseOffset + 0x10;
-    const uint32_t tailReg = mRingBaseOffset + 0x18;
-    const uint32_t ctlReg = mRingBaseOffset + 0x20;
+    const uint32_t headReg = ringHeadReg(mRingBaseOffset);
+    const uint32_t tailReg = ringTailReg(mRingBaseOffset);
+    const uint32_t ctlReg = ringCtlReg(mRingBaseOffset);
 
     // Gen9+ ring CTL: bit0=enable, bits 20:12=(ring pages - 1)
     // where each page is 4KB.
@@ -144,7 +136,7 @@ void FakeIrisXERing::updateHWTail()
 {
     if (!mMMIO) return;
 
-    uint32_t tailReg = mRingBaseOffset + 0x18;
+    uint32_t tailReg = ringTailReg(mRingBaseOffset);
     uint32_t tail = (uint32_t)mRingWriteOffset;
     mmio_write32(mMMIO, tailReg, tail);
     (void)mmio_read32(mMMIO, tailReg);
@@ -152,7 +144,7 @@ void FakeIrisXERing::updateHWTail()
 
 uint32_t FakeIrisXERing::readHWHead()
 {
-    uint32_t headReg = mRingBaseOffset + 0x10;
+    uint32_t headReg = ringHeadReg(mRingBaseOffset);
     return mmio_read32(mMMIO, headReg);
 }
 
