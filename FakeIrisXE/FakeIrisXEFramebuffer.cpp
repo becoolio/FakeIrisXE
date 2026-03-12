@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V177 - Fallback Execlist + LRC Cleanup     ║\n");
+    IOLog("║    FAKEIRISXE V178 - Dual ELSP Audit + Fallback Path     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -912,7 +912,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V177 - Fallback Execlist + LRC Cleanup    ║\n");
+    IOLog("║     FAKEIRISXE V178 - Dual ELSP Audit + Fallback Path    ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2584,7 +2584,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V177)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V178)\n");
     return true;
 
 }

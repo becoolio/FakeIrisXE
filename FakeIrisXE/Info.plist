@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.177</string>
+	<string>1.0.178</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.177</string>
+	<string>1.0.178</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V177 - Fallback Execlist + LRC Cleanup</string>
+	<string>FakeIrisXe V178 - Dual ELSP Audit + Fallback Path</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

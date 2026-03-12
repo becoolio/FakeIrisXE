@@ -25,6 +25,14 @@ static const uint32_t kExecRingTailReg  = RCS0_RING_TAIL;
 static const uint32_t kExecRingHeadReg  = RCS0_RING_HEAD;
 static const uint32_t kExecRingStartReg = RCS0_RING_START;
 static const uint32_t kExecRingCtlReg   = RCS0_RING_CTL;
+static const uint32_t kExecElspPrimaryLo = RCS0_EXECLIST_SUBMITPORT_LO;
+static const uint32_t kExecElspPrimaryHi = RCS0_EXECLIST_SUBMITPORT_HI;
+static const uint32_t kExecElspLegacyLo  = RCS0_ELSP1_LO;
+static const uint32_t kExecElspLegacyHi  = RCS0_ELSP1_HI;
+static const uint32_t kExecStatusPrimaryLo = RCS0_EXECLIST_STATUS_LO;
+static const uint32_t kExecStatusPrimaryHi = RCS0_EXECLIST_STATUS_HI;
+static const uint32_t kExecStatusLegacyLo  = 0x2230;
+static const uint32_t kExecStatusLegacyHi  = 0x2234;
 
 // FACTORY
 FakeIrisXEExeclist* FakeIrisXEExeclist::withOwner(FakeIrisXEFramebuffer* owner)
@@ -756,10 +764,12 @@ bool FakeIrisXEExeclist::programRcsForContext(
     // --------------------------------------------------
     // STEP 2: Read ELSP before write (using SAME regs as setupExeclistPorts)
     // --------------------------------------------------
-    uint32_t elsp_before_lo = mmioRead32(RCS0_EXECLIST_SUBMITPORT_LO);
-    uint32_t elsp_before_hi = mmioRead32(RCS0_EXECLIST_SUBMITPORT_HI);
-    IOLog("programRcsForContext: ELSP before: LO=0x%08x HI=0x%08x\n",
-          elsp_before_lo, elsp_before_hi);
+    uint32_t elsp_before_lo = mmioRead32(kExecElspPrimaryLo);
+    uint32_t elsp_before_hi = mmioRead32(kExecElspPrimaryHi);
+    uint32_t legacy_before_lo = mmioRead32(kExecElspLegacyLo);
+    uint32_t legacy_before_hi = mmioRead32(kExecElspLegacyHi);
+    IOLog("programRcsForContext: ELSP before primary[0x%08x 0x%08x] legacy[0x%08x 0x%08x]\n",
+          elsp_before_lo, elsp_before_hi, legacy_before_lo, legacy_before_hi);
 
     // --------------------------------------------------
     // STEP 3: Write ELSP via mmioWrite32 (NO safeMMIOWrite, NO gpuPowerOn)
@@ -767,8 +777,10 @@ bool FakeIrisXEExeclist::programRcsForContext(
     uint32_t desc_lo = (uint32_t)(listGpu & 0xFFFFFFFFull);
     uint32_t desc_hi = (uint32_t)(listGpu >> 32);
 
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_LO, desc_lo);
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_HI, desc_hi);
+    mmioWrite32(kExecElspPrimaryLo, desc_lo);
+    mmioWrite32(kExecElspPrimaryHi, desc_hi);
+    mmioWrite32(kExecElspLegacyLo, desc_lo);
+    mmioWrite32(kExecElspLegacyHi, desc_hi);
 
     // small delay so posted writes land
     IOSleep(2);
@@ -776,14 +788,23 @@ bool FakeIrisXEExeclist::programRcsForContext(
     // --------------------------------------------------
     // STEP 4: Read back ELSP and STATUS
     // --------------------------------------------------
-    uint32_t elsp_after_lo = mmioRead32(RCS0_EXECLIST_SUBMITPORT_LO);
-    uint32_t elsp_after_hi = mmioRead32(RCS0_EXECLIST_SUBMITPORT_HI);
-    uint32_t status_lo     = mmioRead32(RCS0_EXECLIST_STATUS_LO);
+    uint32_t elsp_after_lo = mmioRead32(kExecElspPrimaryLo);
+    uint32_t elsp_after_hi = mmioRead32(kExecElspPrimaryHi);
+    uint32_t legacy_after_lo = mmioRead32(kExecElspLegacyLo);
+    uint32_t legacy_after_hi = mmioRead32(kExecElspLegacyHi);
+    uint32_t status_lo = mmioRead32(kExecStatusPrimaryLo);
+    uint32_t status_hi = mmioRead32(kExecStatusPrimaryHi);
+    uint32_t legacy_status_lo = mmioRead32(kExecStatusLegacyLo);
+    uint32_t legacy_status_hi = mmioRead32(kExecStatusLegacyHi);
 
-    IOLog("programRcsForContext: ELSP after: LO=0x%08x HI=0x%08x STATUS_LO=0x%08x\n",
-          elsp_after_lo, elsp_after_hi, status_lo);
+    IOLog("programRcsForContext: ELSP after primary[0x%08x 0x%08x] legacy[0x%08x 0x%08x] status_primary[0x%08x 0x%08x] status_legacy[0x%08x 0x%08x]\n",
+          elsp_after_lo, elsp_after_hi,
+          legacy_after_lo, legacy_after_hi,
+          status_lo, status_hi,
+          legacy_status_lo, legacy_status_hi);
 
-    bool ok = (elsp_after_lo == desc_lo && elsp_after_hi == desc_hi);
+    bool ok = (elsp_after_lo == desc_lo && elsp_after_hi == desc_hi) ||
+              (legacy_after_lo == desc_lo && legacy_after_hi == desc_hi);
 
     if (!ok) {
         IOLog("❌ programRcsForContext: ELSP write FAILED, "
@@ -899,11 +920,13 @@ bool FakeIrisXEExeclist::programRcsForContext(
     // STEP 5: Kick execlist
     // --------------------------------------------------
     mmioWrite32(RCS0_EXECLIST_CONTROL, 0x1);   // minimal "kick"
+    mmioWrite32(RCS0_EXECLIST_SQ_CONTENTS, 0x1);
     IOSleep(1);
 
-    uint32_t status_after_kick = mmioRead32(RCS0_EXECLIST_STATUS_LO);
-    IOLog("programRcsForContext: EXECLIST kicked, STATUS_LO=0x%08x\n",
-          status_after_kick);
+    uint32_t status_after_kick = mmioRead32(kExecStatusPrimaryLo);
+    uint32_t legacy_status_after_kick = mmioRead32(kExecStatusLegacyLo);
+    IOLog("programRcsForContext: EXECLIST kicked, STATUS_PRIMARY=0x%08x STATUS_LEGACY=0x%08x\n",
+          status_after_kick, legacy_status_after_kick);
 
     // --------------------------------------------------
     // STEP 6: Release forcewake
@@ -1408,14 +1431,24 @@ bool FakeIrisXEExeclist::submitToELSPSlot(int slot, ExecQueueEntry* e)
     uint32_t lo = (uint32_t)(listGGTT & 0xFFFFFFFFu);
     uint32_t hi = (uint32_t)(listGGTT >> 32);
 
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_LO, lo);
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_HI, hi);
+    mmioWrite32(kExecElspPrimaryLo, lo);
+    mmioWrite32(kExecElspPrimaryHi, hi);
+    mmioWrite32(kExecElspLegacyLo, lo);
+    mmioWrite32(kExecElspLegacyHi, hi);
 
     // Kick control register (lightweight)
     mmioWrite32(RCS0_EXECLIST_SQ_CONTENTS, 0x1);
+    mmioWrite32(RCS0_EXECLIST_CONTROL, 0x1);
     IOSleep(2);
     uint32_t sq = mmioRead32(RCS0_EXECLIST_SQ_CONTENTS);
-    IOLog("SQ_CONTENTS after kick = 0x%08x\n", sq);
+    uint32_t primaryLo = mmioRead32(kExecElspPrimaryLo);
+    uint32_t primaryHi = mmioRead32(kExecElspPrimaryHi);
+    uint32_t legacyLo = mmioRead32(kExecElspLegacyLo);
+    uint32_t legacyHi = mmioRead32(kExecElspLegacyHi);
+    uint32_t statusPrimary = mmioRead32(kExecStatusPrimaryLo);
+    uint32_t statusLegacy = mmioRead32(kExecStatusLegacyLo);
+    IOLog("SQ_CONTENTS after kick = 0x%08x ELSP primary[0x%08x 0x%08x] legacy[0x%08x 0x%08x] status primary=0x%08x legacy=0x%08x\n",
+          sq, primaryLo, primaryHi, legacyLo, legacyHi, statusPrimary, statusLegacy);
 
     
     IOLog("(FakeIrisXE) [Exec] submitToELSPSlot slot=%d ctx=%u listGGTT=0x%llx\n",
