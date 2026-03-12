@@ -71,17 +71,8 @@ private:
         kGuCFirmwareModeLinuxReserved,
     };
 
-    enum AppleRegisterDomain {
-        kAppleRegisterDomainNone = 0,
-        kAppleRegisterDomainGlobal,
-        kAppleRegisterDomainRender,
-        kAppleRegisterDomainMedia,
-    };
-
     GuCStage fLastReportedStage;
     GuCFirmwareMode fFirmwareMode;
-    bool fApplePinnedAccessActive;
-    AppleRegisterDomain fApplePinnedDomain;
     
 public:
     static FakeIrisXEGuC* withOwner(FakeIrisXEFramebuffer* owner);
@@ -127,14 +118,6 @@ private:
     GuCStatusDecoded decodeStatus(uint32_t rawStatus) const;
     bool isImpossibleStatusDecode(uint32_t rawStatus, const GuCStatusDecoded& decoded) const;
     uint32_t selectGtPmConfigReg() const;
-    AppleRegisterDomain determinePowerDomainForOffset(uint32_t offset) const;
-    const char* appleRegisterDomainName(AppleRegisterDomain domain) const;
-    bool beginAppleRegisterAccess(AppleRegisterDomain domain, const char* label,
-                                  bool* outAcquiredSession = nullptr);
-    void endAppleRegisterAccess(bool acquiredSession);
-    uint32_t safeRead32Apple(uint32_t offset, const char* label, bool* outOk = nullptr);
-    bool safeWrite32Apple(uint32_t offset, uint32_t value, const char* label,
-                          uint32_t* outReadback = nullptr);
     bool ownerBooleanPropertyEnabled(const char* key) const;
     void logForceWakeDiagnostics(const char* label) const;
     void logAppleBootAudit(const char* label) const;
@@ -160,7 +143,7 @@ private:
     void consumerCoherencyBarrier(const char* reason);
     void logLinuxBaselineCorrelation(bool bootSuccess);
 
-    // V52.1: ForceWake helpers
+    // V52.1: ForceWake helpers (matching Apple's SafeForceWake)
     bool acquireForceWake();
     void releaseForceWake();
     

@@ -3,7 +3,7 @@
 #pragma once
 
 
-// #include <IOKit/acpi/IOACPIPlatformDevice.h> - Not needed for this implementation
+#include <IOKit/acpi/IOACPIPlatformDevice.h>
 
 #include <IOKit/graphics/IOFramebuffer.h>
 #include <IOKit/pci/IOPCIDevice.h> // for IOPCIDevice
@@ -138,12 +138,32 @@ protected:
     
     
      public:
+    
+    
+     // Safe MMIO access methods
+        uint32_t safeMMIORead(uint32_t offset) {
+           if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
+               offset > mmioMap->getLength() - sizeof(uint32_t)) {
+                IOLog("Invalid MMIO read at 0x%X\n", offset);
+                return 0xFFFFFFFF;
+            }
+            return *(volatile uint32_t*)(mmioBase + offset);
+        }
+        
+        void safeMMIOWrite(uint32_t offset, uint32_t value) {
+            if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
+                offset > mmioMap->getLength() - sizeof(uint32_t)) {
+                IOLog("Invalid MMIO write at 0x%X\n", offset);
+                return;
+            }
+            *(volatile uint32_t*)(mmioBase + offset) = value;
+                  #ifdef OSMemoryBarrier
+                  OSMemoryBarrier();
+                  #else
+                  __asm__ volatile("mfence" ::: "memory"); // x86 specific
+                  #endif
 
-        uint32_t safeMMIORead(uint32_t offset);
-        void safeMMIOWrite(uint32_t offset, uint32_t value);
-        uint32_t safeReadRegister32(uint32_t offset);
-        void safeWriteRegister32(uint32_t offset, uint32_t value);
-        void initializeForceWakeSystem(void);
+        }
 
         uint16_t getPCIVendorID() const {
             return pciDevice ? pciDevice->configRead16(kIOPCIConfigVendorID) : 0;
@@ -172,11 +192,6 @@ protected:
         uint64_t getMMIOMapLength() const {
             return mmioMap ? mmioMap->getLength() : 0;
         }
-
-        volatile UInt8* getMMIOBase() const {
-            return mmioBase;
-        }
-
 
         bool isMMIOOffsetValid(uint32_t offset) const {
             return mmioMap && mmioMap->getLength() >= sizeof(uint32_t) &&
