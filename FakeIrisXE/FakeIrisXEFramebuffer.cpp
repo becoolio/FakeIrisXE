@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V175 - Dual Ring Bank + Engine Audit      ║\n");
+    IOLog("║    FAKEIRISXE V177 - Fallback Execlist + LRC Cleanup     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -912,7 +912,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║      FAKEIRISXE V175 - Dual Ring Bank + Engine Audit     ║\n");
+    IOLog("║     FAKEIRISXE V177 - Fallback Execlist + LRC Cleanup    ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2122,7 +2122,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     // Initialize GuC system with Intel PRM-compliant sequence
     if (!initGuCSystem()) {
-        IOLog("(FakeIrisXE) [V45] ❌ GuC init failed; phase-1 safety mode disables legacy execlist and accelerator bring-up\n");
+        IOLog("(FakeIrisXE) [V45] ❌ GuC init failed; entering fallback execlist/ring diagnostics mode\n");
         fGuCEnabled = false;
         setProperty("FakeIrisXEGuCFailureTerminal", kOSBooleanTrue);
         updateExecutionState(false, "guc-failure");
@@ -2135,7 +2135,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
     }
 
-    if (fGuCEnabled) {
+    if (true) {
 
     //enabling interrupts:
     // Create / obtain a workloop (safe)
@@ -2256,9 +2256,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
         
             // Create / init RCS ring (existing helper returns bool)
-            if (createRcsRing(256 * 1024)) {
+            if (!fRcsRing && createRcsRing(256 * 1024)) {
                 IOLog("FakeIrisXEFramebuffer: RCS ring initialization complete. fRcsRing=%p\n", fRcsRing);
-            } else {
+            } else if (!fRcsRing) {
                 IOLog("FakeIrisXEFramebuffer: FAILED creating RCS ring\n");
             }
 
@@ -2457,6 +2457,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                 break;  // Important — only 1 accelerator
             }
         }
+        if (!fGuCEnabled) {
+            setProperty("FakeIrisXEExecutionFallbackMode", kOSBooleanTrue);
+            IOLog("(FakeIrisXE) [V177] Fallback execution diagnostics completed with guc-failure gate still active\n");
+        }
         iter->release();
     }
 
@@ -2580,7 +2584,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V175)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V177)\n");
     return true;
 
 }
@@ -5408,8 +5412,10 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
             return 0;
         }
 
-        // FIXED: TGL 64-bit PTE (bits 63:0)
-        uint64_t pte_val = ((uint64_t)phys >> 12) & 0x0000FFFFFFFFF000ULL;  // Phys page in bits 56:12
+        // TGL 64-bit GGTT PTE: keep the page-aligned physical address in bits [51:12].
+        // The previous `phys >> 12` encoding truncated the address twice and produced
+        // bogus near-zero PTEs, which likely made the GPU reject the ring backing store.
+        uint64_t pte_val = (static_cast<uint64_t>(phys) & 0x0000FFFFFFFFF000ULL);
 
         pte_val |= (1ULL << 57);   // Valid bit (bit 57 = 1)
         pte_val |= (0ULL << 59);   // 4KB page (exponent = 0)
@@ -5419,6 +5425,14 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
         // FIXED: Write full 64-bit PTE (no low/high split)
         volatile uint64_t* pte_ptr = (volatile uint64_t*)fGGTT + gtt_index;
         *pte_ptr = pte_val;
+        uint64_t verify = *pte_ptr;
+        if (i == 0) {
+            IOLog("FakeIrisXEFramebuffer: ggttMap first PTE idx=%llu phys=0x%llx pte=0x%016llx verify=0x%016llx\n",
+                  static_cast<unsigned long long>(gtt_index),
+                  static_cast<unsigned long long>(phys),
+                  static_cast<unsigned long long>(pte_val),
+                  static_cast<unsigned long long>(verify));
+        }
 
         offGPU += 4096;
         offset += segSz ? segSz : 4096;
@@ -5479,7 +5493,7 @@ uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t mi
             return 0;
         }
 
-        uint64_t pte_val = ((uint64_t)phys >> 12) & 0x0000FFFFFFFFF000ULL;
+        uint64_t pte_val = (static_cast<uint64_t>(phys) & 0x0000FFFFFFFFF000ULL);
         pte_val |= (1ULL << 57);
         pte_val |= (0ULL << 59);
         pte_val |= (0ULL << 58);
@@ -5487,6 +5501,14 @@ uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t mi
 
         volatile uint64_t* pte_ptr = (volatile uint64_t*)fGGTT + gtt_index;
         *pte_ptr = pte_val;
+        uint64_t verify = *pte_ptr;
+        if (i == 0) {
+            IOLog("FakeIrisXEFramebuffer: ggttMapAtOrAbove first PTE idx=%llu phys=0x%llx pte=0x%016llx verify=0x%016llx\n",
+                  static_cast<unsigned long long>(gtt_index),
+                  static_cast<unsigned long long>(phys),
+                  static_cast<unsigned long long>(pte_val),
+                  static_cast<unsigned long long>(verify));
+        }
 
         offGPU += 4096;
         offset += segSz ? segSz : 4096;

@@ -308,59 +308,22 @@ bool FakeIrisXEExeclist::createHwContext()
     };
 
 
-    // 1) Soft GT reset (clears stale state without full power cycle)
-        mmioWrite32(0x52080, 0x0);  // GT_MODE = disable
-        IOSleep(5);
-        mmioWrite32(0x52080, 0x1);  // GT_MODE = enable
-        IOSleep(10);
-    
-    
-    // Forcewake registers (adjust if your headers define different offsets)
-//    const uint32_t FORCEWAKE_ACK = 0x130044; // you read this previously
-
-    // 1) Snapshot before touching anything
+    // Forcewake first; avoid speculative GT/ring reset pokes here because this
+    // path is now also used for GuC-failed fallback diagnostics.
     uint32_t pre_ack = safeRead(FORCEWAKE_ACK);
-    IOLog("(FakeIrisXE) [Exec] pre-reset FORCEWAKE_ACK=0x%08x\n", pre_ack);
+    IOLog("(FakeIrisXE) [Exec] createHwContext pre-forcewake ACK=0x%08x\n", pre_ack);
 
-    // 2) Conservative ring disable/reset (do minimal writes)
-    IOLog("(FakeIrisXE) [Exec] resetting RCS ring (base/head/tail/ctl)\n");
-    safeWrite(kExecRingCtlReg, 0x0);          // disable ring
-    safeWrite(kExecRingTailReg, 0x0);
-    safeWrite(kExecRingHeadReg, 0x0);
-    safeWrite(kExecRingStartReg, 0x0);
-    (void)safeRead(kExecRingCtlReg); // posting read
-    IOSleep(5); // let HW settle
-
-    // Avoid massive mmio clearing loops here — prefer clearing via an allocated CSB GEM
-    // (If you still want to zero CSB registers region, do so sparingly with small delay.)
-    IOLog("(FakeIrisXE) [Exec] re-requesting forcewake (conservative)\n");
-
-    // 3) Request forcewake (bitmask). Use read-verify loop rather than single write.
-    const uint32_t REQ_MASK = 0x000F000F;   // what you wrote earlier; adjust if needed
-    safeWrite(FORCEWAKE_REQ, REQ_MASK);
-    (void)safeRead(FORCEWAKE_REQ); // posting read
-    IOSleep(2);
-
-    // 4) Wait up to 50 ms for ACK bits
-    const uint64_t start = mach_absolute_time();
-    const uint64_t timeout_ns = 50ULL * 1000000ULL;
-    bool fw_ok = false;
-    while (true) {
-        uint32_t ack = safeRead(FORCEWAKE_ACK);
-        IOLog("(FakeIrisXE) [Exec] forcewake ack poll -> 0x%08x\n", ack);
-        // check lower nibble(s) or mask your HW expects:
-        if ((ack & 0xF) == 0xF) { fw_ok = true; break; }
-        if ((mach_absolute_time() - start) > timeout_ns) break;
-        IOSleep(1);
-    }
-
-    if (!fw_ok) {
+    if (!fOwner->forcewakeRenderHold(5000)) {
         uint32_t final_ack = safeRead(FORCEWAKE_ACK);
-        IOLog("❌ Forcewake after reset FAILED (final ack=0x%08X)\n", final_ack);
-        // Bail out safely — do not touch execlist registers if forcewake failed.
+        IOLog("❌ createHwContext: forcewake hold failed (ack=0x%08X)\n", final_ack);
         return false;
     }
-    IOLog("✅ Forcewake post-reset OK\n");
+
+    uint32_t post_ack = safeRead(FORCEWAKE_ACK);
+    IOLog("✅ createHwContext: forcewake held ACK=0x%08x\n", post_ack);
+
+    // Leave engine registers untouched until we have a valid LRC + ELSP path.
+    IOLog("(FakeIrisXE) [Exec] createHwContext using non-destructive fallback path\n");
 
     
     // FIXED: Re-enable IER/IMR (cleared by reset — only completion bit)
@@ -1539,8 +1502,8 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
                     hw->ringGem,
                     ringSize,
                     hw->ringGGTT,
-                    ctxId,  // context ID
-                    0,      // pdps / vm pointer (0 for now)
+                    0,      // ring head
+                    0,      // ring tail
                     &ret);
     IOLog("[V61] createHwContextFor: buildLRCContext returned lrcGem=%p ret=0x%x\n", hw->lrcGem, ret);
 
