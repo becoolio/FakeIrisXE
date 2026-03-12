@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V173 - BAR0 Fix + Execlist Ring Audit     ║\n");
+    IOLog("║     FAKEIRISXE V175 - Dual Ring Bank + Engine Audit      ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -912,7 +912,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║        FAKEIRISXE V173 - BAR0 Fix + Execlist Ring Audit    ║\n");
+    IOLog("║      FAKEIRISXE V175 - Dual Ring Bank + Engine Audit     ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2056,17 +2056,20 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // low 32 bits only. The previous code mapped 0x10000000 instead of the actual
     // 64-bit BAR0 (for example 0x4010000000), which made stage-4 direct MMIO writes
     // and later validation read from different physical regions.
-    const uint64_t gttSize2 = 2ULL * 1024ULL * 1024ULL;
     if (mmioBase && mmioMap) {
-        fGGTT = reinterpret_cast<volatile uint32_t*>(const_cast<volatile UInt8*>(mmioBase));
         fBar0 = reinterpret_cast<volatile uint32_t*>(const_cast<volatile UInt8*>(mmioBase));
-        fGGTTSize = mmioMap->getLength() < gttSize2 ? mmioMap->getLength() : gttSize2;
         fGGTTBaseGPU = 0x00000000;
         fNextGGTTOffset = 0x00100000;
-        IOLog("FakeIrisXEFramebuffer: GGTT/BAR0 reusing stage1 BAR0 mapping phys=0x%llx va=%p len=0x%llx\n",
+        IOLog("FakeIrisXEFramebuffer: BAR0 stage1 mapping phys=0x%llx va=%p len=0x%llx\n",
               static_cast<unsigned long long>(bar0Phys),
+              fBar0,
+              static_cast<unsigned long long>(mmioMap->getLength()));
+        IOLog("FakeIrisXEFramebuffer: GGTT stage3 mapping va=%p len=0x%llx\n",
               fGGTT,
               static_cast<unsigned long long>(fGGTTSize));
+        if (!fGGTT) {
+            logSoftFail(4, "GGTT BAR1 map missing; skipping ring init");
+        }
     } else {
         logSoftFail(4, "BAR0/GGTT map missing; skipping ring init");
     }
@@ -2577,7 +2580,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V173)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V175)\n");
     return true;
 
 }
@@ -3578,6 +3581,8 @@ bool FakeIrisXEFramebuffer::mapFramebufferIntoGGTT()
     }
 
     gttVa = reinterpret_cast<void*>(gttMap->getVirtualAddress());
+    fGGTT = reinterpret_cast<volatile uint32_t*>(gttVa);
+    fGGTTSize = 0x1000000;
     IOLog("🟢 GTTMMADR mapped at VA=%p\n", gttVa);
 
 
@@ -4667,6 +4672,13 @@ static const uint32_t kTglRcsRingTail = 0x2C030u;
 static const uint32_t kTglRcsRingHead = 0x2C034u;
 static const uint32_t kTglRcsRingStart = 0x2C038u;
 static const uint32_t kTglRcsRingCtl = 0x2C03Cu;
+static const uint32_t kTglAltRcsRingStart = 0x23C30u;
+static const uint32_t kTglAltRcsRingHead = 0x23C38u;
+static const uint32_t kTglAltRcsRingTail = 0x23C3Cu;
+static const uint32_t kTglRcsRingMode = 0x2C0D8u;
+static const uint32_t kTglRcsGfxMode = 0x2C0D0u;
+static const uint32_t kTglRcsGfxMode2 = 0x2C0D4u;
+static const uint32_t kTglRcsResetCtrl = 0x2C1C0u;
 
 struct FakeIrisXEBacklightPreset {
     const char* name;
@@ -5498,9 +5510,9 @@ void FakeIrisXEFramebuffer::ggttUnmap(uint64_t gpuAddr, uint32_t pages) {
     uint64_t off = gpuAddr;
     for (uint32_t i = 0; i < pages; ++i) {
         uint64_t idx = (off >> 12);
-        if ((idx * 4 + 4) <= fGGTTSize) {
-            fGGTT[idx] = 0;
-            // if 64-bit PTE used, also clear next dword
+        if ((idx + 1) * sizeof(uint64_t) <= fGGTTSize) {
+            volatile uint64_t* pte_ptr = reinterpret_cast<volatile uint64_t*>(fGGTT) + idx;
+            *pte_ptr = 0;
         }
         off += 4096;
     }
@@ -5573,7 +5585,14 @@ bool FakeIrisXEFramebuffer::validateRcsRingState(const char* phase, bool delayed
     const uint32_t baseLoExpected = static_cast<uint32_t>(fRingGpuVA & 0xFFFFFFFFULL);
     const uint32_t baseHiExpected = static_cast<uint32_t>(fRingGpuVA >> 32);
 
+    uint32_t ringMode0 = safeMMIORead(kTglRcsRingMode);
+    uint32_t gfxMode0 = safeMMIORead(kTglRcsGfxMode);
+    uint32_t gfxMode20 = safeMMIORead(kTglRcsGfxMode2);
+    uint32_t resetCtrl0 = safeMMIORead(kTglRcsResetCtrl);
     uint32_t ringStart = safeMMIORead(kTglRcsRingStart);
+    uint32_t altStart0 = safeMMIORead(kTglAltRcsRingStart);
+    uint32_t altHead0 = safeMMIORead(kTglAltRcsRingHead);
+    uint32_t altTail0 = safeMMIORead(kTglAltRcsRingTail);
     uint32_t head0 = safeMMIORead(kTglRcsRingHead);
     uint32_t tail0 = safeMMIORead(kTglRcsRingTail);
     uint32_t ctl0 = safeMMIORead(kTglRcsRingCtl);
@@ -5582,9 +5601,16 @@ bool FakeIrisXEFramebuffer::validateRcsRingState(const char* phase, bool delayed
         IODelay(25);
     }
 
+    uint32_t ringMode1 = safeMMIORead(kTglRcsRingMode);
+    uint32_t gfxMode1 = safeMMIORead(kTglRcsGfxMode);
+    uint32_t gfxMode21 = safeMMIORead(kTglRcsGfxMode2);
+    uint32_t resetCtrl1 = safeMMIORead(kTglRcsResetCtrl);
     uint32_t head1 = safeMMIORead(kTglRcsRingHead);
     uint32_t tail1 = safeMMIORead(kTglRcsRingTail);
     uint32_t ctl1 = safeMMIORead(kTglRcsRingCtl);
+    uint32_t altStart1 = safeMMIORead(kTglAltRcsRingStart);
+    uint32_t altHead1 = safeMMIORead(kTglAltRcsRingHead);
+    uint32_t altTail1 = safeMMIORead(kTglAltRcsRingTail);
 
     forcewakeRenderRelease();
 
@@ -5601,17 +5627,37 @@ bool FakeIrisXEFramebuffer::validateRcsRingState(const char* phase, bool delayed
     setNumberProperty(this, "FakeIrisXERingCtlStable", ctl1, 32);
     setNumberProperty(this, "FakeIrisXERingHead", head1, 32);
     setNumberProperty(this, "FakeIrisXERingTail", tail1, 32);
-
     setNumberProperty(this, "FakeIrisXERingStart", ringStart, 32);
+    setNumberProperty(this, "FakeIrisXERingMode", ringMode1, 32);
+    setNumberProperty(this, "FakeIrisXEGfxMode", gfxMode1, 32);
+    setNumberProperty(this, "FakeIrisXEGfxMode2", gfxMode21, 32);
+    setNumberProperty(this, "FakeIrisXEResetCtrl", resetCtrl1, 32);
+    setNumberProperty(this, "FakeIrisXEAltRingStart", altStart1, 32);
+    setNumberProperty(this, "FakeIrisXEAltRingHead", altHead1, 32);
+    setNumberProperty(this, "FakeIrisXEAltRingTail", altTail1, 32);
 
-    IOLog("(FakeIrisXE) [V171] Stage4 ring validation (%s): start=0x%08X base=%s ctl0=0x%08X ctl1=0x%08X head=0x%08X tail=0x%08X size=0x%zX result=%s\n",
+    IOLog("(FakeIrisXE) [V171] Stage4 ring validation (%s): mode0=0x%08X gfx0=0x%08X gfx20=0x%08X rst0=0x%08X start=0x%08X base=%s ctl0=0x%08X ctl1=0x%08X head=0x%08X tail=0x%08X alt0=[0x%08X,0x%08X,0x%08X] alt1=[0x%08X,0x%08X,0x%08X] mode1=0x%08X gfx1=0x%08X gfx21=0x%08X rst1=0x%08X size=0x%zX result=%s\n",
           phase ? phase : "unknown",
+          ringMode0,
+          gfxMode0,
+          gfxMode20,
+          resetCtrl0,
           ringStart,
           baseValid ? "OK" : "BAD",
           ctl0,
           ctl1,
           head1,
           tail1,
+          altStart0,
+          altHead0,
+          altTail0,
+          altStart1,
+          altHead1,
+          altTail1,
+          ringMode1,
+          gfxMode1,
+          gfxMode21,
+          resetCtrl1,
           fRingSize,
           fRcsRingValidated ? "PASS" : "FAIL");
 

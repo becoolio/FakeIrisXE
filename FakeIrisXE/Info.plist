@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.173</string>
+	<string>1.0.175</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.173</string>
+	<string>1.0.175</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V173 - BAR0 Fix + Execlist Ring Audit</string>
+	<string>FakeIrisXe V175 - Dual Ring Bank + Engine Audit</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

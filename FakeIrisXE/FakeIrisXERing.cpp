@@ -9,6 +9,10 @@ static inline uint32_t ringTailReg(uint32_t base)  { return base + 0x30; }
 static inline uint32_t ringHeadReg(uint32_t base)  { return base + 0x34; }
 static inline uint32_t ringStartReg(uint32_t base) { return base + 0x38; }
 static inline uint32_t ringCtlReg(uint32_t base)   { return base + 0x3C; }
+static const uint32_t kAltRcsRbStartLo = 0x23C30;
+static const uint32_t kAltRcsRbStartHi = 0x23C34;
+static const uint32_t kAltRcsRbHead    = 0x23C38;
+static const uint32_t kAltRcsRbTail    = 0x23C3C;
 
 static inline void mmio_write32(volatile uint32_t* mmio, uint32_t off, uint32_t val)
 {
@@ -77,10 +81,12 @@ void FakeIrisXERing::programRingBaseToHW()
     uint32_t baseStart = ringStartReg(mRingBaseOffset);
 
     mmio_write32(mMMIO, baseStart, (uint32_t)mRingGPUAddr);
+    mmio_write32(mMMIO, kAltRcsRbStartLo, (uint32_t)mRingGPUAddr);
+    mmio_write32(mMMIO, kAltRcsRbStartHi, (uint32_t)(mRingGPUAddr >> 32));
 
     (void)mmio_read32(mMMIO, baseStart);
-    IOLog("(FakeIrisXE) Ring base programmed: START=0x%X addr=0x%llX\n",
-          baseStart, (unsigned long long)mRingGPUAddr);
+    IOLog("(FakeIrisXE) Ring base programmed: START=0x%X ALT_LO=0x%X ALT_HI=0x%X addr=0x%llX\n",
+          baseStart, kAltRcsRbStartLo, kAltRcsRbStartHi, (unsigned long long)mRingGPUAddr);
 }
 
 void FakeIrisXERing::enableRing()
@@ -102,6 +108,8 @@ void FakeIrisXERing::enableRing()
     // Reset head/tail before enabling.
     mmio_write32(mMMIO, headReg, 0);
     mmio_write32(mMMIO, tailReg, 0);
+    mmio_write32(mMMIO, kAltRcsRbHead, 0);
+    mmio_write32(mMMIO, kAltRcsRbTail, 0);
 
     IOLog("(FakeIrisXE)[V152] enableRing: size=%zu bytes, units=%d, CTL=0x%08X\n", 
           mRingSize, sizePages, ctlValue);
@@ -139,13 +147,17 @@ void FakeIrisXERing::updateHWTail()
     uint32_t tailReg = ringTailReg(mRingBaseOffset);
     uint32_t tail = (uint32_t)mRingWriteOffset;
     mmio_write32(mMMIO, tailReg, tail);
+    mmio_write32(mMMIO, kAltRcsRbTail, tail);
     (void)mmio_read32(mMMIO, tailReg);
 }
 
 uint32_t FakeIrisXERing::readHWHead()
 {
     uint32_t headReg = ringHeadReg(mRingBaseOffset);
-    return mmio_read32(mMMIO, headReg);
+    uint32_t head = mmio_read32(mMMIO, headReg);
+    if (!head)
+        head = mmio_read32(mMMIO, kAltRcsRbHead);
+    return head;
 }
 
 bool FakeIrisXERing::submitBatch64(uint64_t gpu)
