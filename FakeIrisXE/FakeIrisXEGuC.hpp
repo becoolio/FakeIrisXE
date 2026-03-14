@@ -193,6 +193,15 @@ private:
     // V135: Aggressive Linux GT initialization before GuC load
     void initGTPreWorkaround();
 
+    // V214: 10 Linux i915 GPU Improvements
+    void initV214Improvements();
+
+    // V215: Additional GT Recovery and Engine Fixes
+    void initV215Improvements();
+
+    // V216: Fix Clock Gating Registers and More Aggressive RCS Enable
+    void initV216Improvements();
+
     // V137: Correct Tiger Lake GuC loading methods
     bool deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
                              size_t* outPayloadOffset, size_t* outPayloadSize);
