@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.212</string>
+	<string>1.0.213</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.212</string>
+	<string>1.0.213</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V212 - GT Wedge Recovery</string>
+	<string>FakeIrisXe V213 - EXEClist Fallback</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

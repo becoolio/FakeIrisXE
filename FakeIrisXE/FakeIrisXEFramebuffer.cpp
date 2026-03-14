@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V212 - GT Wedge Recovery   ║\n");
+    IOLog("║    FAKEIRISXE V213 - EXEClist Fallback for Submission   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -2390,7 +2390,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             } else {
                 IOLog("(FakeIrisXE)[V150] ❌ GPU EXECUTION TEST FAILED\n");
             }
-            fCommandSubmissionReady = gpuWorking && fRcsRingValidated;
+            
+            // V213: Allow submission if EXEClist is ready (even without RCS validated)
+            // ELSP works, so we can use it for submissions
+            bool execlistReady = fExeclist && fExeclist->isReady();
+            fCommandSubmissionReady = gpuWorking && (fRcsRingValidated || execlistReady);
+            IOLog("(FakeIrisXE) [V213] Submission ready: gpuWorking=%d RCSvalidated=%d EXEClistReady=%d -> %d\n",
+                  gpuWorking ? 1 : 0, fRcsRingValidated ? 1 : 0, execlistReady ? 1 : 0, fCommandSubmissionReady ? 1 : 0);
             updateExecutionState(fCommandSubmissionReady, gpuWorking ? "gpu-test-pass" : "gpu-test-fail");
 
             if (runBootDiagFull) {
