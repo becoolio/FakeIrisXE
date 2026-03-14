@@ -35,6 +35,14 @@ extern const unsigned int tgl_dmc_ver2_12_bin_len;
 extern const unsigned char adlp_dmc_ver2_16_bin[];
 extern const unsigned int adlp_dmc_ver2_16_bin_len;
 
+// V187: Apple GuC Firmware from DTK (AppleIntelTGLGuC.framework)
+extern const unsigned char apple_tgl_guc_bin[];
+extern const unsigned int apple_tgl_guc_bin_len;
+
+// V187: Apple HuC Firmware from DTK
+extern const unsigned char apple_tgl_huc_bin[];
+extern const unsigned int apple_tgl_huc_bin_len;
+
 #ifdef __cplusplus
 }
 #endif

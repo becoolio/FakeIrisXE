@@ -46,6 +46,7 @@ FakeIrisXEExeclist* FakeIrisXEExeclist::withOwner(FakeIrisXEFramebuffer* owner)
     }
 
     obj->fOwner = owner;
+    obj->fIsReady = false;  // V206: Initialize EXEClist not ready
 
     // init HW context table
     obj->fHwContextCount = 0;
@@ -467,16 +468,100 @@ bool FakeIrisXEExeclist::setupExeclistPorts()
     }
 
     IOLog("✅ GPU verified awake: GT_STATUS=0x%08X, ACK=0x%08X\n", gt_status, forcewake_ack);
+    
+    
+    
+    
+    // ---------- V180: Engine Init Prerequisites before ELSP ----------
+    // ELSP won't latch unless RCS engine is properly initialized
+    // Configure RCS0_RING_MODE, RCS0_GFX_MODE, RCS0_RESET_CTRL first
+    
+    // V181: Try RESET first - pulse reset to ensure engine is in known state
+    // Then configure mode registers
+    IOLog("(FakeIrisXE) [Exec] V181 Engine Init: RESET pulsing...\n");
+    
+    // Pulse reset: set bit 0, wait, clear
+    mmioWrite32(RCS0_RESET_CTRL, 0x00000001);  // Request reset
+    IOSleep(10);
+    mmioWrite32(RCS0_RESET_CTRL, 0x00000000);  // Release reset
+    IOSleep(10);
+    
+    // Read current values first
+    uint32_t ring_mode = mmioRead32(RCS0_RING_MODE);
+    uint32_t gfx_mode = mmioRead32(RCS0_GFX_MODE);
+    uint32_t reset_ctrl = mmioRead32(RCS0_RESET_CTRL);
+    IOLog("(FakeIrisXE) [Exec] V181 Engine Init: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
+          ring_mode, gfx_mode, reset_ctrl);
+    
+    // Configure RING_MODE - enable ring buffer
+    // Bit 0: Ring Buffer Enable
+    mmioWrite32(RCS0_RING_MODE, 0x00000001);
+    IOSleep(1);
+    
+    // Configure GFX_MODE - enable graphics mode
+    // For Gen12, need to set bit 0 and possibly others
+    mmioWrite32(RCS0_GFX_MODE, 0x00000003);
+    IOSleep(1);
+    
+    // Verify writes
+    uint32_t ring_mode_after = mmioRead32(RCS0_RING_MODE);
+    uint32_t gfx_mode_after = mmioRead32(RCS0_GFX_MODE);
+    uint32_t reset_ctrl_after = mmioRead32(RCS0_RESET_CTRL);
+    IOLog("(FakeIrisXE) [Exec] V181 Engine Init After: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
+          ring_mode_after, gfx_mode_after, reset_ctrl_after);
 
     
     
     
     // ---------- 2) Program ELSP submit port (LRC pointer) while wake held ----------
+    // V179: Dual ELSP Audit - Try both primary and legacy banks
     const uint64_t lrc = fLrcGGTT & ~0xFFFULL;
     uint32_t elsp_lo = (uint32_t)(lrc & 0xFFFFFFFFULL);
     uint32_t elsp_hi = (uint32_t)(lrc >> 32);
+    
+    // Try primary ELSP first (0x2290/0x2294 - CORRECTED from 0x2C290)
+    IOLog("(FakeIrisXE) [Exec] Trying PRIMARY ELSP (0x2290/0x2294) with LRC=0x%llx\n", lrc);
     mmioWrite32(RCS0_EXECLIST_SUBMITPORT_LO, elsp_lo);
     mmioWrite32(RCS0_EXECLIST_SUBMITPORT_HI, elsp_hi);
+    
+    // small delay so posted writes land
+    IOSleep(2);
+    
+    // Readback checks for primary ELSP
+    uint32_t r_elsp_lo_primary = mmioRead32(RCS0_EXECLIST_SUBMITPORT_LO);
+    uint32_t r_elsp_hi_primary = mmioRead32(RCS0_EXECLIST_SUBMITPORT_HI);
+    IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP readback LO=0x%08x HI=0x%08x (expected LO=0x%08x HI=0x%08x)\n",
+          r_elsp_lo_primary, r_elsp_hi_primary, elsp_lo, elsp_hi);
+          
+    bool primary_latched = (r_elsp_lo_primary == elsp_lo && r_elsp_hi_primary == elsp_hi);
+    
+    // If primary didn't latch, try legacy ELSP (0x2258/0x225C)
+    if (!primary_latched) {
+        IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP did not latch, trying LEGACY ELSP (0x2258/0x225C)\n");
+        mmioWrite32(kExecElspLegacyLo, elsp_lo);
+        mmioWrite32(kExecElspLegacyHi, elsp_hi);
+        
+        // small delay so posted writes land
+        IOSleep(2);
+        
+        // Readback checks for legacy ELSP
+        uint32_t r_elsp_lo_legacy = mmioRead32(kExecElspLegacyLo);
+        uint32_t r_elsp_hi_legacy = mmioRead32(kExecElspLegacyHi);
+        IOLog("(FakeIrisXE) [Exec] LEGACY ELSP readback LO=0x%08x HI=0x%08x (expected LO=0x%08x HI=0x%08x)\n",
+              r_elsp_lo_legacy, r_elsp_hi_legacy, elsp_lo, elsp_hi);
+              
+        if (r_elsp_lo_legacy == elsp_lo && r_elsp_hi_legacy == elsp_hi) {
+            IOLog("(FakeIrisXE) [Exec] LEGACY ELSP latched successfully!\n");
+            // Use legacy ELSP for the rest of the function
+            // (we've already written to it above)
+        } else {
+            IOLog("(FakeIrisXE) [Exec] Neither ELSP latched — aborting safe setup\n");
+            fOwner->forcewakeRenderRelease();
+            return false;
+        }
+    } else {
+        IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP latched successfully!\n");
+    }
 
     
     

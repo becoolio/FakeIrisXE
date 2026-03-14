@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.178</string>
+	<string>1.0.208</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.178</string>
+	<string>1.0.208</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V178 - Dual ELSP Audit + Fallback Path</string>
+	<string>FakeIrisXe V208 - Keep Forcewake for Validation</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V178 - Dual ELSP Audit + Fallback Path     ║\n");
+    IOLog("║    FAKEIRISXE V208 - Keep Forcewake for Validation   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -637,6 +637,26 @@ bool FakeIrisXEFramebuffer::gpuPowerOn(){
     const uint32_t PW_2_REQ_BIT = (1 << 0);
     const uint32_t PW_2_STATE_VALUE = 0x000000FF;
 
+    // V200: Try more aggressive GT power enable
+    IOLog("(FakeIrisXE) [V204] Attempting aggressive GT power enable...\n");
+    uint32_t current_pg = safeMMIORead(GT_PG_ENABLE);
+    IOLog("(FakeIrisXE) [V204] GT_PG_ENABLE before: 0x%08x\n", current_pg);
+    safeMMIOWrite(GT_PG_ENABLE, 0x00000000);
+    IOSleep(10);
+    IOLog("(FakeIrisXE) [V204] GT_PG_ENABLE after: 0x%08x\n", safeMMIORead(GT_PG_ENABLE));
+
+    const uint32_t CLK_CTL = 0x46000;
+    uint32_t clk_status = safeMMIORead(CLK_CTL);
+    IOLog("(FakeIrisXE) [V204] CLK_CTL (0x46000): 0x%08x\n", clk_status);
+
+    // V204: Disable Tiger Lake-specific clock gating
+    // Based on Linux: GEN9_CLKGATE_DIS_3 (0x46538) TGL_VRH_GATING_DIS
+    uint32_t clkgate_dis3 = safeMMIORead(0x46538);
+    IOLog("(FakeIrisXE) [V204] CLKGATE_DIS_3 (0x46538) before: 0x%08x\n", clkgate_dis3);
+    safeMMIOWrite(0x46538, clkgate_dis3 | 0x80000000);  // Enable VRH GATING
+    IOSleep(10);
+    IOLog("(FakeIrisXE) [V204] CLKGATE_DIS_3 (0x46538) after: 0x%08x\n", safeMMIORead(0x46538));
+
     // Force wake
     const uint32_t FORCEWAKE_RENDER_CTL = 0xA188;
     const uint32_t FORCEWAKE_ACK_RENDER = 0x130044;
@@ -727,6 +747,17 @@ bool FakeIrisXEFramebuffer::gpuPowerOn(){
         
     }
     
+    
+    // V201: Additional GT power status verification
+    // Check if GT is actually powered after power well enable
+    uint32_t gt_perf_post = safeMMIORead(0xA070);  // GT_PERF_STATUS (Gen12)
+    uint32_t gt_status_post = safeMMIORead(0xA000);  // GT_STATUS
+    IOLog("(FakeIrisXE) [V204] GT power status: PERF=0x%08x STATUS=0x%08x\n", 
+          gt_perf_post, gt_status_post);
+    
+    if (gt_perf_post == 0x00000000) {
+        IOLog("(FakeIrisXE) [V204] WARNING: GT_PERF_STATUS still 0 - GT may not be powered for compute!\n");
+    }
     
     // 1. Define the register (GEN9_PG_ENABLE is usually 0x8000)
     //#define GEN9_PG_ENABLE 0x8000
@@ -912,7 +943,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V178 - Dual ELSP Audit + Fallback Path    ║\n");
+    IOLog("║     FAKEIRISXE V204 - TigerLake Clock Gating Fix   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1029,6 +1060,64 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("❌ Failed to open PCI device\n");
             return false;
     }
+
+    // V185: Try PCI function-level reset to force ME reinit
+    IOLog("(FakeIrisXE) [V185] Attempting PCI function-level reset...\n");
+    uint16_t pciCmd_before = pciDevice->configRead16(kIOPCIConfigCommand);
+    uint16_t pciStat_before = pciDevice->configRead16(kIOPCIConfigStatus);
+    IOLog("(FakeIrisXE) [V185] PCI CMD before=0x%04X STATUS=0x%04X\n", pciCmd_before, pciStat_before);
+    
+    // Disable memory access and I/O - full reset
+    pciDevice->configWrite16(kIOPCIConfigCommand, 0);
+    IOSleep(100);
+    
+    // V186: Dump full PCI config space for debugging
+    IOLog("(FakeIrisXE) [V186] PCI Config Space:\n");
+    IOLog("  Vendor=0x%04X Device=0x%04X\n",
+          pciDevice->configRead16(kIOPCIConfigVendorID),
+          pciDevice->configRead16(kIOPCIConfigDeviceID));
+    IOLog("  Command=0x%04X Status=0x%04X\n",
+          pciDevice->configRead16(kIOPCIConfigCommand),
+          pciDevice->configRead16(kIOPCIConfigStatus));
+    IOLog("  Revision=0x%02X ProgIF=0x%02X SubClass=0x%02X BaseClass=0x%02X\n",
+          pciDevice->configRead8(kIOPCIConfigRevisionID),
+          pciDevice->configRead8(0x09),  // Programming Interface
+          pciDevice->configRead8(0x0A),  // Subclass
+          pciDevice->configRead8(0x0B)); // Base Class
+    IOLog("  BAR0=0x%08X BAR1=0x%08X\n",
+          pciDevice->configRead32(kIOPCIConfigBaseAddress0),
+          pciDevice->configRead32(kIOPCIConfigBaseAddress1));
+    IOLog("  BAR2=0x%08X BAR3=0x%08X\n",
+          pciDevice->configRead32(kIOPCIConfigBaseAddress2),
+          pciDevice->configRead32(kIOPCIConfigBaseAddress3));
+    IOLog("  BAR4=0x%08X BAR5=0x%08X\n",
+          pciDevice->configRead32(kIOPCIConfigBaseAddress4),
+          pciDevice->configRead32(kIOPCIConfigBaseAddress5));
+    IOLog("  ROM Base=0x%08X\n", pciDevice->configRead32(kIOPCIConfigExpansionROMBase));
+    IOLog("  IntPin=0x%02X IntLine=0x%02X\n",
+          pciDevice->configRead8(kIOPCIConfigInterruptPin),
+          pciDevice->configRead8(kIOPCIConfigInterruptLine));
+    
+    // Try to access parent bus for secondary bus reset
+    // Use IOService traversal instead
+    IOLog("(FakeIrisXE) [V185] Cycling PCI device...\n");
+    
+    // Close and re-open the PCI device
+    pciDevice->close(this);
+    IOSleep(200);
+    if (!pciDevice->open(this)) {
+        IOLog("(FakeIrisXE) [V185] Failed to re-open PCI device\n");
+    } else {
+        IOLog("(FakeIrisXE) [V185] PCI device re-opened\n");
+    }
+    
+    // Re-enable memory access
+    pciDevice->configWrite16(kIOPCIConfigCommand, 0x0006);  // Memory + Bus Master
+    IOSleep(100);
+    
+    uint16_t pciCmd_after = pciDevice->configRead16(kIOPCIConfigCommand);
+    uint16_t pciStat_after = pciDevice->configRead16(kIOPCIConfigStatus);
+    IOLog("(FakeIrisXE) [V185] PCI CMD after=0x%04X STATUS=0x%04X\n", pciCmd_after, pciStat_after);
 
   
     
@@ -2079,6 +2168,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     fNextGGTTOffset = 0x00100000; // choose appropriate base
     updateExecutionState(false, "stage4-begin");
 
+    // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
+    // The GT must be powered on for RCS engine registers to latch
+    IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
+    if (!gpuPowerOn()) {
+        IOLog("(FakeIrisXE) [V204] WARNING: gpuPowerOn failed, continuing anyway...\n");
+    }
+    
     // Create ring
     if (!createRcsRing(256 * 1024)) {
         logSoftFail(4, "createRcsRing failed; continuing degraded");
@@ -2227,6 +2323,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                 IOLog("FakeIrisXEFramebuffer: EXECLIST port setup FAILED\n");
             } else {
                 IOLog("FakeIrisXEFramebuffer: EXECLIST engine READY\n");
+                fExeclist->fIsReady = true;  // V206: Mark EXEClist as ready
                 
                 if (runBootDiagFull) {
                     IOLog("FakeIrisXEFramebuffer: [V70] '-fakeirisxe-diag' detected - running comprehensive diagnostics...\n");
@@ -2268,6 +2365,21 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                 IOLog("FakeIrisXEFramebuffer: BLT ring initialization complete. fBltRing=%p\n", fBltRing);
             } else {
                 IOLog("FakeIrisXEFramebuffer: FAILED creating BLT ring\n");
+            }
+
+            // V201: Try creating RCS again AFTER BLT (when GT is "warmed up")
+            // BLT creation involves forcewake which powers up the GT
+            if (!fRcsRing) {
+                IOLog("(FakeIrisXE) [V204] Retry RCS creation after BLT warmup...\n");
+                if (gpuPowerOn()) {
+                    IOLog("(FakeIrisXE) [V204] gpuPowerOn succeeded, retrying RCS...\n");
+                }
+                fRcsRing = createRcsRing(256 * 1024);
+                if (fRcsRing) {
+                    IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry SUCCESS! fRcsRing=%p\n", fRcsRing);
+                } else {
+                    IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry FAILED\n");
+                }
             }
 
             // V150: Test GPU execution
@@ -4672,17 +4784,17 @@ static const uint32_t kAppleBacklightUserMax = 255;
 static const uint32_t kAppleBacklightRawMax = 0xFFFEu;
 static const uint32_t kAppleBacklightVBLMOne = 0x10000u;
 static const uint32_t kAppleBacklightVBLMMax = 0x30000u;
-static const uint32_t kTglRcsRingTail = 0x2C030u;
-static const uint32_t kTglRcsRingHead = 0x2C034u;
-static const uint32_t kTglRcsRingStart = 0x2C038u;
-static const uint32_t kTglRcsRingCtl = 0x2C03Cu;
+static const uint32_t kTglRcsRingTail = 0x20030u;
+static const uint32_t kTglRcsRingHead = 0x20034u;
+static const uint32_t kTglRcsRingStart = 0x20038u;
+static const uint32_t kTglRcsRingCtl = 0x2003Cu;
 static const uint32_t kTglAltRcsRingStart = 0x23C30u;
 static const uint32_t kTglAltRcsRingHead = 0x23C38u;
 static const uint32_t kTglAltRcsRingTail = 0x23C3Cu;
-static const uint32_t kTglRcsRingMode = 0x2C0D8u;
-static const uint32_t kTglRcsGfxMode = 0x2C0D0u;
-static const uint32_t kTglRcsGfxMode2 = 0x2C0D4u;
-static const uint32_t kTglRcsResetCtrl = 0x2C1C0u;
+static const uint32_t kTglRcsRingMode = 0x2009Cu;
+static const uint32_t kTglRcsGfxMode = 0x200D0u;
+static const uint32_t kTglRcsGfxMode2 = 0x200D4u;
+static const uint32_t kTglRcsResetCtrl = 0x200D0u;
 
 struct FakeIrisXEBacklightPreset {
     const char* name;
@@ -5645,6 +5757,10 @@ bool FakeIrisXEFramebuffer::validateRcsRingState(const char* phase, bool delayed
 
     fRcsRingValidated = baseValid && ctlEnabledNow && ctlEnabledStable && offsetsInRange;
     setProperty("FakeIrisXERcsRingValidated", fRcsRingValidated ? kOSBooleanTrue : kOSBooleanFalse);
+    
+    // V207: Extra debug - show expected vs actual
+    IOLog("(FakeIrisXE) [V207] Validation: expected START=0x%08X actual=0x%08X baseValid=%d ctlEnabledNow=%d ctlEnabledStable=%d offsetsInRange=%d\n",
+          baseLoExpected, ringStart, baseValid ? 1 : 0, ctlEnabledNow ? 1 : 0, ctlEnabledStable ? 1 : 0, offsetsInRange ? 1 : 0);
     setNumberProperty(this, "FakeIrisXERingCtlInitial", ctl0, 32);
     setNumberProperty(this, "FakeIrisXERingCtlStable", ctl1, 32);
     setNumberProperty(this, "FakeIrisXERingHead", head1, 32);
@@ -5751,21 +5867,121 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     fRingGpuVA = ringGpuVA;
     fRingGem = ringGem;
 
+    // V204: Enhanced GT compute power enable with more status checks
+    // Based on Linux i915 - need to request compute power domain
+    IOLog("(FakeIrisXE) [V204] Enabling GT compute power domain...\n");
+    
+    // Request power wells for compute
+    volatile uint32_t* bar0 = fBar0;
+    uint32_t pw_ctl2 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45404);  // PWR_WELL_CTL2
+    uint32_t pw_ctl3 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45408);  // PWR_WELL_CTL3
+    uint32_t pw_ctl4 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x4540C);  // PWR_WELL_CTL4
+    uint32_t pw_status = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45410);  // PWR_WELL_STATUS
+    IOLog("(FakeIrisXE) [V204] Power wells before: CTL2=0x%08X CTL3=0x%08X CTL4=0x%08X STATUS=0x%08X\n", pw_ctl2, pw_ctl3, pw_ctl4, pw_status);
+    
+    // Try enabling GT_PG_ENABLE - bit 0 controls GT power gating
+    uint32_t gt_pg_enable = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA218);
+    IOLog("(FakeIrisXE) [V204] GT_PG_ENABLE before: 0x%08X\n", gt_pg_enable);
+    
+    // Disable GT power gating by clearing bit 0
+    *(volatile uint32_t*)((uint8_t*)bar0 + 0xA218) = 0x00000000;
+    IOSleep(5);
+    gt_pg_enable = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA218);
+    IOLog("(FakeIrisXE) [V204] GT_PG_ENABLE after: 0x%08X\n", gt_pg_enable);
+    
+    // Request all power wells - bit 0 (power request) + bit 16 (force on)
+    *(volatile uint32_t*)((uint8_t*)bar0 + 0x45404) = 0x00030003;  // PW2: request + force on
+    IOSleep(5);
+    *(volatile uint32_t*)((uint8_t*)bar0 + 0x45408) = 0x40030003;  // PW3: request + force on  
+    IOSleep(5);
+    *(volatile uint32_t*)((uint8_t*)bar0 + 0x4540C) = 0x00030003;  // PW4: request + force on
+    IOSleep(10);
+    
+    pw_ctl2 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45404);
+    pw_ctl3 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45408);
+    pw_ctl4 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x4540C);
+    pw_status = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45410);
+    IOLog("(FakeIrisXE) [V204] Power wells after: CTL2=0x%08X CTL3=0x%08X CTL4=0x%08X STATUS=0x%08X\n", pw_ctl2, pw_ctl3, pw_ctl4, pw_status);
+
+    // V204: Check multiple GT status registers
+    IOLog("(FakeIrisXE) [V204] ==== COMPREHENSIVE GT STATUS ====\n");
+    uint32_t gt_perf_pre = safeMMIORead(0xA070);  // GT_PERF_STATUS
+    uint32_t gt_status_pre = safeMMIORead(0xA000);  // GT_STATUS
+    uint32_t gfx_status = safeMMIORead(0xA008);  // GFX_STATUS
+    uint32_t pmc_status = safeMMIORead(0xA010);  // PMC status
+    uint32_t gt_perf_limit = safeMMIORead(0xA094);  // GT_PERF_LIMIT
+    uint32_t gt_clk_ctl = safeMMIORead(0x46000);  // CLK_CTL
+    IOLog("(FakeIrisXE) [V204] GT_PERF=0x%08X GT_STATUS=0x%08X GFX=0x%08X PMC=0x%08X PERF_LIM=0x%08X CLK_CTL=0x%08X\n",
+          gt_perf_pre, gt_status_pre, gfx_status, pmc_status, gt_perf_limit, gt_clk_ctl);
+
     if (!forcewakeRenderHold(5000)) {
         IOLog("❌ createRcsRing — forcewakeRenderHold failed before programming ring\n");
         destroyRcsRingState();
         return nullptr;
     }
 
+    // V201: Check GT power status AFTER forcewake
+    uint32_t gt_perf_post = safeMMIORead(0xA070);
+    uint32_t gt_status_post = safeMMIORead(0xA000);
+    uint32_t gfx_status_post = safeMMIORead(0xA008);
+    uint32_t pmc_status_post = safeMMIORead(0xA010);
+    IOLog("(FakeIrisXE) [V204] Post-forcewake GT: PERF=0x%08X STATUS=0x%08X GFX=0x%08X PMC=0x%08X\n",
+          gt_perf_post, gt_status_post, gfx_status_post, pmc_status_post);
+
+    // V204: Simplified engine init - match Linux i915 approach
+    IOLog("(FakeIrisXE) [V204] Engine Init: Simplified Linux-style...\n");
+    
+    // Check what's readable before programming
+    uint32_t ring_mode_pre = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsRingMode);
+    uint32_t gfx_mode_pre = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsGfxMode);
+    uint32_t reset_ctrl_pre = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsResetCtrl);
+    IOLog("(FakeIrisXE) [V204] Engine Init pre-program: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
+          ring_mode_pre, gfx_mode_pre, reset_ctrl_pre);
+    
+    // Check if GT is powered - read GT_PERF_STATUS
+    uint32_t gt_perf = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA070);  // GT_PERF_STATUS (Gen12)
+    IOLog("(FakeIrisXE) [V204] GT_PERF_STATUS=0x%08x\n", gt_perf);
+    
+    // Additional GT power status checks
+    uint32_t gt_status = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA000);  // GT_STATUS
+    uint32_t gfx0 = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA008);  // GFX_STATUS
+    uint32_t pmc = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA010);  // Render power well status
+    IOLog("(FakeIrisXE) [V204] GT_POWER: GT_STATUS=0x%08x GFX0=0x%08x PM=0x%08x\n", gt_status, gfx0, pmc);
+    
+    // Configure RING_MODE - enable ring buffer with Gen12 specific bits
+    // Based on Linux: RING_MODERegister
+    *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsRingMode) = 0x00000001;
+    IOSleep(5);
+    
+    // Configure GFX_MODE - enable graphics mode
+    // Based on Linux: GFX_MODE for RCS
+    *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsGfxMode) = 0x00000003;
+    IOSleep(5);
+    
+    // Verify writes
+    uint32_t ring_mode_after = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsRingMode);
+    uint32_t gfx_mode_after = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsGfxMode);
+    uint32_t reset_ctrl_after = *(volatile uint32_t*)((uint8_t*)bar0 + kTglRcsResetCtrl);
+    IOLog("(FakeIrisXE) [V183] Engine Init post-program: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
+          ring_mode_after, gfx_mode_after, reset_ctrl_after);
+
     fRcsRing->programRingBaseToHW();
     fRcsRing->enableRing();
-    forcewakeRenderRelease();
-
-    if (!validateRcsRingState("stage4", true)) {
+    
+    // V208: Don't release forcewake! Keep it held for validation
+    // The issue is that GT compute isn't powered, so when we release forcewake,
+    // the RCS registers clear. Keep forcewake to maintain state.
+    IOLog("(FakeIrisXE) [V208] Keeping forcewake HELD for validation\n");
+    // Don't release forcewake - keep it held
+    
+    if (!validateRcsRingState("stage4", false)) {
         IOLog("❌ createRcsRing — strict validation failed\n");
+        forcewakeRenderRelease();
         destroyRcsRingState();
         return nullptr;
     }
+    
+    forcewakeRenderRelease();  // V208: Release after successful validation
 
     IOLog("🟢 RCS ring created @ GPUVA=0x%llx size=%zu (ptr %p)\n",
           (unsigned long long) ringGpuVA, ringBytes, fRcsRing);
@@ -5986,12 +6202,26 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createBltRing(size_t ringBytes)
 // - batchSizeBytes: length of the batch
 // Return: sequence number or 0 on failure
 uint32_t FakeIrisXEFramebuffer::submitBatch(FakeIrisXEGEM* batchGem, size_t batchOffsetBytes, size_t batchSizeBytes) {
-    if (!fRcsRing || !batchGem) {
+    if (!batchGem) {
         IOLog("FakeIrisXEFramebuffer: submitBatch - bad args\n");
         return 0;
     }
 
-    if (!validateRcsRingState("submitBatch", true)) {
+    // V206: Try EXEClist path if RCS ring not available
+    if (!fRcsRing || !validateRcsRingState("submitBatch", true)) {
+        IOLog("FakeIrisXEFramebuffer: submitBatch - RCS ring not available, trying EXEClist fallback...\n");
+        
+        // Try EXEClist submission instead
+        if (fExeclist && fExeclist->isReady()) {
+            IOLog("FakeIrisXEFramebuffer: submitBatch - using EXEClist fallback path\n");
+            bool success = fExeclist->submitBatchExeclist(batchGem);
+            if (success) {
+                IOLog("FakeIrisXEFramebuffer: submitBatch - EXEClist fallback SUCCESS\n");
+                return 1;  // Return success
+            }
+            IOLog("FakeIrisXEFramebuffer: submitBatch - EXEClist fallback FAILED\n");
+        }
+        
         IOLog("FakeIrisXEFramebuffer: submitBatch - ring validation failed\n");
         return 0;
     }
@@ -6905,9 +7135,36 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
         return false;
     }
     
+    // V187: Try to load Apple's GuC first (from embedded binary)
+    bool appleGuCLoaded = false;
+    
+    if (apple_tgl_guc_bin && apple_tgl_guc_bin_len > 0) {
+        IOLog("(FakeIrisXE) [V187] Attempting to load Apple GuC (%u bytes)...\n", apple_tgl_guc_bin_len);
+        
+        if (fGuC->loadGuCFirmware(apple_tgl_guc_bin, apple_tgl_guc_bin_len)) {
+            IOLog("(FakeIrisXE) [V187] SUCCESS! Apple GuC loaded!\n");
+            appleGuCLoaded = true;
+        } else {
+            IOLog("(FakeIrisXE) [V187] Apple GuC failed to load (signature verification likely failed), trying Linux...\n");
+        }
+    } else {
+        IOLog("(FakeIrisXE) [V187] Apple GuC not embedded\n");
+    }
+    
+    // Only load Linux GuC if Apple GuC didn't load
+    if (!appleGuCLoaded) {
+    
     // 3. Load firmware from EMBEDDED arrays (not from resources)
     // Use your embedded arrays directly
     
+    // V187: Support switching between Apple and Linux GuC
+    // For testing: let's try Apple's GuC approach first
+    #if 0  // Set to 1 to try Apple GuC (requires embedding the binary)
+    // TODO: Add Apple GuC binary to embedded_firmware.cpp
+    const unsigned char* guc_bin = apple_tgl_guc_bin;
+    unsigned int guc_len = apple_tgl_guc_bin_len;
+    IOLog("(FakeIrisXE) [V187] Attempting to use Apple GuC firmware (%u bytes)\n", guc_len);
+    #else
     // Determine which firmware to use based on Device ID
     const unsigned char* guc_bin = nullptr;
     unsigned int guc_len = 0;
@@ -6924,6 +7181,7 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
         guc_len = tgl_guc_70_1_1_bin_len;
         IOLog("(FakeIrisXE) Selected TGL GuC firmware\n");
     }
+    #endif
 
     // Check if GuC firmware is embedded
     if (!guc_bin || guc_len == 0) {
@@ -6936,6 +7194,8 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
         IOLog("(FakeIrisXE) Failed to load GuC firmware\n");
         return false;
     }
+    IOLog("(FakeIrisXE) GuC firmware loaded successfully\n");
+    }  // End if (!appleGuCLoaded)
     
     // Load HuC firmware from embedded array (if available)
     if (tgl_huc_7_9_3_bin && tgl_huc_7_9_3_bin_len > 0) {

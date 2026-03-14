@@ -6,11 +6,19 @@
 	<dict>
 		<key>Resources/Info.plist</key>
 		<data>
-		tlwbJ6/h3AanNMylb0POfnQFf6Y=
+		Jdd/UlDEnoQbUh4fJ9pPh1OOmrY=
 		</data>
 		<key>Resources/README.md</key>
 		<data>
 		omzdnt29HdEU+aLTk4OzYvL3kns=
+		</data>
+		<key>Resources/apple_tgl_guc.bin</key>
+		<data>
+		bhBO+A7mu0muumuVY7qWYhR/6o8=
+		</data>
+		<key>Resources/apple_tgl_huc.bin</key>
+		<data>
+		9NImmqVg+BU14vHLbPm4ex27dpU=
 		</data>
 		<key>Resources/regs.txt</key>
 		<data>
@@ -24,10 +32,6 @@
 		<data>
 		8BNJqb/H6Ho+3/XP33ibLHcnduY=
 		</data>
-		<key>Resources/tgl_guc_70.bin</key>
-		<data>
-		R4apY7z2Xa64RHZeLjminI0CXl0=
-		</data>
 		<key>Resources/tgl_huc_7.9.3.bin</key>
 		<data>
 		10njUEuB4mgvC96x4GJsIrEpVmk=
@@ -39,11 +43,11 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			tlwbJ6/h3AanNMylb0POfnQFf6Y=
+			Jdd/UlDEnoQbUh4fJ9pPh1OOmrY=
 			</data>
 			<key>hash2</key>
 			<data>
-			qkMw1nMFRS0QNuBFhgCE17jinOaDnB2E4Hvm/g3Csq0=
+			M8yq6JAKBLCB7U4a9w8rY1Wznl1XjNt2qH/iD5fyiYI=
 			</data>
 		</dict>
 		<key>Resources/README.md</key>
@@ -55,6 +59,28 @@
 			<key>hash2</key>
 			<data>
 			aFfTFmVxfwcrMqNGR9Xk4y+W82igIDuLZSoUxlWo4aQ=
+			</data>
+		</dict>
+		<key>Resources/apple_tgl_guc.bin</key>
+		<dict>
+			<key>hash</key>
+			<data>
+			bhBO+A7mu0muumuVY7qWYhR/6o8=
+			</data>
+			<key>hash2</key>
+			<data>
+			3Mz0roBnXS75Fz2dPMZHXehEHNtzhyEvGy8BaHSQPkg=
+			</data>
+		</dict>
+		<key>Resources/apple_tgl_huc.bin</key>
+		<dict>
+			<key>hash</key>
+			<data>
+			9NImmqVg+BU14vHLbPm4ex27dpU=
+			</data>
+			<key>hash2</key>
+			<data>
+			Pc7dZTLbyYJx5urlQ1YOBykwvbFqpZf3bdXRLLd1pbA=
 			</data>
 		</dict>
 		<key>Resources/regs.txt</key>
@@ -88,17 +114,6 @@
 			<key>hash2</key>
 			<data>
 			WrDkF/ul7HWIOE4hVWswNVMA1FCjXgbruUghwBJhHXc=
-			</data>
-		</dict>
-		<key>Resources/tgl_guc_70.bin</key>
-		<dict>
-			<key>hash</key>
-			<data>
-			R4apY7z2Xa64RHZeLjminI0CXl0=
-			</data>
-			<key>hash2</key>
-			<data>
-			Lx9XobI9GG8lkjGNHgehNllokyhBzLPnF3xRa6AG4vY=
 			</data>
 		</dict>
 		<key>Resources/tgl_huc_7.9.3.bin</key>

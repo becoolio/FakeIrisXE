@@ -31,6 +31,7 @@ public:
     bool createHwContext();
     void freeHwContext();
     bool setupExeclistPorts();
+    bool isReady() { return fIsReady; }  // V206: Check if EXEClist is ready
     bool submitBatchExeclist(FakeIrisXEGEM* batchGem);
     FakeIrisXEGEM* createRealBatchBuffer(const uint8_t* data, size_t len);
 
@@ -82,6 +83,9 @@ public:
     
     public:
         FakeIrisXEFramebuffer* fOwner;
+        
+        // V206: Track if EXEClist is ready
+        bool                    fIsReady;
 
         // Global engine context list
         XEHWContext            fHwContexts[kMaxHwContexts];

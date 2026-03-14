@@ -13,10 +13,15 @@
 
 extern "C" void OSSynchronizeIO(void);
 
-// V135: Add missing register defines - aggressive Linux GT initialization
-// V135: Added PPGTT, GART, additional power management, GT workarounds
-#ifndef GEN11_GUC_RESET
-#define GEN11_GUC_RESET              0x1C0C0
+// V183: Optimize boot speed - reduce timeouts since GuC consistently fails
+#ifndef APPLE_TGL_PREAUTH_RETRY_DELAY_MS_V177
+#define APPLE_TGL_PREAUTH_RETRY_DELAY_MS_V177 20U
+#endif
+#ifndef APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179
+#define APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179 500U  // V183: Reduced from 1500ms to 500ms for faster boot
+#endif
+#ifndef APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179
+#define APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179 500U  // V183: Reduced from 1500ms to 500ms for faster boot
 #endif
 
 // V146: Add GUC_CTL and GUC_MISC_CONTROL registers
@@ -143,6 +148,34 @@ extern "C" void OSSynchronizeIO(void);
 #define GEN12_RPNMINCT              0xA030
 #endif
 
+// V182: Clock gating control registers (UCGCTL = Unit Clock Gating Control, RCGCTL = Render Clock Gating Control)
+// These are critical for enabling RCS clocks before ring/execlist programming
+// Based on Linux i915 and Intel PRM for Gen12/Tiger Lake
+#ifndef GEN12_UCGCTL1
+#define GEN12_UCGCTL1               0x4D00   // Unit Clock Gating Control 1
+#endif
+#ifndef GEN12_UCGCTL2
+#define GEN12_UCGCTL2               0x4D04   // Unit Clock Gating Control 2
+#endif
+#ifndef GEN12_UCGCTL3
+#define GEN12_UCGCTL3               0x4D08   // Unit Clock Gating Control 3
+#endif
+#ifndef GEN12_UCGCTL4
+#define GEN12_UCGCTL4               0x4D0C   // Unit Clock Gating Control 4
+#endif
+#ifndef GEN12_UCGCTL5
+#define GEN12_UCGCTL5               0x4D10   // Unit Clock Gating Control 5
+#endif
+#ifndef GEN12_UCGCTL6
+#define GEN12_UCGCTL6               0x4D14   // Unit Clock Gating Control 6
+#endif
+#ifndef GEN12_RCGCTL1
+#define GEN12_RCGCTL1               0x4D20   // Render Clock Gating Control 1
+#endif
+#ifndef GEN12_RCGCTL2
+#define GEN12_RCGCTL2               0x4D24   // Render Clock Gating Control 2
+#endif
+
 // V134: Additional GT and power management registers
 // Use Linux-public GT_PM_CONFIG candidates; do not alias FORCEWAKE_MT at 0xA188.
 #ifndef GT_PM_CONFIG
@@ -188,6 +221,20 @@ extern "C" void OSSynchronizeIO(void);
 #endif
 #ifndef APPLE_TGL_ME_FW_STATUS_V173
 #define APPLE_TGL_ME_FW_STATUS_V173 0xC0F4
+#endif
+
+// V184: Additional ME status registers for debugging
+#ifndef APPLE_TGL_ME_HFS_V184
+#define APPLE_TGL_ME_HFS_V184 0xC0E8
+#endif
+#ifndef APPLE_TGL_ME_EXT_STATUS_V184
+#define APPLE_TGL_ME_EXT_STATUS_V184 0xC0F8
+#endif
+#ifndef APPLE_TGL_ME_CONTROL_V184
+#define APPLE_TGL_ME_CONTROL_V184 0xC0FC
+#endif
+#ifndef APPLE_TGL_GUC_STATUS_V184
+#define APPLE_TGL_GUC_STATUS_V184 0xC000
 #endif
 #ifndef APPLE_TGL_GUC_RESET_BIT_V173
 #define APPLE_TGL_GUC_RESET_BIT_V173 0x00000008U
@@ -1302,6 +1349,15 @@ bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFre
     uint32_t pollValue = 0;
     uint32_t lastMeValue = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
     uint32_t lastResetValue = fOwner->safeMMIORead(APPLE_TGL_GUC_RESET_CTRL_V173);
+    
+    // V184: Enhanced ME status logging
+    uint32_t me_hfs = fOwner->safeMMIORead(APPLE_TGL_ME_HFS_V184);
+    uint32_t me_ext_status = fOwner->safeMMIORead(APPLE_TGL_ME_EXT_STATUS_V184);
+    uint32_t me_control = fOwner->safeMMIORead(APPLE_TGL_ME_CONTROL_V184);
+    uint32_t guc_status = fOwner->safeMMIORead(APPLE_TGL_GUC_STATUS_V184);
+    IOLog("(FakeIrisXE) [V184] ME Status PRE-AUTH: FW_STATUS=0x%08X HFS=0x%08X EXT=0x%08X CTRL=0x%08X GUC=0x%08X\n",
+          lastMeValue, me_hfs, me_ext_status, me_control, guc_status);
+    
     const uint32_t loadFreqExpectedField =
         ((APPLE_TGL_GUC_LOAD_FREQ_TOKEN_V178 >> 23) & 0x1FFU) << APPLE_TGL_GUC_LOAD_FREQ_STATUS_SHIFT_V178;
 
@@ -1474,6 +1530,22 @@ bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFre
           APPLE_TGL_PREAUTH_MAX_ATTEMPTS_V177,
           lastMeValue,
           lastResetValue);
+    
+    // V184: Final ME status dump for debugging
+    uint32_t final_me_hfs = fOwner->safeMMIORead(APPLE_TGL_ME_HFS_V184);
+    uint32_t final_me_ext = fOwner->safeMMIORead(APPLE_TGL_ME_EXT_STATUS_V184);
+    uint32_t final_me_ctrl = fOwner->safeMMIORead(APPLE_TGL_ME_CONTROL_V184);
+    uint32_t final_guc = fOwner->safeMMIORead(APPLE_TGL_GUC_STATUS_V184);
+    IOLog("(FakeIrisXE) [V184] ME Status POST-FAIL: FW_STATUS=0x%08X HFS=0x%08X EXT=0x%08X CTRL=0x%08X GUC=0x%08X\n",
+          lastMeValue, final_me_hfs, final_me_ext, final_me_ctrl, final_guc);
+    
+    // V184: Try alternative ME wake - write 0x1 instead of 0x2
+    IOLog("(FakeIrisXE) [V184] Trying alternative ME wake sequence...\n");
+    fOwner->safeMMIOWrite(APPLE_TGL_ME_FW_STATUS_V173, 0x1);  // Try bit 1
+    IOSleep(100);
+    uint32_t alt_me_status = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
+    IOLog("(FakeIrisXE) [V184] Alternative ME wake result: 0x%08X\n", alt_me_status);
+    
     return false;
 }
 
@@ -3835,6 +3907,76 @@ void FakeIrisXEGuC::initGTPreWorkaround()
     
     uint32_t fw_ack = fOwner->safeMMIORead(FORCEWAKE_ACK);
     IOLog("(FakeIrisXE) [V135] ForceWake ACK: 0x%08X\n", fw_ack);
+    
+    // V182: Step 3a: Enable RCS Clock Gating
+    // This is CRITICAL - without this, RCS engine registers won't latch
+    // Based on Linux i915 intel_gt_init_hw() and Gen12 PRM
+    IOLog("(FakeIrisXE) [V182] Step 3a: Enabling RCS clock gating...\n");
+    
+    // First check current clock gating status
+    uint32_t ucgctl1 = fOwner->safeMMIORead(GEN12_UCGCTL1);
+    uint32_t ucgctl2 = fOwner->safeMMIORead(GEN12_UCGCTL2);
+    uint32_t ucgctl3 = fOwner->safeMMIORead(GEN12_UCGCTL3);
+    uint32_t ucgctl4 = fOwner->safeMMIORead(GEN12_UCGCTL4);
+    uint32_t ucgctl5 = fOwner->safeMMIORead(GEN12_UCGCTL5);
+    uint32_t ucgctl6 = fOwner->safeMMIORead(GEN12_UCGCTL6);
+    uint32_t rcgctl1 = fOwner->safeMMIORead(GEN12_RCGCTL1);
+    uint32_t rcgctl2 = fOwner->safeMMIORead(GEN12_RCGCTL2);
+    
+    IOLog("(FakeIrisXE) [V182] Clock gating PRE-enable:\n");
+    IOLog("(FakeIrisXE) [V182]   UCGCTL1=0x%08X UCGCTL2=0x%08X UCGCTL3=0x%08X\n", ucgctl1, ucgctl2, ucgctl3);
+    IOLog("(FakeIrisXE) [V182]   UCGCTL4=0x%08X UCGCTL5=0x%08X UCGCTL6=0x%08X\n", ucgctl4, ucgctl5, ucgctl6);
+    IOLog("(FakeIrisXE) [V182]   RCGCTL1=0x%08X RCGCTL2=0x%08X\n", rcgctl1, rcgctl2);
+    
+    // Clear clock gating for RCS (Render Command Streamer) - set bits to 0 to enable clocks
+    // Based on Linux i915: disable specific gating bits that block RCS
+    // RCS needs: BLITTER, DECRYPTOR, DMAS, GUC, LNCF, MT, RENDER, RESERVED, SZ, VDBX, VEBX
+    
+    // UCGCTL1: Disable gating for RCS-related units
+    // Bit 0: GUC disable, Bit 1: TZ disable, Bit 2: RCS disable, etc.
+    uint32_t ucgctl1_enable = ucgctl1 & ~0x00000007;  // Enable GUC, TZ, RCS clocks
+    fOwner->safeMMIOWrite(GEN12_UCGCTL1, ucgctl1_enable);
+    
+    // UCGCTL2: Additional unit clock enables
+    uint32_t ucgctl2_enable = ucgctl2 & ~0x00003FFF;  // Enable various units
+    fOwner->safeMMIOWrite(GEN12_UCGCTL2, ucgctl2_enable);
+    
+    // UCGCTL3: More unit clock enables  
+    uint32_t ucgctl3_enable = ucgctl3 & ~0x00003FFF;
+    fOwner->safeMMIOWrite(GEN12_UCGCTL3, ucgctl3_enable);
+    
+    // UCGCTL4: Enable remaining units
+    uint32_t ucgctl4_enable = ucgctl4 & ~0x00003FFF;
+    fOwner->safeMMIOWrite(GEN12_UCGCTL4, ucgctl4_enable);
+    
+    // UCGCTL5: Enable more units
+    uint32_t ucgctl5_enable = ucgctl5 & ~0x00003FFF;
+    fOwner->safeMMIOWrite(GEN12_UCGCTL5, ucgctl5_enable);
+    
+    // UCGCTL6: Enable remaining units
+    uint32_t ucgctl6_enable = ucgctl6 & ~0x00003FFF;
+    fOwner->safeMMIOWrite(GEN12_UCGCTL6, ucgctl6_enable);
+    
+    // RCGCTL1: Disable render clock gating - CRITICAL for RCS
+    // Bits for RCS clock control
+    uint32_t rcgctl1_enable = rcgctl1 & ~0x00000003;  // Enable RCS clocks
+    fOwner->safeMMIOWrite(GEN12_RCGCTL1, rcgctl1_enable);
+    
+    // RCGCTL2: Additional render clock control
+    uint32_t rcgctl2_enable = rcgctl2 & ~0x00000003;
+    fOwner->safeMMIOWrite(GEN12_RCGCTL2, rcgctl2_enable);
+    
+    IOSleep(10);  // Allow clocks to stabilize
+    
+    // Verify clock gating was disabled (bits should read back as enabled = 0)
+    ucgctl1 = fOwner->safeMMIORead(GEN12_UCGCTL1);
+    ucgctl2 = fOwner->safeMMIORead(GEN12_UCGCTL2);
+    rcgctl1 = fOwner->safeMMIORead(GEN12_RCGCTL1);
+    rcgctl2 = fOwner->safeMMIORead(GEN12_RCGCTL2);
+    
+    IOLog("(FakeIrisXE) [V182] Clock gating POST-enable:\n");
+    IOLog("(FakeIrisXE) [V182]   UCGCTL1=0x%08X UCGCTL2=0x%08X\n", ucgctl1, ucgctl2);
+    IOLog("(FakeIrisXE) [V182]   RCGCTL1=0x%08X RCGCTL2=0x%08X\n", rcgctl1, rcgctl2);
     
     // Step 4: Configure MOCS (Memory Override Control State) - Linux does this
     IOLog("(FakeIrisXE) [V135] Step 4: Configuring MOCS registers...\n");

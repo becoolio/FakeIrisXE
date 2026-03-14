@@ -1081,6 +1081,7 @@
 
 // GT Interrupt registers (Gen11/Gen12)
 #define GEN11_GFX_MSTR_IRQ_MASK  0x190014
+#define GEN11_GFX_MSTR_IRQ        0x190010  // GFX_MSTR_IRQ - added
 
 
 // Example RCS interrupt bits (you can refine according to actual HW docs)
@@ -1089,10 +1090,10 @@
 #define RCS_INTR_FAULT           (1 << 2)
 #define RCS_INTR_COMPLETE        (1 << 3)
 
-// Tiger Lake Gen12 RCS base = 0x2C000
-#define RCS_BASE = 0x2C000;
-#define RCS0_MODE = RCS_BASE + 0xD8;
-#define RCS0_RESET_CTRL = RCS_BASE + 0x8;
+// Tiger Lake Gen12 RCS base = 0x2000 (Linux i915 uses this)
+#define RCS_BASE 0x2000
+#define RCS0_MODE (RCS_BASE + 0x9C)
+#define RCS0_RESET_CTRL (RCS_BASE + 0xD0)
 
 
 // Workaround registers for Gen12
@@ -1164,117 +1165,65 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 
 
 // -----------------------------
-// Tiger Lake / Gen12 — RCS0 base
+// Tiger Lake / Gen12 — RCS0 base (CORRECTED to 0x2000)
 // -----------------------------
-#define TGL_RCS0_BASE                0x2C000
+#define TGL_RCS0_BASE                0x2000
 
 // Basic ring regs (RCS0 block relative)
 #define RCS0_RING_TAIL               (TGL_RCS0_BASE + 0x30)   // tail
 #define RCS0_RING_HEAD               (TGL_RCS0_BASE + 0x34)   // head
 #define RCS0_RING_START              (TGL_RCS0_BASE + 0x38)   // start/base
 #define RCS0_RING_CTL                (TGL_RCS0_BASE + 0x3C)   // ctl
-#define RCS0_RING_MODE               (TGL_RCS0_BASE + 0xD8)   // ring mode
-#define RCS0_RESET_CTRL              (TGL_RCS0_BASE + 0x1C0)  // reset/control
+#define RCS0_RING_MODE               (TGL_RCS0_BASE + 0x9C)   // ring mode
+#define RCS0_RESET_CTRL              (TGL_RCS0_BASE + 0xD0)  // reset/control
 
-#define RCS0_GFX_MODE     (0x2C000 + 0xD0)
-#define RCS0_GFX_MODE2    (0x2C000 + 0xD4)
+#define RCS0_GFX_MODE     (0x2000 + 0xD0)
+#define RCS0_GFX_MODE2    (0x2000 + 0xD4)  // CORRECTED from 0x2C000
 
 
 // -----------------------------
-// Execlist registers (GEN12 TGL fixed offsets)
-// These are NOT relative to per-engine small offsets in some docs: use the
-// absolute 0x2C29x / 0x2C2Ax values on TGL.
+// Execlist registers (GEN12 TGL) - CORRECTED to 0x2000 base
+// These are relative to RCS0 base (0x2000): 0x2000 + 0x290 = 0x2290
 // -----------------------------
-#define RCS0_EXECLIST_SUBMITPORT_LO  0x2C290  // ELSP0 LO  (submit port)
-#define RCS0_EXECLIST_SUBMITPORT_HI  0x2C294  // ELSP0 HI
+#define RCS0_EXECLIST_SUBMITPORT_LO  0x2290  // ELSP0 LO (submit port) - CORRECTED
+#define RCS0_EXECLIST_SUBMITPORT_HI  0x2294  // ELSP0 HI - CORRECTED
+#define RCS0_EXECLIST_SQ_CONTENTS    0x22A8  // optional - CORRECTED
 
-#define RCS0_EXECLIST_SQ_CONTENTS    0x2C2A8  // optional
+// Legacy ELSP (different offset)
+#define RCS0_ELSP1_LO              0x2258  // 0x2000 + 0x258 - CORRECTED
+#define RCS0_ELSP1_HI              0x225C  // 0x2000 + 0x25C - CORRECTED
 
-// NOTE: some older docs label these ELSP0_LO / ELSP0_HI etc. Those names map to
-// the RCS0_EXECLIST_SUBMITPORT_* above.
-
-// -----------------------------
-// Forcewake / GTT / GuC region (common addresses used by drivers)
-// -----------------------------
-// Request forcewake (engine domain specific; you used 0xA188 previously)
-#define FORCEWAKE_REQ                0xA188
-
-// Forcewake ACK (global ack register used in many drivers)
-#define FORCEWAKE_ACK                0x130044
-
-// GuC control registers (GEN11+)
-#define GEN11_GUC_CTL                0x1C0B0
-#define GEN11_GUC_STATUS             0x1C0B4
-#define GEN11_GUC_FW_ADDR_LO         0x1C0C4
-#define GEN11_GUC_FW_ADDR_HI         0x1C0C8
-#define GEN11_GUC_RESET              0x1C0C0
-#define GEN11_GUC_CAPS0              0x1C0A0  // V46: GuC capabilities register 0
-#define GEN11_GUC_CAPS1              0x1C0A4  // V46: GuC capabilities register 1
-
-// Misc
-#define GTT_FLUSH_REG                0x1082C0   // GTT flush (used in your code)
-
-
-#define GEN11_FORCEWAKE_RENDER       0xA278 //working 0x0000A188
-#define GEN11_FORCEWAKE_RENDER_ACK   0xA27C //working 0x0000A18C
-
-
-
-
-#define GEN11_FORCEWAKE_MEDIA_VDBOX0     0x0000A540
-#define GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK 0x00000D50
-#define GEN11_FORCEWAKE_MEDIA_VEBOX0     0x0000A560
-#define GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK 0x00000D70
-
-
-#define RCS0_CSB_LO                0x2300
-#define RCS0_CSB_HI                0x2304
-
-
-#define GEN11_GFX_MSTR_IRQ        0x190014
-
-#define RCS_INTR_CTX_SWITCH        (1 << 1)
-
-
-// =============== GEN12 Tiger Lake CSB registers ===============
-#define RCS0_CSB_ADDR_LO      0x22A0
-#define RCS0_CSB_ADDR_HI      0x22A4
-#define RCS0_CSB_CTRL         0x22A8
-
-
-
-
-
-
-
+// Execlist Status - CORRECTED
+#define RCS0_EXECLIST_STATUS_LO    0x220C  // 0x2000 + 0x20C - CORRECTED
+#define RCS0_EXECLIST_STATUS_HI    0x2210  // 0x2000 + 0x210 - CORRECTED
 
 // ========================
-// GEN12 / Tiger Lake ELSP
+// GEN12 / Tiger Lake ELSP 
 // ========================
 
-
-#define RCS0_ELSP1_LO              0x2258
-#define RCS0_ELSP1_HI              0x225C
-
-
-// Execlist Status
-#define RCS0_EXECLIST_STATUS_LO    0x2C20C
-#define RCS0_EXECLIST_STATUS_HI    0x2C210
-
-
-// Execlist Control
-#define RCS0_EXECLIST_CONTROL      0x2C228
-#define RCS0_CTX_STATUS              0x2234  // Context status
-
-#define GEN12_ELSP_DESC_DWORDS 16
-
-
-// Arbitration Control
-#define RCS0_EXECLIST_ARB_CTL      0x2C22C
-
-
+#define RCS0_EXECLIST_CONTROL      0x2228  // 0x2000 + 0x228 - CORRECTED
+#define RCS0_EXECLIST_ARB_CTL      0x222C  // 0x2000 + 0x22C - CORRECTED
 #define RCS0_EXECLIST_PREEMPT        0x2510
 #define RCS0_EXECLIST_CONTEXT_CONTROL 0x244C
+
+// CSB (Command Streamer Buffer) registers
+#define RCS0_CSB_CTRL              0x20E0  // CSB control
+#define RCS0_CSB_ADDR_LO           0x20E4  // CSB address low
+#define RCS0_CSB_ADDR_HI           0x20E8  // CSB address high
+#define RCS0_CSB_READ_PTR          0x20EC  // CSB read pointer
+#define RCS0_CSB_WRITE_PTR         0x20F0  // CSB write pointer
+
+// Forcewake registers (needed by GuC)
+#define GEN11_FORCEWAKE_RENDER       0xA278
+#define GEN11_FORCEWAKE_RENDER_ACK   0xA27C
+
+// GuC registers
+#define GEN11_GUC_RESET             0xA440
+#define GEN11_GUC_CTL               0x1C0B0
+#define GEN11_GUC_STATUS            0x1C0B4
+#define GEN11_GUC_CAPS1             0x1C0B8
+#define GEN11_GUC_FW_ADDR_HI        0x1C0C8
+#define GEN11_GUC_FW_ADDR_LO        0x1C0C4
 
 #define GEN6_RC_CONTROL              0xA090    // RC6 control
 #define GEN9_PG_ENABLE               0xA210    // Power gating enable

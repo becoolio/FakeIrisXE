@@ -80,7 +80,18 @@ void FakeIrisXERing::programRingBaseToHW()
 
     uint32_t baseStart = ringStartReg(mRingBaseOffset);
 
+    // V206: Add readback of START before writing
+    uint32_t start_before = mmio_read32(mMMIO, baseStart);
+    IOLog("(FakeIrisXE)[V206] START (0x%X) before=0x%08X\n", baseStart, start_before);
+    
+    // V206: Try different sequence - write START first, then do readback
     mmio_write32(mMMIO, baseStart, (uint32_t)mRingGPUAddr);
+    
+    // V206: Immediate readback to check if value stuck
+    uint32_t start_after = mmio_read32(mMMIO, baseStart);
+    IOLog("(FakeIrisXE)[V206] START (0x%X) after=0x%08X (expected 0x%08X)\n", 
+          baseStart, start_after, (uint32_t)mRingGPUAddr);
+    
     mmio_write32(mMMIO, kAltRcsRbStartLo, (uint32_t)mRingGPUAddr);
     mmio_write32(mMMIO, kAltRcsRbStartHi, (uint32_t)(mRingGPUAddr >> 32));
 
@@ -110,6 +121,11 @@ void FakeIrisXERing::enableRing()
     mmio_write32(mMMIO, tailReg, 0);
     mmio_write32(mMMIO, kAltRcsRbHead, 0);
     mmio_write32(mMMIO, kAltRcsRbTail, 0);
+    
+    // V206: Add more debugging - read back HEAD/TAIL
+    uint32_t head_after = mmio_read32(mMMIO, headReg);
+    uint32_t tail_after = mmio_read32(mMMIO, tailReg);
+    IOLog("(FakeIrisXE)[V206] HEAD/Tail reset: HEAD=0x%08X TAIL=0x%08X\n", head_after, tail_after);
 
     IOLog("(FakeIrisXE)[V152] enableRing: size=%zu bytes, units=%d, CTL=0x%08X\n", 
           mRingSize, sizePages, ctlValue);
@@ -119,6 +135,11 @@ void FakeIrisXERing::enableRing()
 
     uint32_t ctl = mmio_read32(mMMIO, ctlReg);
     IOLog("(FakeIrisXE)[V152] Ring CTL (0x%X) = 0x%08x\n", ctlReg, ctl);
+    
+    // V207: Check if START is still valid after writing CTL
+    uint32_t start_check = mmio_read32(mMMIO, ringStartReg(mRingBaseOffset));
+    IOLog("(FakeIrisXE)[V207] START check after CTL: START=0x%08X (expected 0x%llX)\n", 
+          start_check, (unsigned long long)mRingGPUAddr);
 }
 
 
