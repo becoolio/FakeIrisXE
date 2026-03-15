@@ -5566,6 +5566,26 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
     return ret;
 }
 
+// V221: Get CPU virtual address of a GGTT-mapped GEM object
+void* FakeIrisXEFramebuffer::ggttGetCPUAddr(FakeIrisXEGEM* gem) {
+    if (!gem) return nullptr;
+    
+    IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
+    if (!md) {
+        IOLog("(FakeIrisXE) ggttGetCPUAddr: gem->memoryDescriptor() is NULL (gem=%p)\n", gem);
+        return nullptr;
+    }
+    
+    void* cpuAddr = (void*)md->getBytesNoCopy();
+    if (!cpuAddr) {
+        IOLog("(FakeIrisXE) ggttGetCPUAddr: getBytesNoCopy() returned NULL (gem=%p)\n", gem);
+        return nullptr;
+    }
+    
+    IOLog("FakeIrisXEFramebuffer: ggttGetCPUAddr -> CPU VA %p (gem=%p)\n", cpuAddr, gem);
+    return cpuAddr;
+}
+
 // V140: Map a GEM into GGTT at or above a minimum offset (for GuC firmware placement)
 // This ensures firmware is mapped above WOPCM size to avoid GGTT pin bias issues
 uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t minOffset) {

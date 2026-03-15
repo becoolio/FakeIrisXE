@@ -211,6 +211,31 @@ private:
     // V219: RCS Active Mode Fix
     void initV219RCSFix();
 
+    // V221: RCS EXEClist Initialization with MI_STORE_DWORD_IMM Proof-of-Execution
+    void initV221RCSExeclist();
+    
+    // V221 Helper Functions - Gen12 RCS LRC + EXEClist Path
+    void dumpRcsStateBeforeInit(const char* label);
+    bool tryRcsRecoveryPath();
+    struct RcsExeclistResources {
+        FakeIrisXEGEM* ringGem;
+        FakeIrisXEGEM* lrcGem;
+        FakeIrisXEGEM* scratchGem;
+        uint64_t ringGpuAddr;
+        uint64_t lrcGpuAddr;
+        uint64_t scratchGpuAddr;
+        size_t ringSize;
+    };
+    bool allocateRcsExeclistResources(RcsExeclistResources& res);
+    bool buildGen12RcsLrc(RcsExeclistResources& res);
+    uint64_t buildRcsContextDescriptor(uint64_t lrcGpuAddr, uint32_t lrcPages);
+    bool submitRcsExeclistContext(uint64_t ctxDescLo, uint64_t ctxDescHi);
+    bool pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResources& res, uint32_t expectedValue);
+    bool executeRcsTestBatch(RcsExeclistResources& res);
+    
+    // Internal helper
+    void dumpRcsStateAfterRecovery(const char* label);
+
     // V137: Correct Tiger Lake GuC loading methods
     bool deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
                              size_t* outPayloadOffset, size_t* outPayloadSize);

@@ -661,6 +661,7 @@ protected:
     uint64_t ggttMap(FakeIrisXEGEM* gem);
     uint64_t ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t minOffset);  // V140: Map at or above minimum offset
     void ggttUnmap(uint64_t gpuAddr, uint32_t pages);
+    void* ggttGetCPUAddr(FakeIrisXEGEM* gem);  // V221: Get CPU VA of GGTT-mapped GEM
 
     // ===========================
     // RCS Ring + GGTT + BAR0
@@ -678,7 +679,10 @@ protected:
     size_t            fRingSize = 0;              // bytes
     uint32_t fFenceSeq = 0;
     volatile uint32_t fFenceCompletedSeq = 0;
-    FakeIrisXEGEM* fRingGem = nullptr;  // <--- Add this
+    FakeIrisXEGEM* fRingGem = nullptr;  // V221: RCS ring buffer GEM
+    FakeIrisXEGEM* fScratchGem = nullptr;  // V221: Scratch page for writeback
+    FakeIrisXEGEM* fLrcGem = nullptr;  // V221: LRC context GEM
+    uint64_t fScratchGpuVA = 0;  // V221: Scratch GPU VA
 
     
     

@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.219</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.219</string>
-	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V219 - RCS Active Mode Fix</string>
+ 	<string>1.0.222</string>
+ 	<key>CFBundleShortVersionString</key>
+ 	<string>1.0.222</string>
+ 	<key>CFBundleGetInfoString</key>
+ 	<string>FakeIrisXe V222 - Gen12 RCS EXEClist Enhanced</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
