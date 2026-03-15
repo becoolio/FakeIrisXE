@@ -211,6 +211,12 @@ private:
     // V219: RCS Active Mode Fix
     void initV219RCSFix();
 
+    // V220: RCS Unhalt + EXEClist Aggressive
+    void initV220RCSUnhalt();
+
+    // V221: Comprehensive EXEClist Integration
+    void initV221ExeclistIntegration();
+
     // V137: Correct Tiger Lake GuC loading methods
     bool deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
                              size_t* outPayloadOffset, size_t* outPayloadSize);
