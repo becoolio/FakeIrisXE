@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.216</string>
+	<string>1.0.219</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.216</string>
+	<string>1.0.219</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V216 - Clock Gating Fix</string>
+	<string>FakeIrisXe V219 - RCS Active Mode Fix</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

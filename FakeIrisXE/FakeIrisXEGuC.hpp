@@ -202,6 +202,15 @@ private:
     // V216: Fix Clock Gating Registers and More Aggressive RCS Enable
     void initV216Improvements();
 
+    // V217: Aggressive Power Management + Different RCS Bases
+    void initV217Improvements();
+
+    // V218: 10 Parallel Linux i915 Gen12 Improvements
+    void initV218Improvements();
+
+    // V219: RCS Active Mode Fix
+    void initV219RCSFix();
+
     // V137: Correct Tiger Lake GuC loading methods
     bool deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
                              size_t* outPayloadOffset, size_t* outPayloadSize);
