@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-   	<string>1.0.242</string>
+   	<string>1.0.243</string>
    	<key>CFBundleShortVersionString</key>
-   	<string>1.0.242</string>
+   	<string>1.0.243</string>
    	<key>CFBundleGetInfoString</key>
-   	<string>FakeIrisXe V242 - GT ERROR Tracking (when GT becomes wedged)</string>
+   	<string>FakeIrisXe V243 - GT ERROR EARLY Tracking (before init)</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

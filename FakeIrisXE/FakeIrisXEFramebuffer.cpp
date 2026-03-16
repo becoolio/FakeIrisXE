@@ -5920,6 +5920,11 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     fRingGpuVA = ringGpuVA;
     fRingGem = ringGem;
 
+    // V243: Check GT_ERROR at START of GT initialization
+    uint32_t gt_error_early = safeMMIORead(0x0B00);
+    IOLog("(FakeIrisXE) [V243] GT_ERROR at START of GT init: 0x%08X (%s)\n", 
+          gt_error_early, (gt_error_early & 0x80000000) ? "WEDGED!" : "OK");
+
     // V204: Enhanced GT compute power enable with more status checks
     // Based on Linux i915 - need to request compute power domain
     IOLog("(FakeIrisXE) [V204] Enabling GT compute power domain...\n");
@@ -5956,6 +5961,11 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     pw_status = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45410);
     IOLog("(FakeIrisXE) [V210] Power wells after: CTL2=0x%08X CTL3=0x%08X CTL4=0x%08X STATUS=0x%08X\n", pw_ctl2, pw_ctl3, pw_ctl4, pw_status);
 
+    // V243: Check GT_ERROR at START of V210
+    uint32_t gt_error_start = safeMMIORead(0x0B00);
+    IOLog("(FakeIrisXE) [V243] GT_ERROR at START of V210: 0x%08X (%s)\n", 
+          gt_error_start, (gt_error_start & 0x80000000) ? "WEDGED!" : "OK");
+    
     // ===== V210: COMPREHENSIVE GT INITIALIZATION =====
     IOLog("(FakeIrisXE) [V210] ==== COMPREHENSIVE GT INIT (10 improvements) ====\n");
     
