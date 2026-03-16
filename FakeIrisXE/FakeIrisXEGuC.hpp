@@ -220,6 +220,34 @@ private:
     // V233: 10 Parallel Improvements (Based on Linux i915 + DTK Research)
     void initV233AllImprovements();
     
+    // V234: ForceWake Retry + VPU Power + Aggressive Reset
+    void initV234AggressiveInit();
+    
+    // V235: 10 More Parallel Improvements (GMCH/L3/CDCLK/etc)
+    void initV235MoreImprovements();
+    
+    // V236: Critical Pre-Init (PMC/ForceWake/Interrupts/DMI)
+    void initV236CriticalPreInit();
+    
+    // V236 Individual improvements (private helpers)
+    void initV236PMC();
+    void initV236ForceWakeDomains();
+    void initV236GTInterrupts();
+    void initV236GEMFault();
+    void initV236DMI();
+    
+    // V235 Individual improvements (private helpers)
+    void initV235GMCH();
+    void initV235L3Cache();
+    void initV235CDCLK();
+    void initV235PCIeASPM();
+    void initV235DDB();
+    void initV235GSC();
+    void initV235TimerFreq();
+    void initV235MediaClock();
+    void initV235PCIeDebug();
+    void initV235RPS();
+    
     // V233 Individual improvements (private helpers)
     void initV233MOCS();
     void initV233ClockGating();
