@@ -5929,6 +5929,9 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     // Based on Linux i915 - need to request compute power domain
     IOLog("(FakeIrisXE) [V204] Enabling GT compute power domain...\n");
     
+    // V244: Track GT_ERROR before and after power wells
+    uint32_t gt_error_before_pw = safeMMIORead(0x0B00);
+    
     // Request power wells for compute
     volatile uint32_t* bar0 = fBar0;
     uint32_t pw_ctl2 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45404);  // PWR_WELL_CTL2
@@ -5936,6 +5939,10 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     uint32_t pw_ctl4 = *(volatile uint32_t*)((uint8_t*)bar0 + 0x4540C);  // PWR_WELL_CTL4
     uint32_t pw_status = *(volatile uint32_t*)((uint8_t*)bar0 + 0x45410);  // PWR_WELL_STATUS
     IOLog("(FakeIrisXE) [V204] Power wells before: CTL2=0x%08X CTL3=0x%08X CTL4=0x%08X STATUS=0x%08X\n", pw_ctl2, pw_ctl3, pw_ctl4, pw_status);
+    
+    uint32_t gt_error_after_pw = safeMMIORead(0x0B00);
+    IOLog("(FakeIrisXE) [V244] GT_ERROR: before PW=0x%08X after PW=0x%08X\n", 
+          gt_error_before_pw, gt_error_after_pw);
     
     // Try enabling GT_PG_ENABLE - bit 0 controls GT power gating
     uint32_t gt_pg_enable = *(volatile uint32_t*)((uint8_t*)bar0 + 0xA218);
