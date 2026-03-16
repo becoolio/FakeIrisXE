@@ -13,7 +13,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>1824</integer>
+      <key>line</key><integer>1831</integer>
       <key>col</key><integer>17</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -21,24 +21,24 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>1824</integer>
+         <key>line</key><integer>1831</integer>
          <key>col</key><integer>17</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>1824</integer>
+         <key>line</key><integer>1831</integer>
          <key>col</key><integer>25</integer>
          <key>file</key><integer>0</integer>
         </dict>
        </array>
        <array>
         <dict>
-         <key>line</key><integer>1824</integer>
+         <key>line</key><integer>1831</integer>
          <key>col</key><integer>29</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>1824</integer>
+         <key>line</key><integer>1831</integer>
          <key>col</key><integer>37</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -62,7 +62,7 @@
   <key>issue_hash_function_offset</key><string>18</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>1824</integer>
+   <key>line</key><integer>1831</integer>
    <key>col</key><integer>17</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -70,7 +70,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>1824</integer>
+    <integer>1831</integer>
    </array>
   </dict>
   </dict>
@@ -85,12 +85,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2954</integer>
+           <key>line</key><integer>2961</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2954</integer>
+           <key>line</key><integer>2961</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -98,12 +98,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>6</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -119,12 +119,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>6</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -132,12 +132,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -149,7 +149,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>2957</integer>
+      <key>line</key><integer>2964</integer>
       <key>col</key><integer>9</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -157,12 +157,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>2957</integer>
+         <key>line</key><integer>2964</integer>
          <key>col</key><integer>9</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>2957</integer>
+         <key>line</key><integer>2964</integer>
          <key>col</key><integer>24</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -182,12 +182,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2957</integer>
+           <key>line</key><integer>2964</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -195,12 +195,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>6</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -216,12 +216,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>6</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -229,12 +229,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>10</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2962</integer>
+           <key>line</key><integer>2969</integer>
            <key>col</key><integer>36</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -246,7 +246,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>2962</integer>
+      <key>line</key><integer>2969</integer>
       <key>col</key><integer>10</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -254,12 +254,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>2962</integer>
+         <key>line</key><integer>2969</integer>
          <key>col</key><integer>10</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>2962</integer>
+         <key>line</key><integer>2969</integer>
          <key>col</key><integer>38</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -275,7 +275,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>2910</integer>
+      <key>line</key><integer>2917</integer>
       <key>col</key><integer>1</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -293,12 +293,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2910</integer>
+           <key>line</key><integer>2917</integer>
            <key>col</key><integer>1</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2910</integer>
+           <key>line</key><integer>2917</integer>
            <key>col</key><integer>4</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -306,12 +306,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2912</integer>
+           <key>line</key><integer>2919</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2912</integer>
+           <key>line</key><integer>2919</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -327,12 +327,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2912</integer>
+           <key>line</key><integer>2919</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2912</integer>
+           <key>line</key><integer>2919</integer>
            <key>col</key><integer>9</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -340,12 +340,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2922</integer>
+           <key>line</key><integer>2929</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2922</integer>
+           <key>line</key><integer>2929</integer>
            <key>col</key><integer>10</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -361,12 +361,12 @@
         <key>start</key>
          <array>
           <dict>
-           <key>line</key><integer>2922</integer>
+           <key>line</key><integer>2929</integer>
            <key>col</key><integer>5</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2922</integer>
+           <key>line</key><integer>2929</integer>
            <key>col</key><integer>10</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -374,12 +374,12 @@
         <key>end</key>
          <array>
           <dict>
-           <key>line</key><integer>2923</integer>
+           <key>line</key><integer>2930</integer>
            <key>col</key><integer>60</integer>
            <key>file</key><integer>0</integer>
           </dict>
           <dict>
-           <key>line</key><integer>2923</integer>
+           <key>line</key><integer>2930</integer>
            <key>col</key><integer>61</integer>
            <key>file</key><integer>0</integer>
           </dict>
@@ -391,7 +391,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>2923</integer>
+      <key>line</key><integer>2930</integer>
       <key>col</key><integer>60</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -399,12 +399,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>2923</integer>
+         <key>line</key><integer>2930</integer>
          <key>col</key><integer>63</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>2923</integer>
+         <key>line</key><integer>2930</integer>
          <key>col</key><integer>64</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -428,7 +428,7 @@
   <key>issue_hash_function_offset</key><string>12</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>2923</integer>
+   <key>line</key><integer>2930</integer>
    <key>col</key><integer>60</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -436,18 +436,18 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>2910</integer>
-    <integer>2911</integer>
-    <integer>2912</integer>
+    <integer>2917</integer>
+    <integer>2918</integer>
     <integer>2919</integer>
-    <integer>2920</integer>
-    <integer>2922</integer>
-    <integer>2923</integer>
-    <integer>2952</integer>
-    <integer>2953</integer>
-    <integer>2954</integer>
-    <integer>2957</integer>
-    <integer>2962</integer>
+    <integer>2926</integer>
+    <integer>2927</integer>
+    <integer>2929</integer>
+    <integer>2930</integer>
+    <integer>2959</integer>
+    <integer>2960</integer>
+    <integer>2961</integer>
+    <integer>2964</integer>
+    <integer>2969</integer>
    </array>
   </dict>
   </dict>
@@ -458,7 +458,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>5560</integer>
+      <key>line</key><integer>5567</integer>
       <key>col</key><integer>14</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -466,24 +466,24 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>5560</integer>
+         <key>line</key><integer>5567</integer>
          <key>col</key><integer>14</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>5560</integer>
+         <key>line</key><integer>5567</integer>
          <key>col</key><integer>24</integer>
          <key>file</key><integer>0</integer>
         </dict>
        </array>
        <array>
         <dict>
-         <key>line</key><integer>5560</integer>
+         <key>line</key><integer>5567</integer>
          <key>col</key><integer>28</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>5560</integer>
+         <key>line</key><integer>5567</integer>
          <key>col</key><integer>40</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -507,7 +507,7 @@
   <key>issue_hash_function_offset</key><string>57</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>5560</integer>
+   <key>line</key><integer>5567</integer>
    <key>col</key><integer>14</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -515,7 +515,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>5560</integer>
+    <integer>5567</integer>
    </array>
   </dict>
   </dict>
@@ -526,7 +526,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>5561</integer>
+      <key>line</key><integer>5568</integer>
       <key>col</key><integer>29</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -534,12 +534,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>5561</integer>
+         <key>line</key><integer>5568</integer>
          <key>col</key><integer>43</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>5561</integer>
+         <key>line</key><integer>5568</integer>
          <key>col</key><integer>55</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -563,7 +563,7 @@
   <key>issue_hash_function_offset</key><string>58</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>5561</integer>
+   <key>line</key><integer>5568</integer>
    <key>col</key><integer>29</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -571,7 +571,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>5561</integer>
+    <integer>5568</integer>
    </array>
   </dict>
   </dict>
@@ -582,7 +582,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>5562</integer>
+      <key>line</key><integer>5569</integer>
       <key>col</key><integer>29</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -590,12 +590,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>5562</integer>
+         <key>line</key><integer>5569</integer>
          <key>col</key><integer>43</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>5562</integer>
+         <key>line</key><integer>5569</integer>
          <key>col</key><integer>55</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -619,7 +619,7 @@
   <key>issue_hash_function_offset</key><string>59</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>5562</integer>
+   <key>line</key><integer>5569</integer>
    <key>col</key><integer>29</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -627,7 +627,231 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>5562</integer>
+    <integer>5569</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>7300</integer>
+      <key>col</key><integer>13</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>7300</integer>
+         <key>col</key><integer>36</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>7300</integer>
+         <key>col</key><integer>43</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Value stored to &apos;gt_error_when_wedged&apos; is never read</string>
+     <key>message</key>
+     <string>Value stored to &apos;gt_error_when_wedged&apos; is never read</string>
+    </dict>
+   </array>
+   <key>description</key><string>Value stored to &apos;gt_error_when_wedged&apos; is never read</string>
+   <key>category</key><string>Unused code</string>
+   <key>type</key><string>Dead assignment</string>
+   <key>check_name</key><string>deadcode.DeadStores</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>d85a29dbc8f2a8182b4d8a6860de8242</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>pollRcsExeclistProgress</string>
+  <key>issue_hash_function_offset</key><string>66</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>7300</integer>
+   <key>col</key><integer>13</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>7300</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>7316</integer>
+      <key>col</key><integer>13</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>7316</integer>
+         <key>col</key><integer>25</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>7316</integer>
+         <key>col</key><integer>56</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+     <key>message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+    </dict>
+   </array>
+   <key>description</key><string>Value stored to &apos;lastStage&apos; is never read</string>
+   <key>category</key><string>Unused code</string>
+   <key>type</key><string>Dead assignment</string>
+   <key>check_name</key><string>deadcode.DeadStores</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>046ca04a24b98006f22918652d281b19</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>pollRcsExeclistProgress</string>
+  <key>issue_hash_function_offset</key><string>82</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>7316</integer>
+   <key>col</key><integer>13</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>7316</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>7318</integer>
+      <key>col</key><integer>13</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>7318</integer>
+         <key>col</key><integer>25</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>7318</integer>
+         <key>col</key><integer>52</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+     <key>message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+    </dict>
+   </array>
+   <key>description</key><string>Value stored to &apos;lastStage&apos; is never read</string>
+   <key>category</key><string>Unused code</string>
+   <key>type</key><string>Dead assignment</string>
+   <key>check_name</key><string>deadcode.DeadStores</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>38c75a45047a6402cc1943963f0eb2cc</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>pollRcsExeclistProgress</string>
+  <key>issue_hash_function_offset</key><string>84</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>7318</integer>
+   <key>col</key><integer>13</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>7318</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>7320</integer>
+      <key>col</key><integer>13</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>7320</integer>
+         <key>col</key><integer>25</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>7320</integer>
+         <key>col</key><integer>50</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+     <key>message</key>
+     <string>Value stored to &apos;lastStage&apos; is never read</string>
+    </dict>
+   </array>
+   <key>description</key><string>Value stored to &apos;lastStage&apos; is never read</string>
+   <key>category</key><string>Unused code</string>
+   <key>type</key><string>Dead assignment</string>
+   <key>check_name</key><string>deadcode.DeadStores</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>e223a986ebc395311772becb254dfd93</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>pollRcsExeclistProgress</string>
+  <key>issue_hash_function_offset</key><string>86</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>7320</integer>
+   <key>col</key><integer>13</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>7320</integer>
    </array>
   </dict>
   </dict>

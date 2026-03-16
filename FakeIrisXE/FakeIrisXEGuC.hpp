@@ -271,6 +271,7 @@ private:
         uint64_t lrcGpuAddr;
         uint64_t scratchGpuAddr;
         size_t ringSize;
+        uint32_t lrcTailUpdate;  // V241: Ring tail byte offset for LRC
     };
     
     // V230: Context switching support - track multiple contexts
@@ -296,7 +297,7 @@ private:
     bool submitContextPair(uint64_t ctxDesc0, uint64_t ctxDesc1);
     void dumpContextQueue();
     bool allocateRcsExeclistResources(RcsExeclistResources& res);
-    bool buildGen12RcsLrc(RcsExeclistResources& res);
+    bool buildGen12RcsLrc(RcsExeclistResources& res, uint32_t ringTailBytes = 0);  // V241: Added ringTailBytes
     uint64_t buildRcsContextDescriptor(uint64_t lrcGpuAddr, uint32_t lrcPages);
     bool submitRcsExeclistContext(uint64_t ctxDescLo, uint64_t ctxDescHi);
     bool pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResources& res, uint32_t expectedValue);

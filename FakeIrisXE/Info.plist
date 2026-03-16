@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-  	<string>1.0.236</string>
-  	<key>CFBundleShortVersionString</key>
-  	<string>1.0.236</string>
-  	<key>CFBundleGetInfoString</key>
-  	<string>FakeIrisXe V236 - Critical Pre-Init (PMC/ForceWake/Interrupts)</string>
+   	<string>1.0.242</string>
+   	<key>CFBundleShortVersionString</key>
+   	<string>1.0.242</string>
+   	<key>CFBundleGetInfoString</key>
+   	<string>FakeIrisXe V242 - GT ERROR Tracking (when GT becomes wedged)</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

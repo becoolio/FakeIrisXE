@@ -24,6 +24,7 @@
 #include "FakeIrisXERing.h"
 
 #include "FakeIrisXEBacklight.hpp" // include so the compiler sees the type
+#include "FakeIrisXEConnectorManager.hpp"
 
 #include <IOKit/IOLocks.h>
 
@@ -130,6 +131,10 @@ protected:
     bool fullyInitialized = false;
     IOLock* powerLock;
     bool shuttingDown = false;
+    
+    // V240: Connector Manager for Tiger Lake
+    FakeIrisXEConnectorManager* fConnectorManager = nullptr;
+    bool fConnectorDiscoveryDone = false;
 
 
     
@@ -722,6 +727,10 @@ protected:
     
     void enableRcsInterruptsSafely();
 
+    // V240: Connector Manager for Tiger Lake
+    void initializeConnectorManager();
+    void discoverConnectors();
+    void initConnectorForType(TGLConnectorDesc& conn);
     
         bool forcewakeRenderHold(uint32_t timeoutMs = 2000);   // request & wait for FW ack
         void forcewakeRenderRelease();                         // drop FW

@@ -1464,43 +1464,74 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("framebuffer-con1-enable", kOSBooleanTrue);
     setProperty("framebuffer-con2-enable", kOSBooleanTrue);
     
-    // Port A (0): eDP - Internal panel (0x04 = eDP)
-    // Format: type(4) + hotplug(4) + lanes(4) + reserved(4) + flags(4) + maxlanes(4) + maxbitrate(4)
-    // 0x00000004 = eDP, 0x00000004 = 4 lanes, 0x000000A0 = max 10Gbps
-    static const uint8_t con0_edp[] = {
-        0x04, 0x00, 0x00, 0x00,  // Type: eDP (0x04)
-        0x00, 0x00, 0x00, 0x00,  // Hotplug: none
-        0x04, 0x00, 0x00, 0x00,  // Lanes: 4
-        0x00, 0x00, 0x00, 0x00,  // Reserved
-        0x00, 0x00, 0x00, 0x00,  // Flags
-        0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
-        0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
-    };
-    setProperty("framebuffer-con0-alldata", OSData::withBytes(con0_edp, sizeof(con0_edp)));
+    // V240: Use connector manager for dynamic connector properties if available
+    if (fConnectorManager && fConnectorDiscoveryDone) {
+        IOLog("[V240] Publishing dynamic connector properties from connector manager...\n");
+        
+        // Get connector count and publish each connector
+        uint8_t connCount = fConnectorManager->getConnectorCount();
+        for (uint8_t i = 0; i < connCount && i < 4; i++) {
+            TGLConnectorDesc* conn = fConnectorManager->getConnector(i);
+            if (!conn) continue;
+            
+            // Build connector alldata based on discovered type
+            uint8_t conData[32] = {0};
+            conData[0] = (uint8_t)conn->type;  // Type: eDP=4, HDMI=8, DP=16, USB4=32
+            conData[4] = conn->maxLanes;       // Lanes
+            conData[8] = conn->maxLanes;       // Max lanes
+            conData[12] = (uint8_t)(conn->maxBitRate / 100); // Max bitrate (in 100MHz units)
+            conData[16] = conn->isInternal ? 1 : 0; // Internal flag
+            conData[20] = conn->supportsAudio ? 1 : 0; // Audio support
+            
+            char propName[64];
+            snprintf(propName, sizeof(propName), "framebuffer-con%d-alldata", i);
+            setProperty(propName, OSData::withBytes(conData, sizeof(conData)));
+            
+            IOLog("[V240] Published %s: type=%d, lanes=%d, internal=%d\n",
+                  propName, conn->type, conn->maxLanes, conn->isInternal);
+        }
+    } else {
+        // Fallback to hardcoded defaults
+        IOLog("[V131] Using hardcoded fallback connector properties...\n");
     
-    // Port B (1): HDMI (0x08 = HDMI)
-    static const uint8_t con1_hdmi[] = {
-        0x08, 0x00, 0x00, 0x00,  // Type: HDMI (0x08)
-        0x00, 0x00, 0x00, 0x00,  // Hotplug: none (native panel)
-        0x04, 0x00, 0x00, 0x00,  // Lanes: 4
-        0x00, 0x00, 0x00, 0x00,  // Reserved
-        0x01, 0x00, 0x00, 0x00,  // Flags: 0x01 = IBOOST
-        0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
-        0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
-    };
-    setProperty("framebuffer-con1-alldata", OSData::withBytes(con1_hdmi, sizeof(con1_hdmi)));
-    
-    // Port C (2): DP (0x10 = DP)
-    static const uint8_t con2_dp[] = {
-        0x10, 0x00, 0x00, 0x00,  // Type: DP (0x10)
-        0x00, 0x00, 0x00, 0x00,  // Hotplug: none
-        0x04, 0x00, 0x00, 0x00,  // Lanes: 4
-        0x00, 0x00, 0x00, 0x00,  // Reserved
-        0x00, 0x00, 0x00, 0x00,  // Flags
-        0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
-        0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
-    };
-    setProperty("framebuffer-con2-alldata", OSData::withBytes(con2_dp, sizeof(con2_dp)));
+        // Port A (0): eDP - Internal panel (0x04 = eDP)
+        // Format: type(4) + hotplug(4) + lanes(4) + reserved(4) + flags(4) + maxlanes(4) + maxbitrate(4)
+        // 0x00000004 = eDP, 0x00000004 = 4 lanes, 0x000000A0 = max 10Gbps
+        static const uint8_t con0_edp[] = {
+            0x04, 0x00, 0x00, 0x00,  // Type: eDP (0x04)
+            0x00, 0x00, 0x00, 0x00,  // Hotplug: none
+            0x04, 0x00, 0x00, 0x00,  // Lanes: 4
+            0x00, 0x00, 0x00, 0x00,  // Reserved
+            0x00, 0x00, 0x00, 0x00,  // Flags
+            0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
+            0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
+        };
+        setProperty("framebuffer-con0-alldata", OSData::withBytes(con0_edp, sizeof(con0_edp)));
+        
+        // Port B (1): HDMI (0x08 = HDMI)
+        static const uint8_t con1_hdmi[] = {
+            0x08, 0x00, 0x00, 0x00,  // Type: HDMI (0x08)
+            0x00, 0x00, 0x00, 0x00,  // Hotplug: none (native panel)
+            0x04, 0x00, 0x00, 0x00,  // Lanes: 4
+            0x00, 0x00, 0x00, 0x00,  // Reserved
+            0x01, 0x00, 0x00, 0x00,  // Flags: 0x01 = IBOOST
+            0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
+            0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
+        };
+        setProperty("framebuffer-con1-alldata", OSData::withBytes(con1_hdmi, sizeof(con1_hdmi)));
+        
+        // Port C (2): DP (0x10 = DP)
+        static const uint8_t con2_dp[] = {
+            0x10, 0x00, 0x00, 0x00,  // Type: DP (0x10)
+            0x00, 0x00, 0x00, 0x00,  // Hotplug: none
+            0x04, 0x00, 0x00, 0x00,  // Lanes: 4
+            0x00, 0x00, 0x00, 0x00,  // Reserved
+            0x00, 0x00, 0x00, 0x00,  // Flags
+            0x04, 0x00, 0x00, 0x00,  // Max lanes: 4
+            0xA0, 0x00, 0x00, 0x00   // Max bitrate: 10Gbps
+        };
+        setProperty("framebuffer-con2-alldata", OSData::withBytes(con2_dp, sizeof(con2_dp)));
+    }
     
     // ================================================
     // V166: Proper AAPL01-int-cmn-overrides for internal display
@@ -3203,6 +3234,9 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     IOLog("   framebufferMemory: %p (size: %llu bytes)\n", 
           framebufferMemory, framebufferMemory->getLength());
 
+    // V240: Initialize Connector Manager for Tiger Lake
+    initializeConnectorManager();
+    
     // ---- constants (Tiger Lake) ----
  //   const uint32_t PIPECONF_A       = 0x70008;
     const uint32_t PIPE_SRC_A       = 0x6001C;
@@ -8772,6 +8806,106 @@ void FakeIrisXEFramebuffer::printV93Summary() {
     IOLog("[V93] GPU Commands: %u submitted, %u completed\n", fV93CommandsSubmitted, fV93CommandsCompleted);
     IOLog("[V93] Display Failures: %u\n", fV93DisplayVerificationFailures);
     IOLog("[V93] ════════════════════════════════════════════════════════════\n\n");
+}
+
+// ============================================================
+// V240: Connector Manager Implementation for Tiger Lake
+// ============================================================
+
+void FakeIrisXEFramebuffer::initializeConnectorManager() {
+    IOLog("\n");
+    IOLog("╔══════════════════════════════════════════════════════════════╗\n");
+    IOLog("║  V240: Initialize Connector Manager for Tiger Lake           ║\n");
+    IOLog("╚══════════════════════════════════════════════════════════════╝\n");
+    
+    if (!mmioBase) {
+        IOLog("[V240] ERROR: MMIO base not available\n");
+        return;
+    }
+    
+    // Create connector manager if not already created
+    if (!fConnectorManager) {
+        fConnectorManager = new FakeIrisXEConnectorManager();
+        if (!fConnectorManager) {
+            IOLog("[V240] ERROR: Failed to allocate connector manager\n");
+            return;
+        }
+        
+        // Initialize with MMIO base
+        if (!fConnectorManager->init(mmioBase)) {
+            IOLog("[V240] ERROR: Failed to initialize connector manager\n");
+            delete fConnectorManager;
+            fConnectorManager = nullptr;
+            return;
+        }
+        
+        IOLog("[V240] Connector manager initialized successfully\n");
+    }
+    
+    // Discover connectors
+    discoverConnectors();
+    
+    fConnectorDiscoveryDone = true;
+    IOLog("[V240] Connector discovery complete\n");
+}
+
+void FakeIrisXEFramebuffer::discoverConnectors() {
+    if (!fConnectorManager) {
+        IOLog("[V240] ERROR: Connector manager not initialized\n");
+        return;
+    }
+    
+    IOLog("[V240] Running connector discovery...\n");
+    
+    // Run discovery
+    fConnectorManager->discoverConnectors();
+    
+    // Get internal panel if available
+    TGLConnectorDesc* internal = fConnectorManager->getInternalPanel();
+    if (internal) {
+        IOLog("[V240] Internal panel found on %s\n",
+              internal->ddiPort == TGLDDIPort::DDI_A ? "DDI_A" :
+              internal->ddiPort == TGLDDIPort::DDI_B ? "DDI_B" :
+              internal->ddiPort == TGLDDIPort::DDI_C ? "DDI_C" : "Unknown");
+        
+        // Initialize the internal panel
+        initConnectorForType(*internal);
+    } else {
+        IOLog("[V240] WARNING: No internal panel detected\n");
+    }
+}
+
+void FakeIrisXEFramebuffer::initConnectorForType(TGLConnectorDesc& conn) {
+    if (!fConnectorManager) {
+        IOLog("[V240] ERROR: Connector manager not initialized\n");
+        return;
+    }
+    
+    switch (conn.type) {
+        case TGLConnectorType::eDP:
+            IOLog("[V240] Initializing eDP connector...\n");
+            fConnectorManager->initEDPConnector(conn);
+            break;
+            
+        case TGLConnectorType::HDMI:
+            IOLog("[V240] Initializing HDMI connector...\n");
+            fConnectorManager->initHDMIConnector(conn);
+            break;
+            
+        case TGLConnectorType::DP:
+            IOLog("[V240] Initializing DP connector...\n");
+            fConnectorManager->initDPConnector(conn);
+            break;
+            
+        case TGLConnectorType::USB4TypeC:
+            IOLog("[V240] Initializing USB4/Type-C connector...\n");
+            fConnectorManager->initTypeCConnector(conn);
+            break;
+            
+        default:
+            IOLog("[V240] Unknown connector type: %d\n", (int)conn.type);
+            break;
+    }
 }
 
 #include <libkern/libkern.h>
