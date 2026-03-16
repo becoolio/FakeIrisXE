@@ -303,6 +303,11 @@ private:
     bool pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResources& res, uint32_t expectedValue);
     bool executeRcsTestBatch(RcsExeclistResources& res);
     
+    // V246: New helper functions with full diagnostics
+    uint64_t buildRcsContextDescriptorV246(uint64_t lrcGpuAddr, uint32_t lrcPages);
+    bool buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t ringTailBytes);
+    bool verifyMiStoreDwordImmPacket(RcsExeclistResources& res);
+    
     // Internal helper
     void dumpRcsStateAfterRecovery(const char* label);
 
