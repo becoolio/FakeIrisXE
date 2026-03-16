@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-  	<string>1.0.231</string>
+  	<string>1.0.233</string>
   	<key>CFBundleShortVersionString</key>
-  	<string>1.0.231</string>
+  	<string>1.0.233</string>
   	<key>CFBundleGetInfoString</key>
-  	<string>FakeIrisXe V231 - PCI GT Reset + Timing + All Improvements</string>
+  	<string>FakeIrisXe V233 - 10 Parallel Improvements + All Previous</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

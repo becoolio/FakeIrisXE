@@ -214,6 +214,24 @@ private:
     // V221: RCS EXEClist Initialization with MI_STORE_DWORD_IMM Proof-of-Execution
     void initV221RCSExeclist();
     
+    // V232: Early Power Well Initialization - BEFORE GT gets wedged
+    void initV232EarlyPowerWells();
+    
+    // V233: 10 Parallel Improvements (Based on Linux i915 + DTK Research)
+    void initV233AllImprovements();
+    
+    // V233 Individual improvements (private helpers)
+    void initV233MOCS();
+    void initV233ClockGating();
+    void initV233VDENPower();
+    void initV233DMCVerification();
+    void initV233GTInterrupts();
+    void initV233SAGV();
+    void initV233PPGTT();
+    void initV233DisplayPower();
+    void initV233GuCAuthVerify();
+    void initV233RC6Control();
+    
     // V221 Helper Functions - Gen12 RCS LRC + EXEClist Path
     void dumpRcsStateBeforeInit(const char* label);
     bool tryRcsRecoveryPath();
