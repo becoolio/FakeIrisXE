@@ -5549,6 +5549,8 @@ void FakeIrisXEGuC::initV219RCSFix()
 // ============================================================================
 void FakeIrisXEGuC::initV221RCSExeclist()
 {
+    uint64_t v221StartTime = mach_absolute_time();
+    
     IOLog("(FakeIrisXE) [V221] ============================================\n");
     IOLog("(FakeIrisXE) [V221] RCS EXEClist Initialization - Gen12 Path\n");
     IOLog("(FakeIrisXE) [V221] ============================================\n");
@@ -5677,6 +5679,11 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     fOwner->fScratchGem = res.scratchGem;
     fOwner->fScratchGpuVA = res.scratchGpuAddr;
     fOwner->fLrcGem = res.lrcGem;
+    
+    // V231: Timing measurement
+    uint64_t v221EndTime = mach_absolute_time();
+    uint64_t v221Elapsed = (v221EndTime - v221StartTime) / 1000ULL; // Convert to microseconds
+    IOLog("(FakeIrisXE) [V231] Total V221 execution time: %llu us\n", (unsigned long long)v221Elapsed);
 }
 
 // ============================================================================
@@ -5814,6 +5821,56 @@ bool FakeIrisXEGuC::tryRcsRecoveryPath()
     IOLog("(FakeIrisXE) [V221]   Method 3: Check Power Well Status\n");
     uint32_t pw_status = fOwner->safeMMIORead(0x45410); // GEN12_PWR_WELL_STATUS
     IOLog("(FakeIrisXE) [V221]   Power Well Status: 0x%08X\n", pw_status);
+    
+    // Method 4: PCI-based GT Reset via I915_GDRST (per Linux i915)
+    // This is the key reset method for Gen12 when GT is wedged
+    IOLog("(FakeIrisXE) [V221]   Method 4: PCI-based GT Reset (I915_GDRST)\n");
+    
+    IOPCIDevice* pciDevice = fOwner->getPCIDevice();
+    if (pciDevice) {
+        // Read current GDRST value using configRead8 with single argument
+        uint8_t gdrst = pciDevice->configRead8(0xF4);  // I915_GDRST at PCI config offset 0xF4
+        IOLog("(FakeIrisXE) [V221]   GDRST before: 0x%02X\n", gdrst);
+        
+        // Try GEN12_GRDOM_RENDER reset (bit 0)
+        pciDevice->configWrite8(0xF4, 0x01);  // GRDOM_RESET_ENABLE for Render
+        IOSleep(50);  // Wait at least 50 usec per Linux i915
+        
+        // Check if reset is complete
+        gdrst = pciDevice->configRead8(0xF4);
+        IOLog("(FakeIrisXE) [V221]   GDRST after render reset: 0x%02X\n", gdrst);
+        
+        // Release reset
+        pciDevice->configWrite8(0xF4, 0x00);
+        IOSleep(10);
+        
+        // Check RCS status after PCI reset
+        uint32_t rcs_status_pci = fOwner->safeMMIORead(rcsBase + 0x10);
+        IOLog("(FakeIrisXE) [V221]   RCS STATUS after PCI reset: 0x%08X\n", rcs_status_pci);
+        
+        bool rcs_still_halted = (rcs_status_pci & 0xE000) == 0xE000;
+        if (!rcs_still_halted) {
+            IOLog("(FakeIrisXE) [V221]   ✅ PCI-based GT reset WORKED!\n");
+            return true;
+        }
+        
+        // Try media domain reset as well
+        IOLog("(FakeIrisXE) [V221]   Trying media domain reset...\n");
+        pciDevice->configWrite8(0xF4, 0x02);  // GRDOM_RESET_ENABLE for Media
+        IOSleep(50);
+        pciDevice->configWrite8(0xF4, 0x00);
+        IOSleep(10);
+        
+        uint32_t rcs_status_media = fOwner->safeMMIORead(rcsBase + 0x10);
+        IOLog("(FakeIrisXE) [V221]   RCS STATUS after media reset: 0x%08X\n", rcs_status_media);
+        
+        if (!((rcs_status_media & 0xE000) == 0xE000)) {
+            IOLog("(FakeIrisXE) [V221]   ✅ Media domain reset WORKED!\n");
+            return true;
+        }
+    } else {
+        IOLog("(FakeIrisXE) [V221]   ⚠️  No PCI device available\n");
+    }
     
     IOLog("(FakeIrisXE) [V221]   ⚠️  Recovery methods exhausted\n");
     return false;
@@ -6840,4 +6897,91 @@ bool FakeIrisXEGuC::loadGuCWithV139Method(const uint8_t* fwData, size_t fwSize, 
     releaseForceWake();
     IOLog("(FakeIrisXE) [V139] ✅ SUCCESS!\n");
     return true;
+}
+
+// ============================================================================
+// V230: Context Switching Support - Multiple Context Queue
+// ============================================================================
+
+bool FakeIrisXEGuC::queueRcsContext(uint64_t contextDescriptor, uint64_t lrcGpuAddr, FakeIrisXEGEM* lrcGem)
+{
+    if (fContextQueue.count >= 4) {
+        IOLog("(FakeIrisXE) [V230] ❌ Context queue full (max 4)\n");
+        return false;
+    }
+    
+    int idx = fContextQueue.count;
+    fContextQueue.contexts[idx].contextDescriptor = contextDescriptor;
+    fContextQueue.contexts[idx].lrcGpuAddr = lrcGpuAddr;
+    fContextQueue.contexts[idx].lrcGem = lrcGem;
+    fContextQueue.contexts[idx].submitted = false;
+    fContextQueue.contexts[idx].completed = false;
+    fContextQueue.count++;
+    
+    IOLog("(FakeIrisXE) [V230] Queued context %d: desc=0x%llx lrc=0x%llx\n",
+          idx, (unsigned long long)contextDescriptor, (unsigned long long)lrcGpuAddr);
+    
+    return true;
+}
+
+bool FakeIrisXEGuC::submitNextContext()
+{
+    if (fContextQueue.current >= fContextQueue.count) {
+        IOLog("(FakeIrisXE) [V230] No more contexts to submit\n");
+        return false;
+    }
+    
+    int idx = fContextQueue.current;
+    uint64_t ctxDesc = fContextQueue.contexts[idx].contextDescriptor;
+    
+    IOLog("(FakeIrisXE) [V230] Submitting context %d: desc=0x%llx\n",
+          idx, (unsigned long long)ctxDesc);
+    
+    uint32_t ctxLo = (uint32_t)(ctxDesc & 0xFFFFFFFF);
+    uint32_t ctxHi = (uint32_t)(ctxDesc >> 32);
+    
+    fOwner->safeMMIOWrite(0x2290, ctxLo);
+    fOwner->safeMMIOWrite(0x2294, ctxHi);
+    
+    fContextQueue.contexts[idx].submitted = true;
+    fContextQueue.current++;
+    
+    return true;
+}
+
+bool FakeIrisXEGuC::submitContextPair(uint64_t ctxDesc0, uint64_t ctxDesc1)
+{
+    IOLog("(FakeIrisXE) [V230] Submitting context pair:\n");
+    IOLog("(FakeIrisXE) [V230]   ELSP0: 0x%llx\n", (unsigned long long)ctxDesc0);
+    IOLog("(FakeIrisXE) [V230]   ELSP1: 0x%llx\n", (unsigned long long)ctxDesc1);
+    
+    uint32_t ctx0Lo = (uint32_t)(ctxDesc0 & 0xFFFFFFFF);
+    uint32_t ctx0Hi = (uint32_t)(ctxDesc0 >> 32);
+    uint32_t ctx1Lo = (uint32_t)(ctxDesc1 & 0xFFFFFFFF);
+    uint32_t ctx1Hi = (uint32_t)(ctxDesc1 >> 32);
+    
+    fOwner->safeMMIOWrite(0x2290, ctx0Lo);
+    fOwner->safeMMIOWrite(0x2294, ctx0Hi);
+    
+    IOSleep(1);
+    fOwner->safeMMIOWrite(0x2298, ctx1Lo);
+    fOwner->safeMMIOWrite(0x229C, ctx1Hi);
+    
+    IOLog("(FakeIrisXE) [V230] Context pair submitted\n");
+    return true;
+}
+
+void FakeIrisXEGuC::dumpContextQueue()
+{
+    IOLog("(FakeIrisXE) [V230] Context Queue State:\n");
+    IOLog("(FakeIrisXE) [V230]   Count: %d, Current: %d\n",
+          fContextQueue.count, fContextQueue.current);
+    
+    for (int i = 0; i < fContextQueue.count; i++) {
+        IOLog("(FakeIrisXE) [V230]   Context %d: desc=0x%llx submitted=%s completed=%s\n",
+              i,
+              (unsigned long long)fContextQueue.contexts[i].contextDescriptor,
+              fContextQueue.contexts[i].submitted ? "YES" : "NO",
+              fContextQueue.contexts[i].completed ? "YES" : "NO");
+    }
 }

@@ -1233,8 +1233,8 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 
 // MI / PIPE opcodes used in test batch
 enum {
-    MI_STORE_DWORD_IMM      = (0x20u << 23),
-    MI_BATCH_BUFFER_END     = (0x0Au << 23),
+    MI_STORE_DWORD_IMM     = (0x20u << 23),
+    MI_BATCH_BUFFER_END    = (0x0Au << 23),
 
     // Global GTT bit for MI / PIPE addresses
     MI_USE_GGTT             = (1u << 22),
@@ -1245,24 +1245,17 @@ enum {
     // Common PIPE_CONTROL bits (simplified)
     PIPE_CONTROL_CS_STALL        = (1u << 20), // stall before the op
     PIPE_CONTROL_POST_SYNC_WRITE = (1u << 14), // post-sync: write immediate data
+    PIPE_CONTROL_FLUSH_LLC      = (1u << 12), // flush to LLC
+};
 
 
+// These are already defined as macros above - just reference them
+// MI_NOOP = (0 << 23)
+// MI_BATCH_BUFFER_START = MI_INSTR(0x31, 1)
 
 #define GEN12_RCS0_RBSTART      0x23C30
 #define GEN12_RCS0_RBHEAD       0x23C38
 #define GEN12_RCS0_RBTAIL       0x23C3C
-
-
-
-
-
-
-
-
-
-
-
-};
 
 
 

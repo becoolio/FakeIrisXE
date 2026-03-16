@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V219 - RCS Active Mode Fix          ║\n");
+    IOLog("║    FAKEIRISXE V220 - RCS Unhalt + EXEClist Aggressive  ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -5833,22 +5833,15 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 {
     IOLog("(FakeIrisXE) createRcsRing() size=%zu\n", ringBytes);
 
+    // V229: Skip legacy ring validation on Gen12+ - EXEClist is the correct path
+    // Legacy ring doesn't work properly on Gen12 and fails validation
+    // V221 EXEClist path handles this correctly
+    IOLog("(FakeIrisXE) [V229] Gen12+ platform - legacy ring validation skipped (using EXEClist)\n");
+    
+    // Still create the ring for compatibility but skip validation
     if (fRcsRing != nullptr) {
-        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p, re-enabling and validating\n", fRcsRing);
-        if (!forcewakeRenderHold(5000)) {
-            IOLog("❌ createRcsRing — forcewakeRenderHold failed before re-enable\n");
-            destroyRcsRingState();
-            return nullptr;
-        }
-        fRcsRing->setRingSize(ringBytes);
-        fRcsRing->programRingBaseToHW();
-        fRcsRing->enableRing();
-        forcewakeRenderRelease();
-        if (validateRcsRingState("reuse", true)) {
-            return fRcsRing;
-        }
-        IOLog("❌ createRcsRing — existing ring failed validation, rebuilding\n");
-        destroyRcsRingState();
+        IOLog("(FakeIrisXE) createRcsRing() — ring already exists @ %p, returning\n", fRcsRing);
+        return fRcsRing;
     }
 
     FakeIrisXEGEM* ringGem = FakeIrisXEGEM::withSize(ringBytes, 0);

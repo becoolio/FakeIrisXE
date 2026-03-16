@@ -13,12 +13,12 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
- 	<string>1.0.222</string>
- 	<key>CFBundleShortVersionString</key>
- 	<string>1.0.222</string>
- 	<key>CFBundleGetInfoString</key>
- 	<string>FakeIrisXe V222 - Gen12 RCS EXEClist Enhanced</string>
-	<key>OSBundleRequired</key>
+  	<string>1.0.231</string>
+  	<key>CFBundleShortVersionString</key>
+  	<string>1.0.231</string>
+  	<key>CFBundleGetInfoString</key>
+  	<string>FakeIrisXe V231 - PCI GT Reset + Timing + All Improvements</string>
+ 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
 	<dict>

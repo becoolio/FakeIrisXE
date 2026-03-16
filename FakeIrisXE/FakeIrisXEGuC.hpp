@@ -226,6 +226,29 @@ private:
         uint64_t scratchGpuAddr;
         size_t ringSize;
     };
+    
+    // V230: Context switching support - track multiple contexts
+    struct ExeclistContext {
+        uint64_t contextDescriptor;
+        uint64_t lrcGpuAddr;
+        FakeIrisXEGEM* lrcGem;
+        bool submitted;
+        bool completed;
+    };
+    
+    enum { MAX_CONTEXTS = 4 };
+    struct ExeclistContextQueue {
+        ExeclistContext contexts[4];
+        int count;
+        int current;
+    };
+    
+    ExeclistContextQueue fContextQueue;
+    
+    bool queueRcsContext(uint64_t contextDescriptor, uint64_t lrcGpuAddr, FakeIrisXEGEM* lrcGem);
+    bool submitNextContext();
+    bool submitContextPair(uint64_t ctxDesc0, uint64_t ctxDesc1);
+    void dumpContextQueue();
     bool allocateRcsExeclistResources(RcsExeclistResources& res);
     bool buildGen12RcsLrc(RcsExeclistResources& res);
     uint64_t buildRcsContextDescriptor(uint64_t lrcGpuAddr, uint32_t lrcPages);

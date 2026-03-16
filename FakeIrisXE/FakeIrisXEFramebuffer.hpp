@@ -200,6 +200,11 @@ protected:
                    offset <= mmioMap->getLength() - sizeof(uint32_t);
         }
     
+        // V231: Public accessor for PCI device (for GuC GT reset)
+        IOPCIDevice* getPCIDevice() const {
+            return pciDevice;
+        }
+    
     
     
     
