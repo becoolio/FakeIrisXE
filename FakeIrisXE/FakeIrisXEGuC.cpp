@@ -6835,6 +6835,18 @@ bool FakeIrisXEGuC::buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t rin
     
     // Ring Status / APERTURE (offset 0x114-0x11C) - read-only
     
+    // V258: Add CSB (Command Stream Buffer) pointer at offset 0x140
+    // This is critical - tells GPU where to write completion status
+    if (res.csbGpuAddr) {
+        uint64_t csbAddr = res.csbGpuAddr & ~0x3FULL;  // 64-byte align
+        *(uint64_t*)(lrcCpu + 0x140) = csbAddr;  // CSB pointer
+        *(uint32_t*)(lrcCpu + 0x148) = 16;        // CSB size in entries (16 * 4 bytes = 64 bytes)
+        IOLog("(FakeIrisXE) [V258]   CSB_POINTER  @0x140: 0x%016llx\n", (unsigned long long)csbAddr);
+        IOLog("(FakeIrisXE) [V258]   CSB_SIZE     @0x148: 16 entries\n");
+    } else {
+        IOLog("(FakeIrisXE) [V258]   CSB: NOT CONFIGURED (no CSB address)\n");
+    }
+    
     __sync_synchronize();
     OSSynchronizeIO();
     
@@ -6990,9 +7002,11 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     res.ringGem = nullptr;
     res.lrcGem = nullptr;
     res.scratchGem = nullptr;
+    res.csbGem = nullptr;        // V258: CSB buffer
     res.ringGpuAddr = 0;
     res.lrcGpuAddr = 0;
     res.scratchGpuAddr = 0;
+    res.csbGpuAddr = 0;         // V258: CSB GPU address
     res.ringSize = 64 * 1024; // 64KB
     res.lrcTailUpdate = 0;
     
@@ -7400,6 +7414,45 @@ bool FakeIrisXEGuC::allocateRcsExeclistResources(RcsExeclistResources& res)
         OSSynchronizeIO();
     }
     
+    // V258: Allocate CSB (Command Stream Buffer) - 64 bytes minimum
+    // CSB is where the GPU writes completion status
+    res.csbGem = FakeIrisXEGEM::withSize(64, 0);
+    if (!res.csbGem) {
+        IOLog("(FakeIrisXE) [V258] ❌ Failed to allocate CSB\n");
+        res.scratchGem->release();
+        res.lrcGem->release();
+        res.ringGem->release();
+        res.csbGem = nullptr;
+        res.scratchGem = nullptr;
+        res.lrcGem = nullptr;
+        res.ringGem = nullptr;
+        return false;
+    }
+    
+    res.csbGem->pin();
+    res.csbGpuAddr = fOwner->ggttMap(res.csbGem);
+    if (!res.csbGpuAddr) {
+        IOLog("(FakeIrisXE) [V258] ❌ Failed to map CSB to GGTT\n");
+        res.csbGem->release();
+        res.scratchGem->release();
+        res.lrcGem->release();
+        res.ringGem->release();
+        res.csbGem = nullptr;
+        res.scratchGem = nullptr;
+        res.lrcGem = nullptr;
+        res.ringGem = nullptr;
+        return false;
+    }
+    IOLog("(FakeIrisXE) [V258]   CSB: GPU VA 0x%llx\n", (unsigned long long)res.csbGpuAddr);
+    
+    // Initialize CSB to zero
+    void* csbCpu = fOwner->ggttGetCPUAddr(res.csbGem);
+    if (csbCpu) {
+        bzero(csbCpu, 64);
+        __sync_synchronize();
+        OSSynchronizeIO();
+    }
+    
     IOLog("(FakeIrisXE) [V221] Resources allocated successfully\n");
     return true;
 }
@@ -7796,23 +7849,45 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     
     uint32_t* batch = (uint32_t*)ringCpu;
     
-    // V253: Try simpler batch first - just MI_BATCH_BUFFER_END to test if GPU executes anything
-    // If this works, then the problem is specifically with MI_STORE_DWORD_IMM
-    // If this doesn't work, the problem is with the context/ring setup
+    // V257: Add PIPE_CONTROL before MI_BATCH_BUFFER_END
+    // PIPE_CONTROL is a synchronization command that forces the GPU to execute
+    // Without any command before MI_BATCH_BUFFER_END, the GPU has nothing to do
     
-    // First test: Simple batch with just MI_BATCH_BUFFER_END
-    batch[0] = MI_BATCH_BUFFER_END;  // 0x05000000
+    // PIPE_CONTROL command ( opcode 0x7A << 23 = 0x3D000000 )
+    // Bit 0: OpCode (0x7A = PIPE_CONTROL)
+    // Bit 5: No Write Flush
+    // Bit 8: Post-Sync Operation
+    // Bit 14: Write Immediate Data
+    // Bit 20: CS Stall
+    const uint32_t PIPE_CONTROL = (0x7A << 23) | (1 << 5) | (1 << 8) | (1 << 14) | (1 << 20);
     
-    IOLog("(FakeIrisXE) [V253] ===== SIMPLE TEST BATCH =====\n");
-    IOLog("(FakeIrisXE) [V253]   Testing with simple MI_BATCH_BUFFER_END only\n");
-    IOLog("(FakeIrisXE) [V253]   Batch[0]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[0]);
+    unsigned d = 0;
     
-    // V255: FIX - Ring tail should be 4 bytes (1 DWord), not 20!
-    // MI_BATCH_BUFFER_END is just 1 DWord = 4 bytes
-    res.lrcTailUpdate = 4;  // 1 DWord * 4 bytes = 4 bytes
+    // PIPE_CONTROL: Force GPU to do something
+    batch[d++] = PIPE_CONTROL;
+    batch[d++] = 0; // DW1: No address
+    batch[d++] = 0; // DW2: No address
+    batch[d++] = 1; // DW3: Immediate data = 1 (non-zero to force action)
     
-    IOLog("(FakeIrisXE) [V255]   Ring tail FIXED to: %u bytes (1 DWord = MI_BATCH_BUFFER_END)\n",
-          res.lrcTailUpdate);
+    // MI_BATCH_BUFFER_END: End of batch
+    batch[d++] = MI_BATCH_BUFFER_END;
+    
+    uint32_t totalDWords = d;
+    uint32_t totalBytes = totalDWords * 4;
+    
+    IOLog("(FakeIrisXE) [V257] ===== PIPE_CONTROL TEST BATCH =====\n");
+    IOLog("(FakeIrisXE) [V257]   Batch[0]=0x%08X (PIPE_CONTROL)\n", batch[0]);
+    IOLog("(FakeIrisXE) [V257]   Batch[1]=0x%08X (PIPE_CONTROL DW1)\n", batch[1]);
+    IOLog("(FakeIrisXE) [V257]   Batch[2]=0x%08X (PIPE_CONTROL DW2)\n", batch[2]);
+    IOLog("(FakeIrisXE) [V257]   Batch[3]=0x%08X (PIPE_CONTROL DW3=1)\n", batch[3]);
+    IOLog("(FakeIrisXE) [V257]   Batch[4]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[4]);
+    IOLog("(FakeIrisXE) [V257]   Total: %u DWords (%u bytes)\n", totalDWords, totalBytes);
+    
+    // V257: Update ring tail to match actual command size
+    res.lrcTailUpdate = totalBytes;
+    
+    IOLog("(FakeIrisXE) [V257]   Ring tail set to: %u bytes (%u DWords)\n",
+          res.lrcTailUpdate, totalDWords);
     
     return true;
 }

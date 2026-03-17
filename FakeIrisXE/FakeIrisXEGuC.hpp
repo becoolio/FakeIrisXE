@@ -267,11 +267,13 @@ private:
         FakeIrisXEGEM* ringGem;
         FakeIrisXEGEM* lrcGem;
         FakeIrisXEGEM* scratchGem;
+        FakeIrisXEGEM* csbGem;       // V258: CSB buffer for completion status
         uint64_t ringGpuAddr;
         uint64_t lrcGpuAddr;
         uint64_t scratchGpuAddr;
+        uint64_t csbGpuAddr;         // V258: CSB GPU address
         size_t ringSize;
-        uint32_t lrcTailUpdate;  // V241: Ring tail byte offset for LRC
+        uint32_t lrcTailUpdate;      // V241: Ring tail byte offset for LRC
     };
     
     // V230: Context switching support - track multiple contexts
