@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-    	<string>1.0.248</string>
-    	<key>CFBundleShortVersionString</key>
-    	<string>1.0.248</string>
-    	<key>CFBundleGetInfoString</key>
-    	<string>FakeIrisXe V248 - Fixed MI Decode + ELSP Diagnostics</string>
+    	<string>1.0.254</string>
+     	<key>CFBundleShortVersionString</key>
+     	<string>1.0.254</string>
+     	<key>CFBundleGetInfoString</key>
+     	<string>FakeIrisXe V254 - Fixed Gen12 Context Descriptor (Engine Class + Instance ID)</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
