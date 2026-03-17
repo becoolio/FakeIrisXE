@@ -6788,14 +6788,17 @@ bool FakeIrisXEGuC::buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t rin
     *(uint64_t*)(lrcCpu + 0x20) = 0;  // PML1
     *(uint64_t*)(lrcCpu + 0x28) = 0;  // PML2
     
-    // CONTEXT_CONTROL at offset 0x2C:
-    // Bit 0: Load Context (1 = load from memory)
-    // Bit 3: Valid (1 = context valid)
+    // V256: FIX CONTEXT_CONTROL - Add TLB invalidate and other critical bits
+    // Per Intel PRM and Linux i915:
+    // Bit 0: RR (Ring Register) Load = 1 - Load ring registers from LRC
+    // Bit 1: CTX Restore Enable = 1 - Enable context restore
+    // Bit 2: TLB Invalidate = 1 - Invalidate TLB for proper address translation
+    // Bit 3: Valid = 1 - Context is valid
     // Bit 8: Address Space (1 = 64-bit)
-    uint32_t ctx_ctrl = (1 << 0) | (1 << 3) | (1 << 8);
+    uint32_t ctx_ctrl = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 8);
     *(uint32_t*)(lrcCpu + 0x2C) = ctx_ctrl;
-    IOLog("(FakeIrisXE) [V252]   CONTEXT_CONTROL @0x2C: 0x%08x (Load=%u Valid=%u Addr64=%u)\n",
-          ctx_ctrl, (ctx_ctrl>>0)&1, (ctx_ctrl>>3)&1, (ctx_ctrl>>8)&1);
+    IOLog("(FakeIrisXE) [V256]   CONTEXT_CONTROL @0x2C: 0x%08x (RR_Load=%u CTX_Restore=%u TLB_Inv=%u Valid=%u Addr64=%u)\n",
+          ctx_ctrl, (ctx_ctrl>>0)&1, (ctx_ctrl>>1)&1, (ctx_ctrl>>2)&1, (ctx_ctrl>>3)&1, (ctx_ctrl>>8)&1);
     
     // TIMESTAMP at offset 0x30
     *(uint32_t*)(lrcCpu + 0x30) = 0x00010000;
@@ -7804,20 +7807,11 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     IOLog("(FakeIrisXE) [V253]   Testing with simple MI_BATCH_BUFFER_END only\n");
     IOLog("(FakeIrisXE) [V253]   Batch[0]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[0]);
     
-    // If simple batch fails, we know it's the context, not MI_STORE_DWORD_IMM
+    // V255: FIX - Ring tail should be 4 bytes (1 DWord), not 20!
+    // MI_BATCH_BUFFER_END is just 1 DWord = 4 bytes
+    res.lrcTailUpdate = 4;  // 1 DWord * 4 bytes = 4 bytes
     
-    __sync_synchronize();
-    OSSynchronizeIO();
-    
-    IOLog("(FakeIrisXE) [V253]   Ring GPU VA: 0x%llx, Size: %zu bytes\n",
-          (unsigned long long)res.ringGpuAddr, res.ringSize);
-    
-    // V241: Update ring tail in LRC to point to end of commands
-    // The tail should be the byte offset of the last command written
-    // We wrote 5 DWords = 20 bytes
-    res.lrcTailUpdate = 20;  // 5 DWords * 4 bytes
-    
-    IOLog("(FakeIrisXE) [V241]   Ring tail should be set to: %u bytes (20 bytes = 5 DWords)\n",
+    IOLog("(FakeIrisXE) [V255]   Ring tail FIXED to: %u bytes (1 DWord = MI_BATCH_BUFFER_END)\n",
           res.lrcTailUpdate);
     
     return true;
