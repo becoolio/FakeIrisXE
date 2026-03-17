@@ -7054,6 +7054,29 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     IOLog("(FakeIrisXE) [V250] Using V246 context descriptor builder (full field decode)\n");
     
     // =========================================================================
+    // V260: Fresh RCS Engine Init right before submission
+    // This ensures RCS is in a known state before we submit our test context
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V260] Fresh RCS Engine Init before submission...\n");
+    
+    // V260: Reset RCS to ensure clean state
+    fOwner->safeMMIOWrite(rcsBase + 0x0, 0x00000001);  // RCS0_RESET_CTRL - request reset
+    IOSleep(10);
+    fOwner->safeMMIOWrite(rcsBase + 0x0, 0x00000000);  // Release reset
+    IOSleep(10);
+    
+    // V260: Set RING_MODE for Gen12 EXEClist mode
+    // Gen12 uses different RING_MODE than legacy
+    fOwner->safeMMIOWrite(rcsBase + 0x38, 0x00000200);  // RING_MODE - Gen12 EXEClist mode
+    IOSleep(1);
+    
+    // V260: Set GFX_MODE 
+    fOwner->safeMMIOWrite(rcsBase + 0x9C, 0x00000003);  // GFX_MODE
+    IOSleep(1);
+    
+    IOLog("(FakeIrisXE) [V260] RCS Engine Init complete\n");
+    
+    // =========================================================================
     // Step 7: Submit RCS EXEClist Context
     // =========================================================================
     if (!submitRcsExeclistContext(ctxDescLo, ctxDescHi)) {
@@ -7849,9 +7872,23 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     
     uint32_t* batch = (uint32_t*)ringCpu;
     
-    // V257: Add PIPE_CONTROL before MI_BATCH_BUFFER_END
-    // PIPE_CONTROL is a synchronization command that forces the GPU to execute
-    // Without any command before MI_BATCH_BUFFER_END, the GPU has nothing to do
+    // V259: Add LRI (Load Register Immediate) commands to initialize RCS
+    // LRI loads values into GPU registers before execution
+    // This is standard practice in GPU drivers
+    
+    // MI_LOAD_REGISTER_IMM ( opcode 0x22 << 23 )
+    // Format: [31:23] = opcode, [22:16] = reserved, [15:8] = num dwords, [0] = 0
+    // Followed by: register address, then data
+    const uint32_t MI_LOAD_REGISTER_IMM = 0x22 << 23;
+    
+    unsigned d = 0;
+    
+    // V259: LRI to RCS_STATUS (0x2000 + 0x10 = 0x20010)
+    // Writing 0 to RCS_STATUS ensures it's in a known state
+    // Actually, let's use a different approach - LRI to MI_MODE or another init register
+    
+    // For now, let's just add the PIPE_CONTROL and see if that helps
+    // The PIPE_CONTROL was already being added in V257
     
     // PIPE_CONTROL command ( opcode 0x7A << 23 = 0x3D000000 )
     // Bit 0: OpCode (0x7A = PIPE_CONTROL)
@@ -7861,13 +7898,18 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     // Bit 20: CS Stall
     const uint32_t PIPE_CONTROL = (0x7A << 23) | (1 << 5) | (1 << 8) | (1 << 14) | (1 << 20);
     
-    unsigned d = 0;
-    
-    // PIPE_CONTROL: Force GPU to do something
-    batch[d++] = PIPE_CONTROL;
+    // V259: Add 2 PIPE_CONTROL commands to force more GPU activity
+    // First PIPE_CONTROL: with write flush
+    batch[d++] = PIPE_CONTROL | (1 << 14);  // Write flush enabled
     batch[d++] = 0; // DW1: No address
-    batch[d++] = 0; // DW2: No address
-    batch[d++] = 1; // DW3: Immediate data = 1 (non-zero to force action)
+    batch[d++] = 0; // DW2: No address  
+    batch[d++] = 0xFFFFFFFF; // DW3: Write all 1s to trigger something
+    
+    // Second PIPE_CONTROL: to synchronize
+    batch[d++] = PIPE_CONTROL;
+    batch[d++] = 0; // DW1
+    batch[d++] = 0; // DW2
+    batch[d++] = 0x00000001; // DW3
     
     // MI_BATCH_BUFFER_END: End of batch
     batch[d++] = MI_BATCH_BUFFER_END;
@@ -7875,18 +7917,19 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     uint32_t totalDWords = d;
     uint32_t totalBytes = totalDWords * 4;
     
-    IOLog("(FakeIrisXE) [V257] ===== PIPE_CONTROL TEST BATCH =====\n");
-    IOLog("(FakeIrisXE) [V257]   Batch[0]=0x%08X (PIPE_CONTROL)\n", batch[0]);
-    IOLog("(FakeIrisXE) [V257]   Batch[1]=0x%08X (PIPE_CONTROL DW1)\n", batch[1]);
-    IOLog("(FakeIrisXE) [V257]   Batch[2]=0x%08X (PIPE_CONTROL DW2)\n", batch[2]);
-    IOLog("(FakeIrisXE) [V257]   Batch[3]=0x%08X (PIPE_CONTROL DW3=1)\n", batch[3]);
-    IOLog("(FakeIrisXE) [V257]   Batch[4]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[4]);
-    IOLog("(FakeIrisXE) [V257]   Total: %u DWords (%u bytes)\n", totalDWords, totalBytes);
+    IOLog("(FakeIrisXE) [V259] ===== DUAL PIPE_CONTROL TEST =====\n");
+    IOLog("(FakeIrisXE) [V259]   Batch[0]=0x%08X (PIPE_CONTROL #1 with flush)\n", batch[0]);
+    IOLog("(FakeIrisXE) [V259]   Batch[1]=0x%08X (PIPE_CONTROL DW1)\n", batch[1]);
+    IOLog("(FakeIrisXE) [V259]   Batch[2]=0x%08X (PIPE_CONTROL DW2)\n", batch[2]);
+    IOLog("(FakeIrisXE) [V259]   Batch[3]=0x%08X (PIPE_CONTROL DW3=0xFFFFFFFF)\n", batch[3]);
+    IOLog("(FakeIrisXE) [V259]   Batch[4]=0x%08X (PIPE_CONTROL #2)\n", batch[4]);
+    IOLog("(FakeIrisXE) [V259]   Batch[8]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[8]);
+    IOLog("(FakeIrisXE) [V259]   Total: %u DWords (%u bytes)\n", totalDWords, totalBytes);
     
-    // V257: Update ring tail to match actual command size
+    // V259: Update ring tail to match actual command size
     res.lrcTailUpdate = totalBytes;
     
-    IOLog("(FakeIrisXE) [V257]   Ring tail set to: %u bytes (%u DWords)\n",
+    IOLog("(FakeIrisXE) [V259]   Ring tail set to: %u bytes (%u DWords)\n",
           res.lrcTailUpdate, totalDWords);
     
     return true;

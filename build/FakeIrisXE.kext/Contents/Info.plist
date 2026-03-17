@@ -7,19 +7,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V258 - Added CSB (Command Stream Buffer) Pointer to LRC</string>
+	<string>FakeIrisXe V260 - Fresh RCS Engine Init Before Submission</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.258</string>
+	<string>1.0.260</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.258</string>
+	<string>1.0.260</string>
 	<key>DTCompiler</key>
 	<string>com.apple.compilers.llvm.clang.1_0</string>
 	<key>DTPlatformBuild</key>
