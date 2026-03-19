@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V251 - No Stall + Correctness Audit     ║\n");
+    IOLog("║    FAKEIRISXE V251 - Direct Execlist Proof Mode      ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -2113,21 +2113,35 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // map BAR0 into fBar0 — done above
     // map GGTT into fGGTT — done above
     fNextGGTTOffset = 0x00100000; // choose appropriate base
+
+    char runtimeArgBuf[16] = {0};
+    bool runBootDiagFull = PE_parse_boot_argn("-fakeirisxe-diag", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool runBootDiagQuick = PE_parse_boot_argn("-fakeirisxe-quickdiag", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool skipGuCInit = PE_parse_boot_argn("-fakeirisxe-noguc", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool forceGuCInit = PE_parse_boot_argn("-fakeirisxe-guc", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool directProofMode = !runBootDiagFull && !runBootDiagQuick;
+
+    if (directProofMode && !forceGuCInit) {
+        skipGuCInit = true;
+    }
+
     updateExecutionState(false, "stage4-begin");
 
-    // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
-    // The GT must be powered on for RCS engine registers to latch
-    IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
-    if (!gpuPowerOn()) {
-        IOLog("(FakeIrisXE) [V204] WARNING: gpuPowerOn failed, continuing anyway...\n");
-    }
-    
-    // Create ring
-    if (!createRcsRing(256 * 1024)) {
-        logSoftFail(4, "createRcsRing failed; continuing degraded");
+    if (directProofMode) {
+        IOLog("(FakeIrisXE) [V251] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
     } else {
-        IOLog("FakeIrisXEFramebuffer: createRcsRing Succes\n");
+        // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
+        IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
+        if (!gpuPowerOn()) {
+            IOLog("(FakeIrisXE) [V204] WARNING: gpuPowerOn failed, continuing anyway...\n");
+        }
 
+        // Create ring
+        if (!createRcsRing(256 * 1024)) {
+            logSoftFail(4, "createRcsRing failed; continuing degraded");
+        } else {
+            IOLog("FakeIrisXEFramebuffer: createRcsRing Succes\n");
+        }
     }
 
     // optional: create & map fence early (so submitBatch doesn't do it)
@@ -2144,18 +2158,16 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     logStage(5, "Firmware + execution submission mode");
     IOLog("(FakeIrisXE) [V251] Loading firmware (Intel PRM compliant)...\n");
 
-    char runtimeArgBuf[16] = {0};
-    bool runBootDiagFull = PE_parse_boot_argn("-fakeirisxe-diag", runtimeArgBuf, sizeof(runtimeArgBuf));
-    bool runBootDiagQuick = PE_parse_boot_argn("-fakeirisxe-quickdiag", runtimeArgBuf, sizeof(runtimeArgBuf));
-    bool skipGuCInit = PE_parse_boot_argn("-fakeirisxe-noguc", runtimeArgBuf, sizeof(runtimeArgBuf));
-
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V251] Runtime toggles: diag_full=%u diag_quick=%u skip_guc=%u\n",
+    IOLog("(FakeIrisXE) [V251] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
-          skipGuCInit ? 1U : 0U);
+          directProofMode ? 1U : 0U,
+          skipGuCInit ? 1U : 0U,
+          forceGuCInit ? 1U : 0U);
 
     // V251: Skip GuC init if -fakeirisxe-noguc boot-arg is set
     // This prevents IOKit stall during boot by avoiding long GuC timeouts
@@ -2312,34 +2324,37 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                     IOLog("FakeIrisXEFramebuffer: [V70] Plain -fakeirisxe boot will still run one direct Execlist proof via testGPUExecution()\n");
                 }
             }
-        
-            // Create / init RCS ring (existing helper returns bool)
-            if (!fRcsRing && createRcsRing(256 * 1024)) {
-                IOLog("FakeIrisXEFramebuffer: RCS ring initialization complete. fRcsRing=%p\n", fRcsRing);
-            } else if (!fRcsRing) {
-                IOLog("FakeIrisXEFramebuffer: FAILED creating RCS ring\n");
-            }
 
-            // V138: Create BLT ring for 2D operations
-            fBltRing = createBltRing(256 * 1024);
-            if (fBltRing) {
-                IOLog("FakeIrisXEFramebuffer: BLT ring initialization complete. fBltRing=%p\n", fBltRing);
+            if (directProofMode) {
+                IOLog("FakeIrisXEFramebuffer: [V251] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
-                IOLog("FakeIrisXEFramebuffer: FAILED creating BLT ring\n");
-            }
-
-            // V201: Try creating RCS again AFTER BLT (when GT is "warmed up")
-            // BLT creation involves forcewake which powers up the GT
-            if (!fRcsRing) {
-                IOLog("(FakeIrisXE) [V204] Retry RCS creation after BLT warmup...\n");
-                if (gpuPowerOn()) {
-                    IOLog("(FakeIrisXE) [V204] gpuPowerOn succeeded, retrying RCS...\n");
+                // Create / init RCS ring (existing helper returns bool)
+                if (!fRcsRing && createRcsRing(256 * 1024)) {
+                    IOLog("FakeIrisXEFramebuffer: RCS ring initialization complete. fRcsRing=%p\n", fRcsRing);
+                } else if (!fRcsRing) {
+                    IOLog("FakeIrisXEFramebuffer: FAILED creating RCS ring\n");
                 }
-                fRcsRing = createRcsRing(256 * 1024);
-                if (fRcsRing) {
-                    IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry SUCCESS! fRcsRing=%p\n", fRcsRing);
+
+                // V138: Create BLT ring for 2D operations
+                fBltRing = createBltRing(256 * 1024);
+                if (fBltRing) {
+                    IOLog("FakeIrisXEFramebuffer: BLT ring initialization complete. fBltRing=%p\n", fBltRing);
                 } else {
-                    IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry FAILED\n");
+                    IOLog("FakeIrisXEFramebuffer: FAILED creating BLT ring\n");
+                }
+
+                // V201: Try creating RCS again AFTER BLT (when GT is "warmed up")
+                if (!fRcsRing) {
+                    IOLog("(FakeIrisXE) [V204] Retry RCS creation after BLT warmup...\n");
+                    if (gpuPowerOn()) {
+                        IOLog("(FakeIrisXE) [V204] gpuPowerOn succeeded, retrying RCS...\n");
+                    }
+                    fRcsRing = createRcsRing(256 * 1024);
+                    if (fRcsRing) {
+                        IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry SUCCESS! fRcsRing=%p\n", fRcsRing);
+                    } else {
+                        IOLog("FakeIrisXEFramebuffer: [V204] RCS ring retry FAILED\n");
+                    }
                 }
             }
 
@@ -2552,7 +2567,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         }
         if (!fGuCEnabled) {
             setProperty("FakeIrisXEExecutionFallbackMode", kOSBooleanTrue);
-            IOLog("(FakeIrisXE) [V177] Fallback execution diagnostics completed with guc-failure gate still active\n");
+            IOLog("(FakeIrisXE) [V177] Fallback execution diagnostics completed with acceleration still disabled (%s)\n",
+                  skipGuCInit ? "GuC intentionally skipped in direct-proof mode" : "GuC init failed");
         }
         iter->release();
     }
@@ -2666,7 +2682,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("[V131] WindowServer should now be able to render to this framebuffer\n");
         IOLog("[V131] Look for color bars on screen (V81 test pattern)\n");
     } else {
-        IOLog("[V131] Published framebuffer in Apple-only GuC safety mode; acceleration paths remain disabled after GuC failure\n");
+        IOLog("[V131] Published framebuffer with acceleration disabled; direct proof mode is active until real execution succeeds (%s)\n",
+              skipGuCInit ? "GuC skipped by policy" : "GuC init failed");
     }
     IOLog("\n");
     

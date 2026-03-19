@@ -503,8 +503,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     }
 
     if (!singleResetAttemptIfNeeded(self)) {
-        failure = EngineHardHalted;
-        goto done;
+        IOLog("(FakeIrisXE) [V221] RCS remained halted after the focused recovery attempt; continuing with submission so the failure can be classified after ELSP/CSB polling\n");
     }
 
     if (!buildProofCommandStream(self, res)) {
