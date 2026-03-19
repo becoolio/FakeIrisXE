@@ -1233,10 +1233,12 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 
 // MI / PIPE opcodes used in test batch
 enum {
-    MI_STORE_DWORD_IMM     = (0x20u << 23),
-    MI_BATCH_BUFFER_END    = (0x0Au << 23),
+    MI_STORE_DATA_IMM       = MI_INSTR(0x20, 0),
+    MI_STORE_DWORD_IMM      = MI_INSTR(0x20, 1),
+    MI_STORE_DWORD_IMM_GEN4 = MI_INSTR(0x20, 2),
+    MI_BATCH_BUFFER_END     = MI_INSTR(0x0Au, 0),
 
-    // Global GTT bit for MI / PIPE addresses
+    // Global GTT bit for MI / PIPE addresses (Gen4+)
     MI_USE_GGTT             = (1u << 22),
 
     // PIPE_CONTROL (Gen11/12-style)
@@ -1247,6 +1249,14 @@ enum {
     PIPE_CONTROL_POST_SYNC_WRITE = (1u << 14), // post-sync: write immediate data
     PIPE_CONTROL_FLUSH_LLC      = (1u << 12), // flush to LLC
 };
+
+#ifndef RING_CTL_SIZE
+#define RING_CTL_SIZE(size)       ((size) - 4096)
+#endif
+
+#ifndef RING_VALID
+#define RING_VALID                0x00000001u
+#endif
 
 
 // These are already defined as macros above - just reference them
@@ -1272,5 +1282,49 @@ enum {
 
 
 
+
+
+// Gen12 Tiger Lake BCS0 (Blitter Command Streamer 0) register definitions.
+// BCS0 handles 2D blit operations including display scanout, surface copying, and
+// rectangle fills. On Tiger Lake, BCS0 is at MMIO base 0x4000 (same layout as Gen11).
+#define TGL_BCS0_BASE              0x4000
+
+// BCS0 Ring Buffer Registers (relative to BCS0_BASE = 0x4000)
+#define BCS0_RING_TAIL            (TGL_BCS0_BASE + 0x08)  // 0x4008 - Ring tail pointer
+#define BCS0_RING_HEAD            (TGL_BCS0_BASE + 0x04)  // 0x4004 - Ring head pointer
+#define BCS0_RING_START           (TGL_BCS0_BASE + 0x38)  // 0x4038 - Ring base address
+#define BCS0_RING_CTL             (TGL_BCS0_BASE + 0x0C)  // 0x400C - Ring control
+#define BCS0_STATUS               (TGL_BCS0_BASE + 0x10)  // 0x4010 - Engine status
+#define BCS0_MODE                 (TGL_BCS0_BASE + 0x20)  // 0x4020 - Engine mode
+#define BCS0_MI_MODE              (TGL_BCS0_BASE + 0x9C)  // 0x409C - MI mode (CS behavior)
+#define BCS0_HWS_PGA              (TGL_BCS0_BASE + 0x80)  // 0x4080 - HWS page address (LRC location)
+
+// BCS0 EXEClist Registers (relative to BCS0_BASE = 0x4000)
+#define BCS0_ELSP_SUBMIT_LO       (TGL_BCS0_BASE + 0x290)  // 0x4290 - ELSP submit port LO
+#define BCS0_ELSP_SUBMIT_HI       (TGL_BCS0_BASE + 0x294)  // 0x4294 - ELSP submit port HI
+#define BCS0_EXECLIST_STATUS_LO   (TGL_BCS0_BASE + 0x20C)  // 0x420C - EXEClist status LO
+#define BCS0_EXECLIST_STATUS_HI   (TGL_BCS0_BASE + 0x210)  // 0x4210 - EXEClist status HI
+#define BCS0_EXECLIST_CONTROL     (TGL_BCS0_BASE + 0x228)  // 0x4228 - EXEClist control
+#define BCS0_EXECLIST_ARB          (TGL_BCS0_BASE + 0x22C)  // 0x422C - EXEClist arb
+
+// BCS0 CSB (Command Status Buffer) Registers
+#define BCS0_CSB_CTRL             (TGL_BCS0_BASE + 0x1E0)  // 0x41E0 - CSB control
+#define BCS0_CSB_ADDR_LO         (TGL_BCS0_BASE + 0x1E4)  // 0x41E4 - CSB address LO
+#define BCS0_CSB_ADDR_HI         (TGL_BCS0_BASE + 0x1E8)  // 0x41E8 - CSB address HI
+#define BCS0_CSB_READ_PTR         (TGL_BCS0_BASE + 0x1EC)  // 0x41EC - CSB read pointer
+#define BCS0_CSB_WRITE_PTR        (TGL_BCS0_BASE + 0x1F0)  // 0x41F0 - CSB write pointer
+
+// BCS0 ACTHD (Active Head) - tracks current execution position in the blitter stream
+#define BCS0_ACTHD                (TGL_BCS0_BASE + 0x3C0)  // 0x43C0 - ACTHD LO
+#define BCS0_ACTHD_HI             (TGL_BCS0_BASE + 0x3C4)  // 0x43C4 - ACTHD HI
+
+// Gen12 BCS0 RB registers (direct MMIO addresses)
+#define GEN12_BCS0_RBSTART        0x24330
+#define GEN12_BCS0_RBHEAD         0x24338
+#define GEN12_BCS0_RBTAIL         0x2433C
+
+// Gen12 BCS0 ACTHD registers (direct MMIO addresses)
+#define GEN12_BCS0_ACTHD         0x243C0
+#define GEN12_BCS0_ACTHD_HI      0x243C4
 
 #endif // FAKE_IRIS_XE_REG_H

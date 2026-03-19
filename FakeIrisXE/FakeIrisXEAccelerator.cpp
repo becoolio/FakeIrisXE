@@ -85,6 +85,7 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
         LOG("provider is not FakeIrisXEFramebuffer");
         return false;
     }
+    fFramebuffer = fFB;
 
     if (!fWL) {
         fWL = getWorkLoop();
@@ -111,15 +112,11 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
     IOLog("(FakeIrisXEAccelerator)[V148] FAKEIRISXE METAL ACCELERATOR STARTING\n");
     IOLog("(FakeIrisXEAccelerator)[V148] ============================================\n");
     
-    // Publish a pending accelerator personality until the framebuffer proves
-    // the ring and command submission path are actually usable.
+    // Keep accelerator-facing readiness conservative until there is real
+    // fence-backed execution proof. The service can exist for diagnostics
+    // without advertising that Metal/IOGPU are usable.
     setProperty("MetalSupported", kOSBooleanFalse);
-    setProperty("IOAccelFamily", kOSBooleanTrue);
-    setProperty("IOGVA", kOSBooleanTrue);
     setProperty("MetalPlugin", kOSBooleanFalse);
-    setProperty("MetalDriver", "FakeIrisXe");
-    setProperty("IOAccelerator", kOSBooleanTrue);
-    setProperty("IOMatchCategory", "IOAccelerator");
     setProperty("IOAccelReady", kOSBooleanFalse);
     setProperty("IOGPU", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorAttached", kOSBooleanTrue);
@@ -127,11 +124,7 @@ bool FakeIrisXEAccelerator::start(IOService* provider) {
 
     IOLog("(FakeIrisXEAccelerator)[V148] Properties set:\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   MetalSupported = false (pending)\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelFamily = true\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   IOGVA = true\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   MetalPlugin = false (pending)\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   MetalDriver = FakeIrisXe\n");
-    IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelerator = true\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   IOAccelReady = false (pending)\n");
     IOLog("(FakeIrisXEAccelerator)[V148]   IOGPU = false (pending)\n");
 
@@ -214,6 +207,7 @@ void FakeIrisXEAccelerator::stop(IOService* provider) {
     if (fCtxLock) { IOLockFree(fCtxLock); fCtxLock = nullptr; }
 
     fFB = nullptr;
+    fFramebuffer = nullptr;
     IOService::stop(provider);
 }
 
@@ -622,13 +616,14 @@ IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceI
 
     IOLockUnlock(fCtxLock);
 
-    out.gpuAddr = 0; // fake
-    out.status  = kIOReturnSuccess;
+    out.gpuAddr = 0;
+    out.status  = kIOReturnUnsupported;
 
     IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u cpuPtr=%p %ux%u stride=%u fmt=0x%08x\n",
           ctxId, in.ioSurfaceID, ctx->surfCPU, in.width, in.height, in.bytesPerRow, in.pixelFormat);
+    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: GPU address mapping not implemented (returns unsupported)\n");
 
-    return kIOReturnSuccess;
+    return kIOReturnUnsupported;
 }
 
 
@@ -952,6 +947,7 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     }
 
     fFB = fb;
+    fFramebuffer = fb;
     uint64_t accelRegistryID = getRegistryEntryID();
     fExeclistFromFB = fb->getExeclist();
     fRcsRingFromFB  = fb->getRcsRing();
@@ -997,15 +993,15 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
 
     setProperty("FakeIrisXELinkPending", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
-    setProperty("IOAccelReady", kOSBooleanTrue);
-    setProperty("MetalSupported", kOSBooleanTrue);
-    setProperty("MetalPlugin", kOSBooleanTrue);
-    setProperty("IOGPU", kOSBooleanTrue);
+    setProperty("IOAccelReady", kOSBooleanFalse);
+    setProperty("MetalSupported", kOSBooleanFalse);
+    setProperty("MetalPlugin", kOSBooleanFalse);
+    setProperty("IOGPU", kOSBooleanFalse);
     setProperty("IOAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
-    fFB->setProperty("IOFBAccelerator", kOSBooleanTrue);
+    fFB->setProperty("IOFBAccelerator", kOSBooleanFalse);
     fFB->setProperty("IOFBAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("IOAccelServiceRegistryID", accelRegistryID, 64);
 
-    IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - METAL READY ✅\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - diagnostic only, acceleration still unproven\n");
 }

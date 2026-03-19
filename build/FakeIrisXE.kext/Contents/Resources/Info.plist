@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V261 - Added MI_STORE_DWORD_IMM Back (Proof of Execution)</string>
+	<string>FakeIrisXe V251 - Correctness pass: reduced GuC stall time, merge-nub conflict fix, honest readiness gating</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.261</string>
+	<string>1.0.251</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.261</string>
+	<string>1.0.251</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>
@@ -26,10 +26,6 @@
 			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 			<key>IOClass</key>
 			<string>FakeIrisXEAccelerator</string>
-			<key>IOGVAGPUSupported</key>
-			<true/>
-			<key>IOGVAHEVCDecode</key>
-			<true/>
 			<key>IOMatchCategory</key>
 			<string>IOAccelerator</string>
 			<key>IONameMatch</key>
@@ -40,10 +36,6 @@
 			<string>FakeIrisXEFramebuffer</string>
 			<key>IOUserClientClass</key>
 			<string>FakeIrisXEAcceleratorUserClient</string>
-			<key>MetalPlugin</key>
-			<true/>
-			<key>MetalPluginClassName</key>
-			<string>FakeIrisXEAccelerator</string>
 		</dict>
 		<key>FakeIrisXEFramebuffer</key>
 		<dict>
@@ -190,7 +182,7 @@
 			<key>DisplayVendorID</key>
 			<integer>1970170734</integer>
 			<key>IOClass</key>
-			<string>DisplayMergeNub</string>
+			<string>FakeIrisXEDisplayMergeNub</string>
 			<key>IOProbeScore</key>
 			<integer>5100</integer>
 			<key>IOProviderClass</key>

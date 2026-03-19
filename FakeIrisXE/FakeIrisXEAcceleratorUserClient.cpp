@@ -29,6 +29,10 @@ public:
         }
         t->dict = OSDictionary::withCapacity(256);
         t->lock = IOLockAlloc();
+        if (!t->dict || !t->lock) {
+            t->release();
+            return nullptr;
+        }
         t->nextHandle = 1;
         return t;
     }
@@ -57,7 +61,6 @@ public:
         dict->setObject(key, gem);
         key->release();
 
-        gem->retain();
         uint32_t handle = nextHandle++;
         IOLockUnlock(lock);  // FIX: Added missing unlock
         return handle;
@@ -87,12 +90,19 @@ public:
         snprintf(keybuf, sizeof(keybuf), "%u", h);
 
         const OSSymbol* key = OSSymbol::withCString(keybuf);
+
+        // V249: FIX - dict->getObject() returns a BORROWED reference (NOT retained).
+        // We must NOT call release() on the result. removeObject() handles its own
+        // retain/release. Calling gem->release() here was a double-release bug.
+        // Per OSDictionary semantics: setObject() retains, getObject() returns a borrowed
+        // reference (no retain), removeObject() releases and removes.
         bool exists = dict->getObject(key) != nullptr;
 
         if (exists) {
-            FakeIrisXEGEM* gem = OSDynamicCast(FakeIrisXEGEM, dict->getObject(key));
-            if (gem) gem->release();
             dict->removeObject(key);
+            // DO NOT call gem->release() here. OSDictionary::removeObject releases
+            // the object when it removes it from the dictionary. We never owned a retain
+            // from getObject(), so we have nothing to release.
         }
 
         key->release();
@@ -177,6 +187,26 @@ bool FakeIrisXEAcceleratorUserClient::start(IOService* provider)
 
     if (!fHandleTable || !fMemTypeToHandle || !fMemBindLock || !fSurfaceRegistry || !fSurfaceLock) {
         RLLog("[FakeIrisXE] UserClient start failed: missing allocations");
+        if (fHandleTable) {
+            fHandleTable->release();
+            fHandleTable = nullptr;
+        }
+        if (fMemTypeToHandle) {
+            fMemTypeToHandle->release();
+            fMemTypeToHandle = nullptr;
+        }
+        if (fMemBindLock) {
+            IOLockFree(fMemBindLock);
+            fMemBindLock = nullptr;
+        }
+        if (fSurfaceRegistry) {
+            fSurfaceRegistry->release();
+            fSurfaceRegistry = nullptr;
+        }
+        if (fSurfaceLock) {
+            IOLockFree(fSurfaceLock);
+            fSurfaceLock = nullptr;
+        }
         return false;
     }
     
@@ -222,10 +252,17 @@ IOReturn FakeIrisXEAcceleratorUserClient::clientClose() {
 
 uint32_t FakeIrisXEAcceleratorUserClient::createGemAndRegister(uint64_t size, uint32_t flags)
 {
+    if (!fHandleTable) return 0;
+
     FakeIrisXEGEM* gem = FakeIrisXEGEM::withSize((size_t)size, flags);
     if (!gem) return 0;
 
     uint32_t handle = fHandleTable->add(gem);
+    if (!handle) {
+        gem->release();
+        return 0;
+    }
+
     gem->release();
     return handle;
 }
@@ -237,13 +274,27 @@ bool FakeIrisXEAcceleratorUserClient::destroyGemHandle(uint32_t h)
 
 IOReturn FakeIrisXEAcceleratorUserClient::pinGemHandle(uint32_t handle, uint64_t* outGpuAddr)
 {
+    if (!outGpuAddr || !fOwner) return kIOReturnBadArgument;
+
     FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
     if (!gem) return kIOReturnNotFound;
 
+    FakeIrisXEFramebuffer* fb = fOwner->framebuffer();
+    if (!fb) {
+        gem->release();
+        return kIOReturnNotReady;
+    }
+
     gem->pin();
 
-    uint64_t gpuVA = fOwner->fFramebuffer->ggttMap(gem);
-    gem->setGpuAddress(gpuVA);   // add this new method
+    uint64_t gpuVA = fb->ggttMap(gem);
+    if (!gpuVA) {
+        gem->unpin();
+        gem->release();
+        return kIOReturnNoMemory;
+    }
+
+    gem->setGpuAddress(gpuVA);
 
     *outGpuAddr = gpuVA;
 
@@ -252,13 +303,23 @@ IOReturn FakeIrisXEAcceleratorUserClient::pinGemHandle(uint32_t handle, uint64_t
 }
 
 bool FakeIrisXEAcceleratorUserClient::unpinGemHandle(uint32_t handle) {
+    if (!fOwner) return false;
+
     FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
     if (!gem) return false;
+
+    FakeIrisXEFramebuffer* fb = fOwner->framebuffer();
+    if (!fb) {
+        gem->release();
+        return false;
+    }
 
     uint64_t gpuVA = gem->gpuAddress();    // retrieve
     uint32_t pages = gem->pageCount();
 
-    fOwner->fFramebuffer->ggttUnmap(gpuVA, pages);
+    if (gpuVA && pages) {
+        fb->ggttUnmap(gpuVA, pages);
+    }
     gem->unpin();
 
     gem->release();
@@ -322,7 +383,7 @@ uint32_t FakeIrisXEAcceleratorUserClient::getMemBinding(UInt32 type) {
     if (!key) return 0;
     IOLockLock(fMemBindLock);
     OSNumber* val = OSDynamicCast(OSNumber, fMemTypeToHandle->getObject(key));
-    if (val) handle = val->unsigned32BitValue();
+    if (val != nullptr) handle = val->unsigned32BitValue();
     IOLockUnlock(fMemBindLock);
     key->release();
     return handle;
@@ -349,7 +410,6 @@ IOReturn FakeIrisXEAcceleratorUserClient::registerSurface(uint32_t surfID, uint3
     if (!fHandleTable) return kIOReturnNotReady;
     FakeIrisXEGEM* gem = fHandleTable->lookup(handle);
     if (!gem) return kIOReturnNotFound;
-    gem->release();
     RLLog("[RegisterSurface] id=%u handle=%u w=%u h=%u stride=%u fmt=0x%x",
           (unsigned)surfID, (unsigned)handle, (unsigned)w, (unsigned)h, (unsigned)rowBytes, (unsigned)pixFmt);
     FakeIrisXESurfaceInfo info = {1, surfID, w, h, rowBytes, pixFmt, handle};
@@ -610,26 +670,16 @@ IOReturn FakeIrisXEAcceleratorUserClient::externalMethod(
             return kIOReturnSuccess;
         }
         case kFIx_Method_GetCaps: {
-            if (!args->structureOutput) return kIOReturnBadArgument;
-            struct { uint32_t version; uint32_t conservative; } caps = {1,1};
-            size_t sz = args->structureOutputSize;
-            if (sz < sizeof(caps)) {
-                args->structureOutputSize = sizeof(caps);
-                return kIOReturnNoSpace;
+            if (args && args->structureOutputSize > 0) {
+                args->structureOutputSize = 0;
             }
-            memcpy(args->structureOutput, &caps, sizeof(caps));
-            args->structureOutputSize = sizeof(caps);
-            return kIOReturnSuccess;
+            return kIOReturnUnsupported;
         }
         case kFIx_Method_GetStats: {
-            if (!args->structureOutput) return kIOReturnBadArgument;
-            size_t sz = args->structureOutputSize;
-            if (sz > 0) {
-                struct { uint32_t version; uint32_t surfaces; } stats = {1,0};
-                memcpy(args->structureOutput, &stats, sizeof(stats));
-                args->structureOutputSize = sizeof(stats);
+            if (args && args->structureOutputSize > 0) {
+                args->structureOutputSize = 0;
             }
-            return kIOReturnSuccess;
+            return kIOReturnUnsupported;
         }
         default:
             IOLog("(FakeIrisXEFramebuffer) [UC] externalMethod unsupported selector=%u\n",

@@ -30,12 +30,12 @@
 
 #define super IOService
 
-OSDefineMetaClassAndStructors(DisplayMergeNub, IOService)
+OSDefineMetaClassAndStructors(FakeIrisXEDisplayMergeNub, IOService)
 
 static bool haveCreatedRef = false;
 
 bool
-DisplayMergeNub::start(IOService *provider)
+FakeIrisXEDisplayMergeNub::start(IOService *provider)
 {
     if (!super::start(provider)) {
         return false;
@@ -59,7 +59,7 @@ DisplayMergeNub::start(IOService *provider)
 //================================================================================================
 //
 IOService *
-DisplayMergeNub::probe(IOService *provider, SInt32 *score)
+FakeIrisXEDisplayMergeNub::probe(IOService *provider, SInt32 *score)
 {
 #pragma unused (score)
     if (!provider) {
@@ -113,7 +113,7 @@ DisplayMergeNub::probe(IOService *provider, SInt32 *score)
 //================================================================================================
 //
 bool
-DisplayMergeNub::MergeDictionaryIntoProvider(IOService * provider, OSDictionary * dictionaryToMerge)
+FakeIrisXEDisplayMergeNub::MergeDictionaryIntoProvider(IOService * provider, OSDictionary * dictionaryToMerge)
 {
     const OSSymbol * 		dictionaryEntry = NULL;
     OSCollectionIterator * 	iter = NULL;
@@ -234,7 +234,7 @@ DisplayMergeNub::MergeDictionaryIntoProvider(IOService * provider, OSDictionary 
 //================================================================================================
 //
 bool
-DisplayMergeNub::MergeDictionaryIntoDictionary(OSDictionary * parentSourceDictionary,  OSDictionary * parentTargetDictionary)
+FakeIrisXEDisplayMergeNub::MergeDictionaryIntoDictionary(OSDictionary * parentSourceDictionary,  OSDictionary * parentTargetDictionary)
 {
     OSCollectionIterator*	srcIterator = NULL;
     OSSymbol*			keyObject = NULL ;

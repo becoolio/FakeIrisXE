@@ -16,10 +16,10 @@ extern "C" void OSSynchronizeIO(void);
 // V221: MI command definitions for RCS batch
 // V241: FIXED - Correct Gen12 MI_STORE_DWORD_IMM encoding
 #ifndef MI_BATCH_BUFFER_END
-#define MI_BATCH_BUFFER_END    (0xA << 23)
+#define MI_BATCH_BUFFER_END    MI_INSTR(0x0A, 0)
 #endif
 #ifndef MI_STORE_DWORD_IMM
-#define MI_STORE_DWORD_IMM     (0x20 << 23)
+#define MI_STORE_DWORD_IMM     MI_INSTR(0x20, 1)
 #endif
 #ifndef MI_USE_GGTT
 #define MI_USE_GGTT           (1 << 22)
@@ -28,7 +28,7 @@ extern "C" void OSSynchronizeIO(void);
 // V241: Add MI_STORE_DWORD_IMM_GEN4 (what Linux uses)
 // Gen4+ uses the same opcode but with different length encoding
 #ifndef MI_STORE_DWORD_IMM_GEN4
-#define MI_STORE_DWORD_IMM_GEN4  MI_STORE_DWORD_IMM
+#define MI_STORE_DWORD_IMM_GEN4  MI_INSTR(0x20, 2)
 #endif
 
 // V183: Optimize boot speed - reduce timeouts since GuC consistently fails
@@ -736,6 +736,14 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
     obj->fLastReportedStage = kGuCStageIdle;
     obj->fFirmwareMode = kGuCFirmwareModeAppleOnly;
     obj->fGuCPublicKeyGem = nullptr;
+    obj->fH2GDbGem = nullptr;
+    obj->fH2GCtbGem = nullptr;
+    obj->fG2HDbGem = nullptr;
+    obj->fG2HCtbGem = nullptr;
+    obj->fH2GDbGpuVA = 0;
+    obj->fH2GCtbGpuVA = 0;
+    obj->fG2HDbGpuVA = 0;
+    obj->fG2HCtbGpuVA = 0;
     return obj;
 }
 
@@ -783,13 +791,80 @@ bool FakeIrisXEGuC::initGuC()
     // V219: RCS Active Mode Fix
     initV219RCSFix();
 
-    // V221: RCS EXEClist Initialization with MI_STORE_DWORD_IMM Proof-of-Execution
-    initV221RCSExeclist();
+    // Direct RCS0 proof-of-execution is now owned by FakeIrisXEExeclist.
+    // Keep GuC focused on firmware bring-up and transport research so the
+    // direct Execlist milestone stays independent of GuC state.
+    IOLog("(FakeIrisXE) [GuC] Skipping legacy V221/V248 execution experiments during GuC init; direct RCS proof is owned by FakeIrisXEExeclist\n");
 
     extern const unsigned char tgl_dmc_ver2_12_bin[];
     extern const unsigned int tgl_dmc_ver2_12_bin_len;
     if (!loadDmcFirmware(tgl_dmc_ver2_12_bin, tgl_dmc_ver2_12_bin_len)) {
         IOLog("(FakeIrisXE) [GuC] DMC load failed, continuing with GuC path\n");
+    }
+
+    // =========================================================================
+    // V248: NEW - Load GuC firmware
+    // The GuC (Graphics MicroController) is a firmware-based command scheduler
+    // that runs on a separate microcontroller within the GPU. Loading the GuC
+    // firmware is essential for proper command submission and scheduling.
+    //
+    // The fFirmwareMode determines which firmware to use:
+    //   kGuCFirmwareModeAppleOnly  -> Apple's signed GuC firmware
+    //   kGuCFirmwareModeLinuxReserved -> Linux i915's open GuC firmware
+    //
+    // Per Intel PRM and Linux i915, the GuC must be:
+    //   1. Loaded into WOPCM (Working OPCode Memory) via DMA
+    //   2. Authenticated using RSA signature from the CSS header
+    //   3. Started via GUC_CTL register
+    //
+    // Without GuC firmware loaded, the GPU falls back to legacy ring-based
+    // submission only, which may not work reliably on Gen12 Tiger Lake.
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] Attempting GuC firmware load...\n");
+
+    const uint8_t* guCfwData = nullptr;
+    size_t guCfwSize = 0;
+
+    if (fFirmwareMode == kGuCFirmwareModeAppleOnly) {
+        extern const unsigned char apple_tgl_guc_bin[];
+        extern const unsigned int apple_tgl_guc_bin_len;
+        guCfwData = apple_tgl_guc_bin;
+        guCfwSize = apple_tgl_guc_bin_len;
+        IOLog("(FakeIrisXE) [V248] Using Apple TGL GuC firmware (%zu bytes)\n", guCfwSize);
+    } else {
+        extern const unsigned char tgl_guc_70_1_1_bin[];
+        extern const unsigned int tgl_guc_70_1_1_bin_len;
+        guCfwData = tgl_guc_70_1_1_bin;
+        guCfwSize = tgl_guc_70_1_1_bin_len;
+        IOLog("(FakeIrisXE) [V248] Using Linux TGL GuC firmware v70.1.1 (%zu bytes)\n", guCfwSize);
+    }
+
+    // V248: Try V137 Linux-style GuC load sequence
+    // This follows the Linux i915 approach which is more reliable:
+    //   1. Acquire forcewake
+    //   2. Program shim control
+    //   3. Derive CSS layout (RSA key, modulus, exponent)
+    //   4. Write RSA scratch
+    //   5. Configure WOPCM size/offset
+    //   6. DMA copy from GGTT to WOPCM
+    //   7. Wait for boot acknowledgment
+    //   8. Release forcewake
+    if (guCfwData && guCfwSize > 0) {
+        // First load the firmware into GEM (alloc + copy + map)
+        if (loadGuCFirmware(guCfwData, guCfwSize)) {
+            IOLog("(FakeIrisXE) [V248] ✅ GuC firmware loaded and mapped to GGTT\n");
+        } else {
+            IOLog("(FakeIrisXE) [V248] ⚠️  GuC firmware GEM mapping failed\n");
+        }
+
+        // Then try to execute the boot sequence
+        // The loadGuCFirmware function already maps the firmware to GGTT and
+        // stores the GPU address in fGuCFwGpuAddr. We can use the V137 method
+        // to perform the full boot sequence.
+        IOLog("(FakeIrisXE) [V248] NOTE: Full GuC boot sequence (authentication + start)\n");
+        IOLog("(FakeIrisXE) [V248]       requires additional steps - see loadGuCWithV137Method\n");
+    } else {
+        IOLog("(FakeIrisXE) [V248] ⚠️  No GuC firmware available (binary not found)\n");
     }
 
     IOLog("(FakeIrisXE) [GuC] Pre-flight complete\n");
@@ -1596,7 +1671,7 @@ bool FakeIrisXEGuC::runApplePreAuthHandshake(GuCStage stage, uint32_t restoreFre
     // V184: Try alternative ME wake - write 0x1 instead of 0x2
     IOLog("(FakeIrisXE) [V184] Trying alternative ME wake sequence...\n");
     fOwner->safeMMIOWrite(APPLE_TGL_ME_FW_STATUS_V173, 0x1);  // Try bit 1
-    IOSleep(100);
+    IOSleep(20);
     uint32_t alt_me_status = fOwner->safeMMIORead(APPLE_TGL_ME_FW_STATUS_V173);
     IOLog("(FakeIrisXE) [V184] Alternative ME wake result: 0x%08X\n", alt_me_status);
     
@@ -2282,7 +2357,8 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         // V139: Poll for boot status with enhanced logging
         dumpGuCStatusEx("post-DMA, pre-boot-poll");
         
-        if (pollForBootFastFail(3000, startNs, retryIndex)) {
+        // V251: Reduced timeout from 3000ms to 1000ms to prevent IOKit stall
+        if (pollForBootFastFail(1000, startNs, retryIndex)) {
             dmaSuccess = true;
             dumpGuCStatusEx("post-boot-success");
             break;
@@ -2486,7 +2562,8 @@ bool FakeIrisXEGuC::runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, ui
                          APPLE_DMA_MAGIC_TRIGGER, 0);
     logAppleRegisterWindow("apple-after-dma-ctrl");
 
-    if (!pollForBootFastFail(5000, startNs, retryIndex)) {
+    // V251: Reduced from 5000ms to 1000ms to prevent IOKit stall
+    if (!pollForBootFastFail(1000, startNs, retryIndex)) {
         return failAppleBoot("boot-poll");
     }
 
@@ -2572,7 +2649,7 @@ bool FakeIrisXEGuC::loadDmcFirmware(const uint8_t* fwData, size_t fwSize)
     
     // Trigger DMC load
     fOwner->safeMMIOWrite(DMC_SSP_BASE, 0x1);
-    IOSleep(100);
+    IOSleep(20);
     
     IOLog("(FakeIrisXE) [V49] ✅ DMC firmware loaded successfully\n");
     
@@ -2916,40 +2993,108 @@ bool FakeIrisXEGuC::initDoorbells()
 
 bool FakeIrisXEGuC::initCommandTransportBuffers()
 {
-    IOLog("(FakeIrisXE) [V53] Initializing Command Transport Buffers (CTB)...\n");
+    IOLog("(FakeIrisXE) [V250] Initializing Command Transport Buffers (CTB)...\n");
     
-    // Allocate CTB buffers (4KB each for H2G and G2H)
-    // In a real implementation, these would be GEM objects
-    // For now, we set up the register structures
+    // V250: Allocate real GEM buffers for CTB structures (4KB each)
+    // H2G = Host-to-GuC (doorbell + command transport buffer)
+    // G2H = GuC-to-Host (doorbell + command transport buffer)
     
-    // H2G CTB Setup
-    uint32_t h2gDb = 0x0;      // Doorbell offset (would be from GEM)
-    uint32_t h2gCtb = 0x1000;  // CTB offset (would be from GEM)
+    fH2GDbGem = FakeIrisXEGEM::withSize(GUC_CTB_SIZE, 0);
+    if (!fH2GDbGem) {
+        IOLog("(FakeIrisXE) [V250] FAILED to allocate H2G doorbell GEM\n");
+        return false;
+    }
     
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_LO, h2gDb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_HI, (h2gDb >> 32) & 0xFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_LO, h2gCtb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_HI, (h2gCtb >> 32) & 0xFFFF);
+    fH2GCtbGem = FakeIrisXEGEM::withSize(GUC_CTB_SIZE, 0);
+    if (!fH2GCtbGem) {
+        IOLog("(FakeIrisXE) [V250] FAILED to allocate H2G CTB GEM\n");
+        fH2GDbGem->release();
+        fH2GDbGem = nullptr;
+        return false;
+    }
+    
+    fG2HDbGem = FakeIrisXEGEM::withSize(GUC_CTB_SIZE, 0);
+    if (!fG2HDbGem) {
+        IOLog("(FakeIrisXE) [V250] FAILED to allocate G2H doorbell GEM\n");
+        fH2GCtbGem->release(); fH2GCtbGem = nullptr;
+        fH2GDbGem->release();   fH2GDbGem = nullptr;
+        return false;
+    }
+    
+    fG2HCtbGem = FakeIrisXEGEM::withSize(GUC_CTB_SIZE, 0);
+    if (!fG2HCtbGem) {
+        IOLog("(FakeIrisXE) [V250] FAILED to allocate G2H CTB GEM\n");
+        fG2HDbGem->release();  fG2HDbGem = nullptr;
+        fH2GCtbGem->release(); fH2GCtbGem = nullptr;
+        fH2GDbGem->release();  fH2GDbGem = nullptr;
+        return false;
+    }
+    
+    void* h2gCtbCpu = nullptr;
+    void* g2hCtbCpu = nullptr;
+
+    // Map all 4 GEMs to GGTT
+    fH2GDbGpuVA = fOwner->ggttMap(fH2GDbGem);
+    if (fH2GDbGpuVA == 0) {
+        IOLog("(FakeIrisXE) [V250] FAILED to map H2G doorbell GEM to GGTT\n");
+        goto ctb_fail;
+    }
+    
+    fH2GCtbGpuVA = fOwner->ggttMap(fH2GCtbGem);
+    if (fH2GCtbGpuVA == 0) {
+        IOLog("(FakeIrisXE) [V250] FAILED to map H2G CTB GEM to GGTT\n");
+        goto ctb_fail;
+    }
+    
+    fG2HDbGpuVA = fOwner->ggttMap(fG2HDbGem);
+    if (fG2HDbGpuVA == 0) {
+        IOLog("(FakeIrisXE) [V250] FAILED to map G2H doorbell GEM to GGTT\n");
+        goto ctb_fail;
+    }
+    
+    fG2HCtbGpuVA = fOwner->ggttMap(fG2HCtbGem);
+    if (fG2HCtbGpuVA == 0) {
+        IOLog("(FakeIrisXE) [V250] FAILED to map G2H CTB GEM to GGTT\n");
+        goto ctb_fail;
+    }
+    
+    // Zero-initialize the CTB command buffers
+    h2gCtbCpu = fH2GCtbGem->memoryDescriptor()->getBytesNoCopy();
+    g2hCtbCpu = fG2HCtbGem->memoryDescriptor()->getBytesNoCopy();
+    if (h2gCtbCpu) bzero(h2gCtbCpu, GUC_CTB_SIZE);
+    if (g2hCtbCpu) bzero(g2hCtbCpu, GUC_CTB_SIZE);
+    
+    // H2G CTB Setup (Host-to-GuC command transport)
+    // The H2G CTB is where the host writes commands for the GuC to consume
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_LO, (uint32_t)(fH2GDbGpuVA & 0xFFFFFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_DB_ADDR_HI, (uint32_t)((fH2GDbGpuVA >> 32) & 0xFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_LO, (uint32_t)(fH2GCtbGpuVA & 0xFFFFFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_ADDR_HI, (uint32_t)((fH2GCtbGpuVA >> 32) & 0xFFFF));
     fOwner->safeMMIOWrite(GEN11_GUC_H2G_CTB_SIZE, GUC_CTB_SIZE);
     
-    IOLog("(FakeIrisXE) [V53]   H2G CTB configured: DB=0x%X, CTB=0x%X, Size=0x%X\n",
-          h2gDb, h2gCtb, GUC_CTB_SIZE);
+    IOLog("(FakeIrisXE) [V250]   H2G: DB=0x%llX, CTB=0x%llX, Size=0x%X\n",
+          (unsigned long long)fH2GDbGpuVA, (unsigned long long)fH2GCtbGpuVA, GUC_CTB_SIZE);
     
-    // G2H CTB Setup
-    uint32_t g2hDb = 0x2000;   // Doorbell offset
-    uint32_t g2hCtb = 0x3000;  // CTB offset
-    
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_LO, g2hDb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_HI, (g2hDb >> 32) & 0xFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_LO, g2hCtb & 0xFFFFFFFF);
-    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_HI, (g2hCtb >> 32) & 0xFFFF);
+    // G2H CTB Setup (GuC-to-Host status/response transport)
+    // The G2H CTB is where the GuC writes completion status
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_LO, (uint32_t)(fG2HDbGpuVA & 0xFFFFFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_DB_ADDR_HI, (uint32_t)((fG2HDbGpuVA >> 32) & 0xFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_LO, (uint32_t)(fG2HCtbGpuVA & 0xFFFFFFFF));
+    fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_ADDR_HI, (uint32_t)((fG2HCtbGpuVA >> 32) & 0xFFFF));
     fOwner->safeMMIOWrite(GEN11_GUC_G2H_CTB_SIZE, GUC_CTB_SIZE);
     
-    IOLog("(FakeIrisXE) [V53]   G2H CTB configured: DB=0x%X, CTB=0x%X, Size=0x%X\n",
-          g2hDb, g2hCtb, GUC_CTB_SIZE);
+    IOLog("(FakeIrisXE) [V250]   G2H: DB=0x%llX, CTB=0x%llX, Size=0x%X\n",
+          (unsigned long long)fG2HDbGpuVA, (unsigned long long)fG2HCtbGpuVA, GUC_CTB_SIZE);
     
-    IOLog("(FakeIrisXE) [V53] ✅ CTB buffers initialized\n");
+    IOLog("(FakeIrisXE) [V250] ✅ CTB buffers initialized (real GEM-backed)\n");
     return true;
+
+ctb_fail:
+    fG2HCtbGem->release(); fG2HCtbGem = nullptr;
+    fG2HDbGem->release();  fG2HDbGem = nullptr;
+    fH2GCtbGem->release(); fH2GCtbGem = nullptr;
+    fH2GDbGem->release();  fH2GDbGem = nullptr;
+    return false;
 }
 
 // ============================================================================
@@ -3235,8 +3380,8 @@ bool FakeIrisXEGuC::uploadFirmwareWithFallback(uint64_t sourceGpuAddr, uint32_t 
         }
         
         // V111: Wait before retry
-        IOLog("(FakeIrisXE) [V134] ❌ Retry %d failed, waiting 100ms...\n", retry + 1);
-        IOSleep(100);
+        IOLog("(FakeIrisXE) [V134] Retry %d failed, waiting 20ms...\n", retry + 1);
+        IOSleep(20);
     }
     
     IOLog("(FakeIrisXE) [V134] ❌ All %d retries failed!\n", maxRetries);
@@ -3309,19 +3454,19 @@ bool FakeIrisXEGuC::enableGuCSubmission()
         IOLog("(FakeIrisXE) [HuC] Status: 0x%08x\n", huc_status);
     }
     
-    IOLog("(FakeIrisXE) [V48] [GuC] ✅ GuC submission enabled successfully!\n");
-    IOLog("(FakeIrisXE) [V48] [GuC] Hardware acceleration is now ACTIVE\n");
+    IOLog("(FakeIrisXE) [V48] [GuC] GuC ready bits observed; submission proof still required\n");
     dumpGuCStatus();
     
     // V47: Test command submission
     IOLog("(FakeIrisXE) [V48] Testing command submission...\n");
     if (testCommandSubmission()) {
         IOLog("(FakeIrisXE) [V48] ✅ Command submission test PASSED\n");
+        return true;
     } else {
-        IOLog("(FakeIrisXE) [V48] ⚠️ Command submission test FAILED (GuC may still work)\n");
+        IOLog("(FakeIrisXE) [V48] ❌ Command submission test FAILED; keeping GuC submission disabled\n");
     }
-    
-    return true;
+
+    return false;
 }
 
 bool FakeIrisXEGuC::waitGuCReady(uint32_t timeoutMs)
@@ -3526,13 +3671,13 @@ bool FakeIrisXEGuC::testCommandSubmission()
     fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(2), 0x1);  // Trigger bit
     consumerCoherencyBarrier("scratch trigger consumed");
     
-    IOLog("(FakeIrisXE) [V48] Submitted test command via scratch registers\n");
+    IOLog("(FakeIrisXE) [V48] Submitted diagnostic scratch write, but no completion path is implemented\n");
     
     // Cleanup
     testGem->unpin();
     testGem->release();
     
-    return true;
+    return false;
 }
 
 // ============================================================================
@@ -4142,90 +4287,232 @@ void FakeIrisXEGuC::initGTPreWorkaround()
 #define GEN12_MOCS1                  0x4004
 #define GEN12_MOCS_UC                0x100
 
-// ============================================================================
-// V232: Early Power Well Initialization - BEFORE GT gets wedged
-// Critical: GT can be unwedged at boot but gets wedged later
-// We need power wells enabled EARLY to prevent wedging
+// V248: Enhanced early power wells with CDCLK/LCPLL initialization.
+// V232 originally enabled power wells only. V248 adds:
+//   - LCPLL (Phase-Locked Loop) initialization before CDCLK
+//   - CDCLK (Display Clock) setup via TRANS_CLK_SEL and LCPLL registers
+//   - MBUS DBOX control for display bandwidth
+//   - Render power well (PW1) with explicit FORCEWAKE acquisition
+// These clocks must be running before macOS queries timing information.
+// Reference: Intel Gen12 Graphics PRM and Linux i915 display clock initialization.
 // ============================================================================
 void FakeIrisXEGuC::initV232EarlyPowerWells()
 {
-    IOLog("(FakeIrisXE) [V232] ============================================\n");
-    IOLog("(FakeIrisXE) [V232] EARLY POWER WELL INITIALIZATION\n");
-    IOLog("(FakeIrisXE) [V232] Critical: Enable power wells BEFORE GT wedges\n");
-    IOLog("(FakeIrisXE) [V232] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] EARLY POWER WELL + CDCLK INITIALIZATION\n");
+    IOLog("(FakeIrisXE) [V248] Critical: Enable power wells and clocks BEFORE GT wedges\n");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
     
     if (!fOwner) {
-        IOLog("(FakeIrisXE) [V232] ❌ Invalid owner\n");
+        IOLog("(FakeIrisXE) [V248] ❌ Invalid owner\n");
         return;
     }
     
     // =========================================================================
-    // 1. Check and enable power wells at EARLY stage
-    // Using GEN12_PWR_WELL registers at 0x45400-0x4541C
+    // Gen12/Tiger Lake register definitions for power wells and display clocks
     // =========================================================================
-    IOLog("(FakeIrisXE) [V232] 1. Early Power Well Status Check...\n");
-    
-    // Check current power well status
-    uint32_t pw_status = fOwner->safeMMIORead(0x45410);  // GEN12_PWR_WELL_STATUS
-    IOLog("(FakeIrisXE) [V232]   PWR_WELL_STATUS @0x45410: 0x%08X\n", pw_status);
-    
-    // Power well definitions for Gen12:
-    // PW0 @ 0x45400 - Always on
-    // PW1 @ 0x45404 - Render power well  
-    // PW2 @ 0x45408 - Display power well
-    // PW3 @ 0x4540C - Media power well
-    // PW4 @ 0x45410 - Extra power well
-    
-    // Try to enable each power well with force bit
-    uint32_t pw_bases[] = {0x45400, 0x45404, 0x45408, 0x4540C, 0x45414, 0x45418, 0x4541C};
-    const char* pw_names[] = {"PW0", "PW1", "PW2", "PW3", "PW4", "PW5", "PW6"};
-    
-    for (int i = 0; i < 7; i++) {
-        uint32_t pw_addr = pw_bases[i];
-        
-        // Read current status
-        uint32_t pw_val = fOwner->safeMMIORead(pw_addr);
-        IOLog("(FakeIrisXE) [V232]   %s @0x%X: 0x%08X\n", pw_names[i], pw_addr, pw_val);
-        
-        // Try to enable: bit 0 = request on, bit 1 = force on
-        // For power wells that are readable and not already on
-        if (pw_val != 0xFFFFFFFF && (pw_val & 0x1) == 0) {
-            // Request power on with force
-            fOwner->safeMMIOWrite(pw_addr, 0x00030003);
-            IOSleep(10);
-            
-            uint32_t pw_after = fOwner->safeMMIORead(pw_addr);
-            IOLog("(FakeIrisXE) [V232]   %s after enable: 0x%08X\n", pw_names[i], pw_after);
-        }
+    #define GEN12_PWR_WELL_CTL0       0x45400  // PW0 - Always on
+    #define GEN12_PWR_WELL_CTL1       0x45404  // PW1 - Render (primary)
+    #define GEN12_PWR_WELL_CTL2       0x45408  // PW2 - Display
+    #define GEN12_PWR_WELL_CTL3       0x4540C  // PW3 - Media
+    #define GEN12_PWR_WELL_STATUS     0x45410  // Power well status
+
+    #define PWR_WELL_REQ_ON           0x00000001  // Request power on
+    #define PWR_WELL_REQ_FORCE_ON     0x00000002  // Force power on (override)
+    #define PWR_WELL_STATE_ON         0x00000001  // Power well is on
+
+    // Display clock registers (MMIO range 0x46000-0x461FF)
+    #define LCPLL1_CTL               0x46010  // LC PLL control
+    #define LCPLL1_CTL_ENABLE        0xcc000000  // LCPLL enable + PLL lock
+    #define TRANS_CLK_SEL_A          0x46140  // Transform clock select pipe A
+    #define TRANS_CLK_SEL_B          0x46144  // Transform clock select pipe B
+    #define TRANS_CLK_SEL_C          0x46148  // Transform clock select pipe C
+    #define CDCLK_CTL                0x46000  // CDCLK control
+    #define CDCLK_STATUS             0x46008  // CDCLK status
+
+    // MBUS DBOX control for display bandwidth
+    #define MBUS_DBOX_CTL_A          0x7003C
+
+    // =========================================================================
+    // 1. FORCEWAKE acquisition - required before any GT register access
+    // On Gen12, FORCEWAKE is at GEN11_FORCEWAKE_RENDER (0xA278)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 1. FORCEWAKE Acquisition...\n");
+
+    // Read current forcewake state
+    uint32_t fw_req = fOwner->safeMMIORead(0xA188);  // FORCEWAKE_REQ
+    uint32_t fw_ack = fOwner->safeMMIORead(0x130044); // FORCEWAKE_ACK
+    IOLog("(FakeIrisXE) [V248]   FORCEWAKE REQ @0xA188: 0x%08X\n", fw_req);
+    IOLog("(FakeIrisXE) [V248]   FORCEWAKE ACK @0x130044: 0x%08X\n", fw_ack);
+
+    // Issue aggressive forcewake
+    fOwner->safeMMIOWrite(0xA188, 0x000F000F);
+    IOSleep(1);
+
+    uint32_t fw_ack_after = fOwner->safeMMIORead(0x130044);
+    IOLog("(FakeIrisXE) [V248]   FORCEWAKE ACK after: 0x%08X\n", fw_ack_after);
+
+    // =========================================================================
+    // 2. Power well status check before enable
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 2. Pre-enable Power Well Status...\n");
+
+    uint32_t pw_status = fOwner->safeMMIORead(GEN12_PWR_WELL_STATUS);
+    IOLog("(FakeIrisXE) [V248]   PWR_WELL_STATUS @0x45410: 0x%08X\n", pw_status);
+
+    // Decode status bits for each power well
+    for (int i = 0; i < 4; i++) {
+        uint32_t pw_ctl_addr = GEN12_PWR_WELL_CTL0 + (i * 4);
+        uint32_t pw_ctl = fOwner->safeMMIORead(pw_ctl_addr);
+        bool is_on = (pw_status & (1U << (i * 2))) != 0;
+        IOLog("(FakeIrisXE) [V248]   PW%u @0x%X: CTL=0x%08X STATE=%s\n",
+               i, pw_ctl_addr, pw_ctl, is_on ? "ON" : "OFF");
     }
-    
+
     // =========================================================================
-    // 2. Check Power Well Status after enable attempts
+    // 3. Enable Display Power Well (PW2) - required for CDCLK
+    // Per Intel PRM, display power well must be on before CDCLK can be configured
     // =========================================================================
-    IOLog("(FakeIrisXE) [V232] 2. Power Well Status After Early Enable...\n");
-    
-    pw_status = fOwner->safeMMIORead(0x45410);
-    IOLog("(FakeIrisXE) [V232]   PWR_WELL_STATUS: 0x%08X\n", pw_status);
-    
+    IOLog("(FakeIrisXE) [V248] 3. Enable Display Power Well (PW2)...\n");
+
+    uint32_t pw2_ctl = fOwner->safeMMIORead(GEN12_PWR_WELL_CTL2);
+    IOLog("(FakeIrisXE) [V248]   PW2 before: 0x%08X\n", pw2_ctl);
+
+    // Enable PW2: request on + force on
+    fOwner->safeMMIOWrite(GEN12_PWR_WELL_CTL2,
+                           PWR_WELL_REQ_ON | PWR_WELL_REQ_FORCE_ON);
+    IOSleep(20);  // Display well needs more settle time
+
+    uint32_t pw2_ctl_after = fOwner->safeMMIORead(GEN12_PWR_WELL_CTL2);
+    uint32_t pw2_status_after = fOwner->safeMMIORead(GEN12_PWR_WELL_STATUS);
+    IOLog("(FakeIrisXE) [V248]   PW2 after:  0x%08X\n", pw2_ctl_after);
+    IOLog("(FakeIrisXE) [V248]   PW2 STATUS bit: 0x%08X\n", pw2_status_after & 0x4 ? 1 : 0);
+
     // =========================================================================
-    // 3. Check GT status to ensure not wedged yet
+    // 4. Enable Render Power Well (PW1) - required for RCS0
     // =========================================================================
-    IOLog("(FakeIrisXE) [V232] 3. Early GT Status Check...\n");
-    
+    IOLog("(FakeIrisXE) [V248] 4. Enable Render Power Well (PW1)...\n");
+
+    uint32_t pw1_ctl = fOwner->safeMMIORead(GEN12_PWR_WELL_CTL1);
+    IOLog("(FakeIrisXE) [V248]   PW1 before: 0x%08X\n", pw1_ctl);
+
+    // Enable PW1: request on + force on
+    fOwner->safeMMIOWrite(GEN12_PWR_WELL_CTL1,
+                           PWR_WELL_REQ_ON | PWR_WELL_REQ_FORCE_ON);
+    IOSleep(15);
+
+    uint32_t pw1_ctl_after = fOwner->safeMMIORead(GEN12_PWR_WELL_CTL1);
+    IOLog("(FakeIrisXE) [V248]   PW1 after:  0x%08X\n", pw1_ctl_after);
+
+    // =========================================================================
+    // 5. CDCLK initialization - display clock must be running for timing queries
+    // The CDCLK PLL must be enabled and locked before display operations.
+    // Per Intel PRM, the sequence is:
+    //   a) Enable LCPLL (LCPLL1_CTL at 0x46010)
+    //   b) Wait for PLL lock
+    //   c) Set TRANS_CLK_SEL to select CDCLK source
+    //   d) Verify CDCLK is running
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 5. CDCLK Initialization...\n");
+
+    // 5a. Check current LCPLL state
+    uint32_t lcpll_ctl = fOwner->safeMMIORead(LCPLL1_CTL);
+    IOLog("(FakeIrisXE) [V248]   LCPLL1_CTL @0x46010: 0x%08X\n", lcpll_ctl);
+
+    bool lcpll_locked = (lcpll_ctl & 0x80000000) != 0;
+    bool lcpll_enabled = (lcpll_ctl & 0x40000000) != 0;
+    IOLog("(FakeIrisXE) [V248]   LCPLL: enabled=%u locked=%u\n",
+           lcpll_enabled ? 1U : 0U, lcpll_locked ? 1U : 0U);
+
+    // 5b. If LCPLL not enabled, enable it
+    if (!lcpll_enabled) {
+        IOLog("(FakeIrisXE) [V248]   Enabling LCPLL...\n");
+        fOwner->safeMMIOWrite(LCPLL1_CTL, 0xcc000000);
+        IOSleep(50);  // PLL takes time to lock
+
+        uint32_t lcpll_ctl2 = fOwner->safeMMIORead(LCPLL1_CTL);
+        IOLog("(FakeIrisXE) [V248]   LCPLL1_CTL after enable: 0x%08X\n", lcpll_ctl2);
+    }
+
+    // 5c. Read current CDCLK state
+    uint32_t cdclk_ctl = fOwner->safeMMIORead(CDCLK_CTL);
+    uint32_t cdclk_status = fOwner->safeMMIORead(CDCLK_STATUS);
+    IOLog("(FakeIrisXE) [V248]   CDCLK_CTL @0x46000:    0x%08X\n", cdclk_ctl);
+    IOLog("(FakeIrisXE) [V248]   CDCLK_STATUS @0x46008: 0x%08X\n", cdclk_status);
+
+    // 5d. Set TRANS_CLK_SEL_A to select the CDCLK source
+    // Bit 29 must be set to select the PLL clock (not bypass)
+    // The exact divider value depends on the desired CDCLK frequency:
+    //   0x10000000 = divide by 1 (slowest)
+    //   0x30000000 = divide by 2
+    //   0x50000000 = divide by 3
+    //   0x70000000 = divide by 4 (fastest)
+    // For Tiger Lake, the standard CDCLK is 337.5 MHz (slowest) or 675 MHz
+    uint32_t trans_clk_sel = fOwner->safeMMIORead(TRANS_CLK_SEL_A);
+    IOLog("(FakeIrisXE) [V248]   TRANS_CLK_SEL_A @0x46140: 0x%08X\n", trans_clk_sel);
+
+    // Set to slowest CDCLK (337.5 MHz) for stability - this is safe for all TGL
+    fOwner->safeMMIOWrite(TRANS_CLK_SEL_A, 0x10000000);
+    IOSleep(10);
+
+    uint32_t trans_clk_sel2 = fOwner->safeMMIORead(TRANS_CLK_SEL_A);
+    IOLog("(FakeIrisXE) [V248]   TRANS_CLK_SEL_A after:  0x%08X\n", trans_clk_sel2);
+
+    // =========================================================================
+    // 6. MBus DBOX control for display bandwidth
+    // The MBus (Media Bus) connects the display engine to memory.
+    // Per Intel PRM, MBUS_DBOX_CTL must be configured for proper display operation.
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 6. MBus DBOX Control...\n");
+
+    uint32_t mbus_dbox = fOwner->safeMMIORead(MBUS_DBOX_CTL_A);
+    IOLog("(FakeIrisXE) [V248]   MBUS_DBOX_CTL_A @0x7003C: 0x%08X\n", mbus_dbox);
+
+    // Configure MBUS DBOX for display: enable + set watermark
+    // The value 0xb1038c02 comes from Linux i915 TGL panel power-on sequence
+    if (mbus_dbox == 0 || mbus_dbox == 0xFFFFFFFF) {
+        fOwner->safeMMIOWrite(MBUS_DBOX_CTL_A, 0xb1038c02);
+        IOSleep(5);
+        uint32_t mbus_dbox2 = fOwner->safeMMIORead(MBUS_DBOX_CTL_A);
+        IOLog("(FakeIrisXE) [V248]   MBUS_DBOX_CTL_A after: 0x%08X\n", mbus_dbox2);
+    }
+
+    // =========================================================================
+    // 7. Final power well status check
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 7. Post-Enable Power Well Status...\n");
+
+    pw_status = fOwner->safeMMIORead(GEN12_PWR_WELL_STATUS);
+    IOLog("(FakeIrisXE) [V248]   PWR_WELL_STATUS final: 0x%08X\n", pw_status);
+
+    for (int i = 0; i < 4; i++) {
+        uint32_t state_on = (pw_status & (1U << (i * 2))) != 0;
+        IOLog("(FakeIrisXE) [V248]   PW%u: %s\n", i, state_on ? "ON " : "OFF");
+    }
+
+    // =========================================================================
+    // 8. GT status check to ensure not wedged
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 8. GT Status Check...\n");
+
     uint32_t gt_error = fOwner->safeMMIORead(0x18E04);  // GT_ERROR
     uint32_t gt_status = fOwner->safeMMIORead(0x13805C); // GT_STATUS
-    IOLog("(FakeIrisXE) [V232]   GT_ERROR: 0x%08X\n", gt_error);
-    IOLog("(FakeIrisXE) [V232]   GT_STATUS: 0x%08X\n", gt_status);
-    
+    IOLog("(FakeIrisXE) [V248]   GT_ERROR @0x18E04:  0x%08X\n", gt_error);
+    IOLog("(FakeIrisXE) [V248]   GT_STATUS @0x13805C: 0x%08X\n", gt_status);
+
     if (gt_error & 0x80000000) {
-        IOLog("(FakeIrisXE) [V232]   ⚠️  GT ALREADY WEDGED at early stage!\n");
+        IOLog("(FakeIrisXE) [V248]   ⚠️  GT is WEDGED!\n");
     } else {
-        IOLog("(FakeIrisXE) [V232]   ✅ GT NOT WEDGED - Early init successful\n");
+        IOLog("(FakeIrisXE) [V248]   ✅ GT NOT WEDGED - Init successful\n");
     }
-    
-    IOLog("(FakeIrisXE) [V232] ============================================\n");
-    IOLog("(FakeIrisXE) [V232] EARLY POWER WELL INIT COMPLETE\n");
-    IOLog("(FakeIrisXE) [V232] ============================================\n");
+
+    // Final CDCLK check
+    uint32_t cdclk_status_final = fOwner->safeMMIORead(CDCLK_STATUS);
+    IOLog("(FakeIrisXE) [V248]   CDCLK final status: 0x%08X\n", cdclk_status_final);
+
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] V248 POWER WELL + CDCLK INIT COMPLETE\n");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
 }
 
 // ============================================================================
@@ -4643,8 +4930,8 @@ void FakeIrisXEGuC::initV234AggressiveInit()
     // =========================================================================
     IOLog("(FakeIrisXE) [V234] 1. ForceWake Retry...\n");
     
-    // Try ForceWake multiple times with increasing delays
-    const int MAX_FORCEWAKE_RETRIES = 10;
+    // V251: Reduced retries from 10 to 5, cap wait at 50ms (was exponential up to 512ms)
+    const int MAX_FORCEWAKE_RETRIES = 5;
     uint32_t forcewake_ack = 0;
     bool forcewake_success = false;
     
@@ -4652,8 +4939,8 @@ void FakeIrisXEGuC::initV234AggressiveInit()
         // Request forcewake
         fOwner->safeMMIOWrite(0xA18C, 0x1);  // FORCEWAKE_RENDER
         
-        // Wait with exponential backoff: 1ms, 2ms, 4ms, 8ms...
-        uint32_t wait_ms = 1 << (attempt - 1);
+        // V251: Cap wait at 50ms max (was exponential: 1,2,4,8,16,32,64,128,256,512ms)
+        uint32_t wait_ms = (attempt <= 5) ? (1U << (attempt - 1)) : 50U;
         IOSleep(wait_ms);
         
         // Check ACK
@@ -6464,6 +6751,15 @@ void FakeIrisXEGuC::initV218Improvements()
 // We need RCS to have HEAD/TAIL like BCS0/VCS0
 // ============================================================================
 
+// V248: Enhanced RCS Active Mode Fix with ACTHD Polling
+// V219 originally fixed RCS by comparing modes/HEAD/TAIL with working BCS0/VCS0.
+// V248 extends this with:
+//   - RCS0 ACTHD (Actual Head) polling to verify GPU execution state
+//   - MI_MODE register check for command streamer readiness
+//   - Engine status bit classification (Idle/Executing/Halted)
+//   - Comprehensive diagnostic logging of RCS0, BCS0, and VCS0 states
+// Based on Intel Gen12 Graphics PRM and Linux i915 engine recovery patterns.
+// ============================================================================
 void FakeIrisXEGuC::initV219RCSFix()
 {
     IOLog("(FakeIrisXE) [V219] ============================================\n");
@@ -6618,21 +6914,98 @@ void FakeIrisXEGuC::initV219RCSFix()
     uint32_t lrc_head = fOwner->safeMMIORead(rcsBase + 0x140);
     uint32_t lrc_tail = fOwner->safeMMIORead(rcsBase + 0x144);
     uint32_t lrc_ctx = fOwner->safeMMIORead(rcsBase + 0x148);
-    IOLog("(FakeIrisXE) [V219]   LRC_HEAD @0x%X: 0x%08X\n", rcsBase + 0x140, lrc_head);
-    IOLog("(FakeIrisXE) [V219]   LRC_TAIL @0x%X: 0x%08X\n", rcsBase + 0x144, lrc_tail);
-    IOLog("(FakeIrisXE) [V219]   LRC_CTX @0x%X: 0x%08X\n", rcsBase + 0x148, lrc_ctx);
-    
+    IOLog("(FakeIrisXE) [V248]   LRC_HEAD @0x%X: 0x%08X\n", rcsBase + 0x140, lrc_head);
+    IOLog("(FakeIrisXE) [V248]   LRC_TAIL @0x%X: 0x%08X\n", rcsBase + 0x144, lrc_tail);
+    IOLog("(FakeIrisXE) [V248]   LRC_CTX @0x%X: 0x%08X\n", rcsBase + 0x148, lrc_ctx);
+
+    // =========================================================================
+    // V248: NEW - Poll RCS0 ACTHD to verify engine state
+    // ACTHD (Actual Head) at 0x23C0 is the current GPU execution head position
+    // in the render command stream. Polling it confirms whether the GPU has
+    // active work pending or is idle. On Gen12 Tiger Lake:
+    //   - RCS0 ACTHD_LO at RCS_BASE + 0x3C0 = 0x23C0
+    //   - RCS0 ACTHD_HI at RCS_BASE + 0x3C4 = 0x23C4
+    //
+    // A stable ACTHD (not changing across polls) indicates the GPU has completed
+    // its current batch of work. A changing ACTHD indicates active execution.
+    // =========================================================================
+    #define GEN12_RCS_ACTHD_LO  0x23C0
+    #define GEN12_RCS_ACTHD_HI  0x23C4
+
+    IOLog("(FakeIrisXE) [V248] 7. RCS0 ACTHD Poll...\n");
+
+    uint32_t acthd_lo0 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_LO);
+    uint32_t acthd_hi0 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_HI);
+    IOLog("(FakeIrisXE) [V248]   Initial ACTHD: 0x%08X%08X\n", acthd_hi0, acthd_lo0);
+
+    IOSleep(10);
+
+    uint32_t acthd_lo1 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_LO);
+    uint32_t acthd_hi1 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_HI);
+    IOLog("(FakeIrisXE) [V248]   After 10ms:   ACTHD: 0x%08X%08X\n", acthd_hi1, acthd_lo1);
+
+    IOSleep(20);
+
+    uint32_t acthd_lo2 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_LO);
+    uint32_t acthd_hi2 = fOwner->safeMMIORead(GEN12_RCS_ACTHD_HI);
+    IOLog("(FakeIrisXE) [V248]   After 30ms:   ACTHD: 0x%08X%08X\n", acthd_hi2, acthd_lo2);
+
+    bool acthdStable = (acthd_lo0 == acthd_lo1 && acthd_lo1 == acthd_lo2 &&
+                         acthd_hi0 == acthd_hi1 && acthd_hi1 == acthd_hi2);
+    IOLog("(FakeIrisXE) [V248]   ACTHD stable: %s\n", acthdStable ? "YES (GPU idle)" : "NO (GPU active)");
+
+    // =========================================================================
+    // V248: NEW - Verify RCS0 MI_MODE for command streamer readiness
+    // The MI_MODE register (offset 0x7C relative to RCS base) controls
+    // command streamer behavior. Key bits for Gen12:
+    //   Bit 0:  Command Streamer Enable
+    //   Bit 1:  Command Streamer Idle
+    //   Bit 8:  Stop Ring (1 = stop executing commands)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 8. RCS0 MI_MODE check...\n");
+
+    uint32_t rcs_mi_mode_final = fOwner->safeMMIORead(rcsBase + 0x7C);
+    bool csIdle    = (rcs_mi_mode_final & (1 << 1)) != 0;
+    bool csStopped = (rcs_mi_mode_final & (1 << 8)) != 0;
+    IOLog("(FakeIrisXE) [V248]   MI_MODE: 0x%08X (idle=%u stopped=%u)\n",
+           rcs_mi_mode_final, csIdle ? 1U : 0U, csStopped ? 1U : 0U);
+
+    // =========================================================================
+    // V248: NEW - RCS0 Status summary
+    // RCS0 STATUS register (offset 0x10 relative to RCS base) reports engine
+    // state. Bits 15:13 encode:
+    //   0b000 = Idle
+    //   0b010 = Paused
+    //   0b100 = Executing
+    //   0b111 = Halted (fatal error or watchdog)
+    // =========================================================================
+    uint32_t rcs_status_final = fOwner->safeMMIORead(rcsBase + 0x10);
+    uint32_t statusBits = (rcs_status_final >> 13) & 0x7;
+    const char* statusStr = "UNKNOWN";
+    switch (statusBits) {
+        case 0: statusStr = "Idle"; break;
+        case 1: statusStr = "Paused"; break;
+        case 2: statusStr = "Reserved"; break;
+        case 4: statusStr = "Executing"; break;
+        case 7: statusStr = "Halted"; break;
+        default: statusStr = "Unknown"; break;
+    }
+    IOLog("(FakeIrisXE) [V248]   STATUS: 0x%08X (engine=%s, bits=0x%X)\n",
+           rcs_status_final, statusStr, statusBits);
+
     // =========================================================================
     // Summary
     // =========================================================================
-    IOLog("(FakeIrisXE) [V219] ============================================\n");
-    IOLog("(FakeIrisXE) [V219] V219 RCS FIX COMPLETE\n");
-    IOLog("(FakeIrisXE) [V219]   RCS MODE: 0x%08X -> 0x%08X\n", rcs_mode, rcs_mi_mode_after);
-    IOLog("(FakeIrisXE) [V219]   RCS HEAD: 0x%08X -> 0x%08X\n", rcs_head, rcs_head_after);
-    IOLog("(FakeIrisXE) [V219]   RCS TAIL: 0x%08X -> 0x%08X\n", rcs_tail, rcs_tail_after);
-    IOLog("(FakeIrisXE) [V219]   RCS CTL: 0x%08X -> 0x%08X\n", rcs_ctl, rcs_ctl_after);
-    IOLog("(FakeIrisXE) [V219]   RCS STATUS: 0x%08X -> 0x%08X\n", rcs_status, rcs_status_after);
-    IOLog("(FakeIrisXE) [V219] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] V248 RCS FIX COMPLETE\n");
+    IOLog("(FakeIrisXE) [V248]   RCS MODE: 0x%08X -> 0x%08X\n", rcs_mode, rcs_mi_mode_after);
+    IOLog("(FakeIrisXE) [V248]   RCS HEAD: 0x%08X -> 0x%08X\n", rcs_head, rcs_head_after);
+    IOLog("(FakeIrisXE) [V248]   RCS TAIL: 0x%08X -> 0x%08X\n", rcs_tail, rcs_tail_after);
+    IOLog("(FakeIrisXE) [V248]   RCS CTL:  0x%08X -> 0x%08X\n", rcs_ctl, rcs_ctl_after);
+    IOLog("(FakeIrisXE) [V248]   RCS STATUS: 0x%08X (engine=%s)\n", rcs_status_final, statusStr);
+    IOLog("(FakeIrisXE) [V248]   RCS ACTHD: 0x%08X%08X (stable=%s)\n",
+           acthd_hi2, acthd_lo2, acthdStable ? "yes" : "no");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
 }
 
 // ============================================================================
@@ -6681,26 +7054,17 @@ uint64_t FakeIrisXEGuC::buildRcsContextDescriptorV246(uint64_t lrcGpuAddr, uint3
     //   Bits [8:11]  = Reserved
     //   Bits [12:31] = LRC GGTT address [31:12] (4K aligned, bits 12-31)
     // DWord 1 (bits [63:32]):
-    //   Bits [0:11]  = LRC Size (in pages - 1, stored as pages-1)
-    //   Bits [12:15] = Reserved
+    //   Bits [0:15]  = LRC Size (in pages - 1, stored as pages-1)
     //   Bits [16:19] = Engine Class (1 = RCS/Render)
     //   Bits [20:23] = Instance ID (0 = RCS0)
     //   Bits [24:31] = Reserved / MMIO offset high bits
     //   
-    // For Gen12, the format is:
+    // For Gen12, the format is simpler:
     //   Bit 0 = Valid
     //   Bits [12:31] = LRC address [31:12]
     //   Bits [32:43] = LRC pages - 1
-    //   Bits [44:47] = Engine Class
-    //   Bits [48:51] = Instance ID
     
     uint64_t desc = 0;
-    
-    // V254: FIX - Add proper Engine Class and Instance ID
-    // Engine Class: 1 = RCS/Render, 2 = VCS/Video, 3 = BCS/Blitter, etc.
-    // Instance ID: 0 = RCS0, 1 = RCS1, etc.
-    const uint32_t kEngineClassRCS = 1;  // Render Command Streamer
-    const uint32_t kInstanceIDRCS = 0;    // First RCS instance
     
     // Bit 0: Valid = 1
     desc |= (1ULL << 0);
@@ -6715,35 +7079,21 @@ uint64_t FakeIrisXEGuC::buildRcsContextDescriptorV246(uint64_t lrcGpuAddr, uint3
     uint32_t pagesEncoding = (lrcPages - 1) & 0xFFF;
     desc |= ((uint64_t)pagesEncoding << 32);
     
-    // V254: Add Engine Class in bits [44:47]
-    desc |= ((uint64_t)(kEngineClassRCS & 0xF) << 44);
-    
-    // V254: Add Instance ID in bits [48:51]
-    desc |= ((uint64_t)(kInstanceIDRCS & 0xF) << 48);
-    
-    // V254: Log the new fields
-    IOLog("(FakeIrisXE) [V254] Engine Class: %u (RCS=1)\n", kEngineClassRCS);
-    IOLog("(FakeIrisXE) [V254] Instance ID: %u (RCS0=0)\n", kInstanceIDRCS);
-    
-    // V254: Log BOTH dwords with FULL FIELD DECODING (including new Engine Class/Instance)
+    // V246: Log BOTH dwords with FULL FIELD DECODING
     uint32_t descLo = (uint32_t)(desc & 0xFFFFFFFF);
     uint32_t descHi = (uint32_t)(desc >> 32);
     
-    IOLog("(FakeIrisXE) [V254] ========== CONTEXT DESCRIPTOR ==========\n");
-    IOLog("(FakeIrisXE) [V254] Full 64-bit: 0x%016llx\n", (unsigned long long)desc);
-    IOLog("(FakeIrisXE) [V254]   DWord 0: 0x%08x\n", descLo);
-    IOLog("(FakeIrisXE) [V254]   DWord 1: 0x%08x\n", descHi);
-    IOLog("(FakeIrisXE) [V254] ---- FIELD DECODE ----\n");
-    IOLog("(FakeIrisXE) [V254]   Bit[0]     Valid:        %u\n", (descLo >> 0) & 1);
-    IOLog("(FakeIrisXE) [V254]   Bits[12:31] LRCAddr[31:12]: 0x%07x (GPU VA 0x%09llx)\n",
+    IOLog("(FakeIrisXE) [V246] ========== CONTEXT DESCRIPTOR ==========\n");
+    IOLog("(FakeIrisXE) [V246] Full 64-bit: 0x%016llx\n", (unsigned long long)desc);
+    IOLog("(FakeIrisXE) [V246]   DWord 0: 0x%08x\n", descLo);
+    IOLog("(FakeIrisXE) [V246]   DWord 1: 0x%08x\n", descHi);
+    IOLog("(FakeIrisXE) [V246] ---- FIELD DECODE ----\n");
+    IOLog("(FakeIrisXE) [V246]   Bit[0]     Valid:        %u\n", (descLo >> 0) & 1);
+    IOLog("(FakeIrisXE) [V246]   Bits[12:31] LRCAddr[31:12]: 0x%07x (GPU VA 0x%09llx)\n",
           (descLo >> 12) & 0xFFFFF, (unsigned long long)(lrcAddrAligned));
-    IOLog("(FakeIrisXE) [V254]   Bits[32:43] LRCPages-1:   0x%03x (%u pages)\n",
+    IOLog("(FakeIrisXE) [V246]   Bits[32:43] LRCPages-1:   0x%03x (%u pages)\n",
           (descHi >> 0) & 0xFFF, pagesEncoding + 1);
-    IOLog("(FakeIrisXE) [V254]   Bits[44:47] EngineClass: %u (RCS=1)\n",
-          (descHi >> 12) & 0xF);
-    IOLog("(FakeIrisXE) [V254]   Bits[48:51] InstanceID:  %u (RCS0=0)\n",
-          (descHi >> 16) & 0xF);
-    IOLog("(FakeIrisXE) [V254] ==============================\n");
+    IOLog("(FakeIrisXE) [V246] ==============================\n");
     
     return desc;
 }
@@ -6755,11 +7105,11 @@ bool FakeIrisXEGuC::buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t rin
 {
     if (!fOwner || !res.lrcGem || !res.ringGem) return false;
     
-    IOLog("(FakeIrisXE) [V250] ========== BUILDING GEN12 RCS LRC ==========\n");
+    IOLog("(FakeIrisXE) [V246] ========== BUILDING GEN12 RCS LRC ==========\n");
     
     uint8_t* lrcCpu = (uint8_t*)fOwner->ggttGetCPUAddr(res.lrcGem);
     if (!lrcCpu) {
-        IOLog("(FakeIrisXE) [V250] ❌ Failed to get LRC CPU address\n");
+        IOLog("(FakeIrisXE) [V246] ❌ Failed to get LRC CPU address\n");
         return false;
     }
     
@@ -6780,32 +7130,56 @@ bool FakeIrisXEGuC::buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t rin
     *(uint64_t*)(lrcCpu + 0x10) = 0;        // PDP2
     *(uint64_t*)(lrcCpu + 0x18) = 0;        // PDP3
     
-    IOLog("(FakeIrisXE) [V252]   PDP0: 0x%016llx\n", (unsigned long long)pdp0);
+    IOLog("(FakeIrisXE) [V246]   PDP0: 0x%016llx\n", (unsigned long long)pdp0);
     
-    // V252: Add more Gen12-specific LRC fields
-    // PML (Page Miss List) at offset 0x18-0x1F - Gen12 specific
-    *(uint64_t*)(lrcCpu + 0x18) = 0;  // PML0 - no page miss list
-    *(uint64_t*)(lrcCpu + 0x20) = 0;  // PML1
-    *(uint64_t*)(lrcCpu + 0x28) = 0;  // PML2
-    
-    // V256: FIX CONTEXT_CONTROL - Add TLB invalidate and other critical bits
-    // Per Intel PRM and Linux i915:
-    // Bit 0: RR (Ring Register) Load = 1 - Load ring registers from LRC
-    // Bit 1: CTX Restore Enable = 1 - Enable context restore
-    // Bit 2: TLB Invalidate = 1 - Invalidate TLB for proper address translation
-    // Bit 3: Valid = 1 - Context is valid
-    // Bit 8: Address Space (1 = 64-bit)
-    uint32_t ctx_ctrl = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 8);
+    // V248: CONTEXT_CONTROL at offset 0x2C:
+    // This word controls how the GPU Command Streamer loads and manages context state
+    // when an EXEClist submission is made. Per Intel Gen12 Graphics Programmer's
+    // Reference Manual (PRM), Volume 3, the CONTEXT_CONTROL register bitfields:
+    //
+    //   Bit  0: Load Context Control (1 = Load from LRC image in memory)
+    //           When set, the CS reads the entire CONTEXT_CONTROL dword from LRC
+    //           and applies all bits below. If 0, the CS uses hard-coded defaults.
+    //
+    //   Bit  1: Load Ring Head (1 = Load RING_HEAD from LRC image at offset 0x100)
+    //   Bit  2: Load Ring Tail (1 = Load RING_TAIL from LRC image at offset 0x104)
+    //   Bit  3: Context Valid   (1 = This context is valid and can be submitted)
+    //           The CS checks this bit before executing any commands.
+    //
+    //   Bit  5: Address Space   (1 = 64-bit virtual addresses, 0 = 32-bit)
+    //           Set to 1 for Tiger Lake which uses 64-bit addressing.
+    //
+    //   Bit 11: CTX_Restore Inhibit (1 = Do NOT restore context from LRC on submission)
+    //           *** THIS IS THE CRITICAL BIT ***
+    //           When set, the CS uses the values already in its internal registers
+    //           from the LRC image and does NOT reload them. This is essential for
+    //           proper EXEClist operation because:
+    //             1. The LRC image has been pre-loaded with ring base, PDP pointers, etc.
+    //             2. The CS should execute with those pre-configured values
+    //             3. Without this bit, the CS may try to reload from stale/wrong memory
+    //                and enter an error state (CSB FAULT bit set)
+    //             4. This matches what Linux i915 does for Gen12 EXEClist submission
+    //
+    //   Bit 12: Load CTX_TIMESTAMP (1 = Load timestamp from LRC at offset 0x30)
+    //
+    // V248: Added CTX_Restore inhibit (bit 11 = 0x800) which was missing in V246-V247.
+    // Without this bit, the RCS engine may attempt to reload context state from the
+    // LRC image after EXEClist submission, potentially using stale/invalid values
+    // and entering the FAULT state, causing the CoreDisplay timing crash.
+    //
+    // Combined value: bit 0 (Load) + bit 3 (Valid) + bit 5 (Addr64) + bit 11 (Inhibit)
+    // = 0x1 + 0x8 + 0x20 + 0x800 = 0x829
+    uint32_t ctx_ctrl = (1 << 0) | (1 << 3) | (1 << 5) | (1 << 11);
     *(uint32_t*)(lrcCpu + 0x2C) = ctx_ctrl;
-    IOLog("(FakeIrisXE) [V256]   CONTEXT_CONTROL @0x2C: 0x%08x (RR_Load=%u CTX_Restore=%u TLB_Inv=%u Valid=%u Addr64=%u)\n",
-          ctx_ctrl, (ctx_ctrl>>0)&1, (ctx_ctrl>>1)&1, (ctx_ctrl>>2)&1, (ctx_ctrl>>3)&1, (ctx_ctrl>>8)&1);
+    IOLog("(FakeIrisXE) [V248]   CONTEXT_CONTROL @0x2C: 0x%08x\n", ctx_ctrl);
+    IOLog("(FakeIrisXE) [V248]     Bit[0]  LoadContext:    1 (load from LRC image)\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[3]  ContextValid:    1 (context is valid)\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[5]  AddressSpace:    1 (64-bit mode)\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[11] CTX_RestoreInhibit: 1 (DO NOT reload context)\n");
     
     // TIMESTAMP at offset 0x30
     *(uint32_t*)(lrcCpu + 0x30) = 0x00010000;
-    IOLog("(FakeIrisXE) [V252]   TIMESTAMP @0x30: 0x%08x\n", 0x00010000);
-    
-    // V252: Add BB_PER_CTX pointer at offset 0x38 (Batch Buffer Per Context)
-    *(uint64_t*)(lrcCpu + 0x38) = 0;  // No per-context batch buffer
+    IOLog("(FakeIrisXE) [V246]   TIMESTAMP @0x30: 0x%08x\n", 0x00010000);
     
     // =========================================================================
     // Ring State Area starts at offset 0x100
@@ -6820,49 +7194,36 @@ bool FakeIrisXEGuC::buildGen12RcsLrcV246(RcsExeclistResources& res, uint32_t rin
     uint32_t tailValue = ringTailBytes ? ringTailBytes : res.lrcTailUpdate;
     *(uint32_t*)(lrcCpu + ringStateOff + 0x04) = tailValue;
     
-    // Ring START (offset 0x108)
-    uint32_t ringStart = (uint32_t)(res.ringGpuAddr & 0xFFFFFFFF);
-    *(uint32_t*)(lrcCpu + ringStateOff + 0x08) = ringStart;
+    // Ring Base LO/HI (offset 0x108-0x10C)
+    uint32_t ringBaseLo = (uint32_t)(res.ringGpuAddr & 0xFFFFFFFF);
+    uint32_t ringBaseHi = (uint32_t)(res.ringGpuAddr >> 32);
+    *(uint32_t*)(lrcCpu + ringStateOff + 0x08) = ringBaseLo;
+    *(uint32_t*)(lrcCpu + ringStateOff + 0x0C) = ringBaseHi;
     
-    // Ring Control (offset 0x10C)
+    // Ring Control (offset 0x110):
     // Bits [20:12] = (num_pages - 1), Bit 0 = Ring Enable
     uint32_t ringPages = res.ringSize / 4096;
     uint32_t ring_ctl = ((ringPages - 1) << 12) | 1;
-    *(uint32_t*)(lrcCpu + ringStateOff + 0x0C) = ring_ctl;
-    
-    // V252: Add ring buffer size at offset 0x110
-    *(uint32_t*)(lrcCpu + ringStateOff + 0x10) = res.ringSize;
+    *(uint32_t*)(lrcCpu + ringStateOff + 0x10) = ring_ctl;
     
     // Ring Status / APERTURE (offset 0x114-0x11C) - read-only
-    
-    // V258: Add CSB (Command Stream Buffer) pointer at offset 0x140
-    // This is critical - tells GPU where to write completion status
-    if (res.csbGpuAddr) {
-        uint64_t csbAddr = res.csbGpuAddr & ~0x3FULL;  // 64-byte align
-        *(uint64_t*)(lrcCpu + 0x140) = csbAddr;  // CSB pointer
-        *(uint32_t*)(lrcCpu + 0x148) = 16;        // CSB size in entries (16 * 4 bytes = 64 bytes)
-        IOLog("(FakeIrisXE) [V258]   CSB_POINTER  @0x140: 0x%016llx\n", (unsigned long long)csbAddr);
-        IOLog("(FakeIrisXE) [V258]   CSB_SIZE     @0x148: 16 entries\n");
-    } else {
-        IOLog("(FakeIrisXE) [V258]   CSB: NOT CONFIGURED (no CSB address)\n");
-    }
     
     __sync_synchronize();
     OSSynchronizeIO();
     
-    // V251: Log ACTUAL ring state values that were written
-    IOLog("(FakeIrisXE) [V251] ---- RING STATE AREA @0x%03X ----\n", ringStateOff);
-    IOLog("(FakeIrisXE) [V251]   RING_HEAD    @0x%03X: 0x%08X (%u bytes)\n",
+    // V246: Log ACTUAL ring state values that were written
+    IOLog("(FakeIrisXE) [V246] ---- RING STATE AREA @0x%03X ----\n", ringStateOff);
+    IOLog("(FakeIrisXE) [V246]   RING_HEAD    @0x%03X: 0x%08X (%u bytes)\n",
           ringStateOff + 0x00, headValue, headValue);
-    IOLog("(FakeIrisXE) [V251]   RING_TAIL    @0x%03X: 0x%08X (%u bytes)\n",
+    IOLog("(FakeIrisXE) [V246]   RING_TAIL    @0x%03X: 0x%08X (%u bytes)\n",
           ringStateOff + 0x04, tailValue, tailValue);
-    IOLog("(FakeIrisXE) [V251]   RING_START   @0x%03X: 0x%08X\n",
-          ringStateOff + 0x08, ringStart);
-    IOLog("(FakeIrisXE) [V251]   RING_CTL     @0x%03X: 0x%08X (pages=%u, enable=%u)\n",
-          ringStateOff + 0x0C, ring_ctl, ringPages, ring_ctl & 1);
-    IOLog("(FakeIrisXE) [V250]   RING_CTL     @0x%03X: 0x%08X (pages=%u, enable=%u)\n",
+    IOLog("(FakeIrisXE) [V246]   RING_BASE_LO @0x%03X: 0x%08X\n",
+          ringStateOff + 0x08, ringBaseLo);
+    IOLog("(FakeIrisXE) [V246]   RING_BASE_HI @0x%03X: 0x%08X\n",
+          ringStateOff + 0x0C, ringBaseHi);
+    IOLog("(FakeIrisXE) [V246]   RING_CTL     @0x%03X: 0x%08X (pages=%u, enable=%u)\n",
           ringStateOff + 0x10, ring_ctl, ringPages, ring_ctl & 1);
-    IOLog("(FakeIrisXE) [V250] ==============================\n");
+    IOLog("(FakeIrisXE) [V246] ==============================\n");
     
     return true;
 }
@@ -6879,7 +7240,7 @@ bool FakeIrisXEGuC::verifyMiStoreDwordImmPacket(RcsExeclistResources& res)
     
     uint32_t* batch = (uint32_t*)ringCpu;
     
-    IOLog("(FakeIrisXE) [V250] ========== MI_STORE_DWORD_IMM VERIFICATION ==========\n");
+    IOLog("(FakeIrisXE) [V246] ========== MI_STORE_DWORD_IMM VERIFICATION ==========\n");
     
     // Expected packet format for Gen4+ (including Gen12):
     // DWord[0]: [31:29] = opcode(0x20), [23] = MI_USE_GGTT, [22:21] = reserved, [20:16] = length
@@ -6887,8 +7248,8 @@ bool FakeIrisXEGuC::verifyMiStoreDwordImmPacket(RcsExeclistResources& res)
     //   MI_USE_GGTT = 1 << 22
     //   Length = number of DWords - 1 (so 3 means 4 DWords total for addr_lo+addr_hi+data)
     //
-    // For our packet: MI_STORE_DWORD_IMM | MI_USE_GGTT | 3
-    // = 0x10000000 | 0x00400000 | 0x3 = 0x10400003
+    // For our packet on Gen12 we use the Linux-style Gen4+ encoding:
+    // MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT = 0x10400002
     
     uint32_t dword0 = batch[0];
     uint32_t dword1 = batch[1];  // Address LOW
@@ -6896,48 +7257,45 @@ bool FakeIrisXEGuC::verifyMiStoreDwordImmPacket(RcsExeclistResources& res)
     uint32_t dword3 = batch[3];  // Data
     uint32_t dword4 = batch[4];  // MI_BATCH_BUFFER_END
     
-    IOLog("(FakeIrisXE) [V250]   DWord[0]: 0x%08x (MI_STORE_DWORD_IMM header)\n", dword0);
-    IOLog("(FakeIrisXE) [V250]   DWord[1]: 0x%08x (GGTT Address LO)\n", dword1);
-    IOLog("(FakeIrisXE) [V250]   DWord[2]: 0x%08x (GGTT Address HI)\n", dword2);
-    IOLog("(FakeIrisXE) [V250]   DWord[3]: 0x%08x (Immediate Data)\n", dword3);
-    IOLog("(FakeIrisXE) [V250]   DWord[4]: 0x%08x (MI_BATCH_BUFFER_END)\n", dword4);
+    IOLog("(FakeIrisXE) [V246]   DWord[0]: 0x%08x (MI_STORE_DWORD_IMM header)\n", dword0);
+    IOLog("(FakeIrisXE) [V246]   DWord[1]: 0x%08x (GGTT Address LO)\n", dword1);
+    IOLog("(FakeIrisXE) [V246]   DWord[2]: 0x%08x (GGTT Address HI)\n", dword2);
+    IOLog("(FakeIrisXE) [V246]   DWord[3]: 0x%08x (Immediate Data)\n", dword3);
+    IOLog("(FakeIrisXE) [V246]   DWord[4]: 0x%08x (MI_BATCH_BUFFER_END)\n", dword4);
     
-    // Decode DWord[0] - MI opcode is in bits [28:23] for MI commands
-    // But for verification, we just check the full header
-    uint32_t opcodeField = (dword0 >> 23) & 0x1F;  // Bits [27:23]
-    uint32_t opcodeHi = (dword0 >> 29) & 0x7;  // Bits [31:29]
+    // Decode DWord[0]
+    uint32_t opcode = (dword0 >> 23) & 0x3F;
     bool hasGgtt = ((dword0 >> 22) & 1) != 0;
-    uint32_t length = (dword0 >> 16) & 0x1F;
+    uint32_t length = dword0 & 0xFF;
     
-    IOLog("(FakeIrisXE) [V250] ---- FIELD DECODE ----\n");
-    IOLog("(FakeIrisXE) [V250]   Opcode[27:23]: 0x%X (MI_STORE=0x20)\n", opcodeField);
-    IOLog("(FakeIrisXE) [V250]   MI_USE_GGTT: %u (expected 1)\n", hasGgtt ? 1 : 0);
-    IOLog("(FakeIrisXE) [V250]   Length bits: %u (expected 3 = 4 DWords total)\n", length);
+    IOLog("(FakeIrisXE) [V246] ---- FIELD DECODE ----\n");
+    IOLog("(FakeIrisXE) [V246]   Opcode:      0x%X (expected 0x20)\n", opcode);
+    IOLog("(FakeIrisXE) [V246]   MI_USE_GGTT: %u (expected 1)\n", hasGgtt ? 1 : 0);
+    IOLog("(FakeIrisXE) [V246]   Length bits: %u (expected 2 = addrLo+addrHi+data)\n", length);
     
-    // Verify the header matches expected: MI_STORE_DWORD_IMM | MI_USE_GGTT | (3<<16) = 0x10430000
-    bool headerOk = (dword0 == 0x10430000);
+    bool opcodeOk = (opcode == 0x20);
     bool ggttOk = hasGgtt;
-    bool lengthOk = (length == 3);
+    bool lengthOk = (length == 2);
     
-    IOLog("(FakeIrisXE) [V250] ---- VERIFICATION ----\n");
-    IOLog("(FakeIrisXE) [V250]   Header[0x10430000]: %s\n", headerOk ? "✅ OK" : "❌ WRONG");
-    IOLog("(FakeIrisXE) [V250]   GGTT mode:       %s\n", ggttOk ? "✅ OK" : "❌ WRONG");
-    IOLog("(FakeIrisXE) [V250]   Length(4 DW):   %s\n", lengthOk ? "✅ OK" : "❌ WRONG");
+    IOLog("(FakeIrisXE) [V246] ---- VERIFICATION ----\n");
+    IOLog("(FakeIrisXE) [V246]   Opcode[0x20]:    %s\n", opcodeOk ? "✅ OK" : "❌ WRONG");
+    IOLog("(FakeIrisXE) [V246]   GGTT mode:       %s\n", ggttOk ? "✅ OK" : "❌ WRONG");
+    IOLog("(FakeIrisXE) [V246]   Length(4 DW):   %s\n", lengthOk ? "✅ OK" : "❌ WRONG");
     
     // Verify operand order: Address LOW, Address HIGH, Data
     bool orderOk = (dword1 == (uint32_t)(res.scratchGpuAddr & 0xFFFFFFFF)) &&
                    (dword2 == (uint32_t)(res.scratchGpuAddr >> 32));
-    IOLog("(FakeIrisXE) [V250]   Operand order:  %s\n", orderOk ? "✅ OK" : "❌ WRONG");
-    IOLog("(FakeIrisXE) [V250]   Target GGTT:    0x%016llx\n", (unsigned long long)res.scratchGpuAddr);
-    IOLog("(FakeIrisXE) [V250]   Written addr:   0x%08X%08X\n", dword2, dword1);
+    IOLog("(FakeIrisXE) [V246]   Operand order:  %s\n", orderOk ? "✅ OK" : "❌ WRONG");
+    IOLog("(FakeIrisXE) [V246]   Target GGTT:    0x%016llx\n", (unsigned long long)res.scratchGpuAddr);
+    IOLog("(FakeIrisXE) [V246]   Written addr:   0x%08X%08X\n", dword2, dword1);
     
     // Verify MI_BATCH_BUFFER_END
     bool endOk = (dword4 == MI_BATCH_BUFFER_END);
-    IOLog("(FakeIrisXE) [V250]   Batch end:      %s\n", endOk ? "✅ OK" : "❌ WRONG");
+    IOLog("(FakeIrisXE) [V246]   Batch end:      %s\n", endOk ? "✅ OK" : "❌ WRONG");
     
-    IOLog("(FakeIrisXE) [V250] ==============================\n");
+    IOLog("(FakeIrisXE) [V246] ==============================\n");
     
-    return headerOk && ggttOk && lengthOk && orderOk && endOk;
+    return opcodeOk && ggttOk && lengthOk && orderOk && endOk;
 }
 
 // ============================================================================
@@ -6947,6 +7305,9 @@ bool FakeIrisXEGuC::verifyMiStoreDwordImmPacket(RcsExeclistResources& res)
 // ============================================================================
 void FakeIrisXEGuC::initV221RCSExeclist()
 {
+    IOLog("(FakeIrisXE) [V221] Legacy GuC-owned RCS proof path retired; FakeIrisXEExeclist is now the sole owner of direct Execlist execution proof\n");
+    return;
+
     uint64_t v221StartTime = mach_absolute_time();
     
     IOLog("(FakeIrisXE) [V221] ============================================\n");
@@ -7002,11 +7363,9 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     res.ringGem = nullptr;
     res.lrcGem = nullptr;
     res.scratchGem = nullptr;
-    res.csbGem = nullptr;        // V258: CSB buffer
     res.ringGpuAddr = 0;
     res.lrcGpuAddr = 0;
     res.scratchGpuAddr = 0;
-    res.csbGpuAddr = 0;         // V258: CSB GPU address
     res.ringSize = 64 * 1024; // 64KB
     res.lrcTailUpdate = 0;
     
@@ -7018,24 +7377,24 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     // =========================================================================
     // V246: Step 4 - Write commands to ring AND verify packet
     // =========================================================================
-    IOLog("(FakeIrisXE) [V250] Writing test commands to ring...\n");
+    IOLog("(FakeIrisXE) [V246] Writing test commands to ring...\n");
     if (!executeRcsTestBatch(res)) {
-        IOLog("(FakeIrisXE) [V250] ❌ Failed to execute test batch\n");
+        IOLog("(FakeIrisXE) [V246] ❌ Failed to execute test batch\n");
         return;
     }
     
     // V246: Verify MI_STORE_DWORD_IMM packet correctness
     if (!verifyMiStoreDwordImmPacket(res)) {
-        IOLog("(FakeIrisXE) [V250] ❌ MI_STORE_DWORD_IMM packet verification FAILED\n");
+        IOLog("(FakeIrisXE) [V246] ❌ MI_STORE_DWORD_IMM packet verification FAILED\n");
     }
     
     // =========================================================================
     // V246: Step 5 - Build LRC with PROPER RING STATE LOGGING
     // =========================================================================
     uint32_t ringTailBytes = res.lrcTailUpdate;
-    IOLog("(FakeIrisXE) [V250] Building LRC with ring tail = %u bytes...\n", ringTailBytes);
+    IOLog("(FakeIrisXE) [V246] Building LRC with ring tail = %u bytes...\n", ringTailBytes);
     if (!buildGen12RcsLrcV246(res, ringTailBytes)) {
-        IOLog("(FakeIrisXE) [V250] ❌ Failed to build LRC\n");
+        IOLog("(FakeIrisXE) [V246] ❌ Failed to build LRC\n");
         // Cleanup
         if (res.ringGem) res.ringGem->release();
         if (res.lrcGem) res.lrcGem->release();
@@ -7051,30 +7410,7 @@ void FakeIrisXEGuC::initV221RCSExeclist()
     uint64_t ctxDescHi = 0;
     
     // Keep legacy function for compatibility but log that V246 is being used
-    IOLog("(FakeIrisXE) [V250] Using V246 context descriptor builder (full field decode)\n");
-    
-    // =========================================================================
-    // V260: Fresh RCS Engine Init right before submission
-    // This ensures RCS is in a known state before we submit our test context
-    // =========================================================================
-    IOLog("(FakeIrisXE) [V260] Fresh RCS Engine Init before submission...\n");
-    
-    // V260: Reset RCS to ensure clean state
-    fOwner->safeMMIOWrite(rcsBase + 0x0, 0x00000001);  // RCS0_RESET_CTRL - request reset
-    IOSleep(10);
-    fOwner->safeMMIOWrite(rcsBase + 0x0, 0x00000000);  // Release reset
-    IOSleep(10);
-    
-    // V260: Set RING_MODE for Gen12 EXEClist mode
-    // Gen12 uses different RING_MODE than legacy
-    fOwner->safeMMIOWrite(rcsBase + 0x38, 0x00000200);  // RING_MODE - Gen12 EXEClist mode
-    IOSleep(1);
-    
-    // V260: Set GFX_MODE 
-    fOwner->safeMMIOWrite(rcsBase + 0x9C, 0x00000003);  // GFX_MODE
-    IOSleep(1);
-    
-    IOLog("(FakeIrisXE) [V260] RCS Engine Init complete\n");
+    IOLog("(FakeIrisXE) [V246] Using V246 context descriptor builder (full field decode)\n");
     
     // =========================================================================
     // Step 7: Submit RCS EXEClist Context
@@ -7437,45 +7773,6 @@ bool FakeIrisXEGuC::allocateRcsExeclistResources(RcsExeclistResources& res)
         OSSynchronizeIO();
     }
     
-    // V258: Allocate CSB (Command Stream Buffer) - 64 bytes minimum
-    // CSB is where the GPU writes completion status
-    res.csbGem = FakeIrisXEGEM::withSize(64, 0);
-    if (!res.csbGem) {
-        IOLog("(FakeIrisXE) [V258] ❌ Failed to allocate CSB\n");
-        res.scratchGem->release();
-        res.lrcGem->release();
-        res.ringGem->release();
-        res.csbGem = nullptr;
-        res.scratchGem = nullptr;
-        res.lrcGem = nullptr;
-        res.ringGem = nullptr;
-        return false;
-    }
-    
-    res.csbGem->pin();
-    res.csbGpuAddr = fOwner->ggttMap(res.csbGem);
-    if (!res.csbGpuAddr) {
-        IOLog("(FakeIrisXE) [V258] ❌ Failed to map CSB to GGTT\n");
-        res.csbGem->release();
-        res.scratchGem->release();
-        res.lrcGem->release();
-        res.ringGem->release();
-        res.csbGem = nullptr;
-        res.scratchGem = nullptr;
-        res.lrcGem = nullptr;
-        res.ringGem = nullptr;
-        return false;
-    }
-    IOLog("(FakeIrisXE) [V258]   CSB: GPU VA 0x%llx\n", (unsigned long long)res.csbGpuAddr);
-    
-    // Initialize CSB to zero
-    void* csbCpu = fOwner->ggttGetCPUAddr(res.csbGem);
-    if (csbCpu) {
-        bzero(csbCpu, 64);
-        __sync_synchronize();
-        OSSynchronizeIO();
-    }
-    
     IOLog("(FakeIrisXE) [V221] Resources allocated successfully\n");
     return true;
 }
@@ -7682,27 +7979,27 @@ bool FakeIrisXEGuC::pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResou
     uint32_t acthd_lo = fOwner->safeMMIORead(GEN12_ACTHD);
     uint32_t acthd_hi = fOwner->safeMMIORead(GEN12_ACTHD_HI);
     
-    IOLog("(FakeIrisXE) [V250] ==========================================\n");
-    IOLog("(FakeIrisXE) [V250] EXPANDED POLLING - Gen12 Diagnostics\n");
-    IOLog("(FakeIrisXE) [V250] ==========================================\n");
-    IOLog("(FakeIrisXE) [V250]   Timeout: %ums\n", timeoutMs);
-    IOLog("(FakeIrisXE) [V250]   Expected scratch: 0x%08X at GPU VA 0x%llx\n",
+    IOLog("(FakeIrisXE) [V246] ==========================================\n");
+    IOLog("(FakeIrisXE) [V246] EXPANDED POLLING - Gen12 Diagnostics\n");
+    IOLog("(FakeIrisXE) [V246] ==========================================\n");
+    IOLog("(FakeIrisXE) [V246]   Timeout: %ums\n", timeoutMs);
+    IOLog("(FakeIrisXE) [V246]   Expected scratch: 0x%08X at GPU VA 0x%llx\n",
           expectedValue, (unsigned long long)res.scratchGpuAddr);
-    IOLog("(FakeIrisXE) [V250] ---- INITIAL STATE ----\n");
-    IOLog("(FakeIrisXE) [V250]   GT_ERROR:   0x%08X (%s)\n",
+    IOLog("(FakeIrisXE) [V246] ---- INITIAL STATE ----\n");
+    IOLog("(FakeIrisXE) [V246]   GT_ERROR:   0x%08X (%s)\n",
           initial_gt_error, (initial_gt_error & 0x80000000) ? "WEDGED" : "OK");
-    IOLog("(FakeIrisXE) [V250]   ELSP:       LO=0x%08X HI=0x%08X\n", elsp_lo, elsp_hi);
-    IOLog("(FakeIrisXE) [V250]   CSB:        HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n",
+    IOLog("(FakeIrisXE) [V246]   ELSP:       LO=0x%08X HI=0x%08X\n", elsp_lo, elsp_hi);
+    IOLog("(FakeIrisXE) [V246]   CSB:        HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n",
           csb_head, csb_tail, csb_status);
-    IOLog("(FakeIrisXE) [V250]   ACTHD:      LO=0x%08X HI=0x%08X\n", acthd_lo, acthd_hi);
+    IOLog("(FakeIrisXE) [V246]   ACTHD:      LO=0x%08X HI=0x%08X\n", acthd_lo, acthd_hi);
     
     // Read initial scratch value
     void* scratchCpu = fOwner->ggttGetCPUAddr(res.scratchGem);
     if (scratchCpu) {
         uint32_t initialScratch = *(volatile uint32_t*)scratchCpu;
-        IOLog("(FakeIrisXE) [V250]   Scratch:    0x%08X\n", initialScratch);
+        IOLog("(FakeIrisXE) [V246]   Scratch:    0x%08X\n", initialScratch);
     }
-    IOLog("(FakeIrisXE) [V250] ==========================================\n");
+    IOLog("(FakeIrisXE) [V246] ==========================================\n");
     
     // V246: Track failure classification
     V246FailureType failureType = V246FailureType::None;
@@ -7750,29 +8047,26 @@ bool FakeIrisXEGuC::pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResou
         
         // V246: Log every 10 polls with FULL diagnostics
         if (i % 10 == 0 || writeback_done || gt_wedged) {
-            IOLog("(FakeIrisXE) [V250] Poll%03u: RCS H=0x%08X T=0x%08X STAT=0x%08X%s | GT_ERR=0x%08X%s\n",
+            IOLog("(FakeIrisXE) [V246] Poll%03u: RCS H=0x%08X T=0x%08X STAT=0x%08X%s | GT_ERR=0x%08X%s\n",
                   i, rcs_head, rcs_tail, rcs_status,
                   halted ? "[HALT]" : "",
                   gt_error,
                   gt_wedged ? "[WEDGE]" : "");
-            IOLog("(FakeIrisXE) [V250]         CSB: H=0x%08X T=0x%08X S=0x%08X | ACTHD=0x%08X%08X\n",
+            IOLog("(FakeIrisXE) [V246]         CSB: H=0x%08X T=0x%08X S=0x%08X | ACTHD=0x%08X%08X\n",
                   csb_head, csb_tail, csb_status, acthd_hi, acthd_lo);
-            IOLog("(FakeIrisXE) [V250]         Scratch=0x%08X%s\n",
+            IOLog("(FakeIrisXE) [V246]         Scratch=0x%08X%s\n",
                   scratchValue, writeback_done ? "[DONE]" : "");
         }
         
         // V246: Only check writeback - definitive proof
         if (writeback_done) {
-            IOLog("(FakeIrisXE) [V250] ✅ SUCCESS: Scratch writeback! Value=0x%08X\n", scratchValue);
+            IOLog("(FakeIrisXE) [V246] ✅ SUCCESS: Scratch writeback! Value=0x%08X\n", scratchValue);
             return true;
         }
     }
     
-    // V250: Add fault register checking
-    #define GEN12_RING_FAULT_REG 0x1C3E0
-    
     // =========================================================================
-    // V250: FINAL DIAGNOSTICS - Include GPU Fault Registers
+    // V246: FINAL DIAGNOSTICS - Classify failure A-F
     // =========================================================================
     uint32_t final_status = fOwner->safeMMIORead(rcsBase + 0x10);
     uint32_t final_head = fOwner->safeMMIORead(rcsBase + 0x4);
@@ -7785,61 +8079,57 @@ bool FakeIrisXEGuC::pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResou
     uint32_t final_acthd_lo = fOwner->safeMMIORead(GEN12_ACTHD);
     uint32_t final_acthd_hi = fOwner->safeMMIORead(GEN12_ACTHD_HI);
     
-    // V250: Read GPU fault register
-    uint32_t final_fault = fOwner->safeMMIORead(GEN12_RING_FAULT_REG);
-    
     bool was_halted = (final_status & 0xE000) == 0xE000;
     bool final_gt_wedged = (final_gt_error & 0x80000000) != 0;
-    bool has_fault = (final_fault != 0);
     
-    IOLog("(FakeIrisXE) [V250] ========== FINAL DIAGNOSTICS ==========\n");
-    IOLog("(FakeIrisXE) [V250] RCS STATUS: 0x%08X (%s)\n", final_status, was_halted ? "HALTED" : "RUNNING");
-    IOLog("(FakeIrisXE) [V250] RCS HEAD: 0x%08X, TAIL: 0x%08X\n", final_head, final_tail);
-    IOLog("(FakeIrisXE) [V250] ELSP: LO=0x%08X HI=0x%08X (latched=%s)\n",
+    IOLog("(FakeIrisXE) [V246] ========== FINAL DIAGNOSTICS ==========\n");
+    IOLog("(FakeIrisXE) [V246] RCS STATUS: 0x%08X (%s)\n", final_status, was_halted ? "HALTED" : "RUNNING");
+    IOLog("(FakeIrisXE) [V246] RCS HEAD: 0x%08X, TAIL: 0x%08X\n", final_head, final_tail);
+    IOLog("(FakeIrisXE) [V246] ELSP: LO=0x%08X HI=0x%08X (latched=%s)\n",
           final_elsp_lo, final_elsp_hi, elsp_latched ? "YES" : "NO");
-    IOLog("(FakeIrisXE) [V250] GT_ERROR: 0x%08X (%s)\n", final_gt_error, final_gt_wedged ? "WEDGED" : "OK");
-    IOLog("(FakeIrisXE) [V250] CSB STATUS: 0x%08X\n", csb_status);
-    IOLog("(FakeIrisXE) [V250] ACTHD: 0x%08X%08X\n", final_acthd_hi, final_acthd_lo);
-    IOLog("(FakeIrisXE) [V250] Scratch: 0x%08X (expected 0x%08X)\n", final_scratch, expectedValue);
+    IOLog("(FakeIrisXE) [V246] GT_ERROR: 0x%08X (%s)\n", final_gt_error, final_gt_wedged ? "WEDGED" : "OK");
+    IOLog("(FakeIrisXE) [V246] CSB STATUS: 0x%08X\n", csb_status);
+    IOLog("(FakeIrisXE) [V246] ACTHD: 0x%08X%08X\n", final_acthd_hi, final_acthd_lo);
+    IOLog("(FakeIrisXE) [V246] Scratch: 0x%08X (expected 0x%08X)\n", final_scratch, expectedValue);
     
     // =========================================================================
     // V246: CLASSIFY FAILURE A-F
     // =========================================================================
-    IOLog("(FakeIrisXE) [V250] ========== FAILURE CLASSIFICATION ==========\n");
+    IOLog("(FakeIrisXE) [V246] ========== FAILURE CLASSIFICATION ==========\n");
     
     if (final_gt_wedged) {
         failureType = V246FailureType::G_GtWedged;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE G: GT WEDGED (GT_ERROR=0x%08X)\n", final_gt_error);
-        IOLog("(FakeIrisXE) [V250]    -> Hardware error, GT needs reset\n");
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE G: GT WEDGED (GT_ERROR=0x%08X)\n", final_gt_error);
+        IOLog("(FakeIrisXE) [V246]    -> Hardware error, GT needs reset\n");
     } else if (was_halted) {
         failureType = V246FailureType::E_EngineHardHalted;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE E: RCS HARD-HALTED (STATUS=0x%08X)\n", final_status);
-        IOLog("(FakeIrisXE) [V250]    -> Engine not accepting work, check reset path\n");
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE E: RCS HARD-HALTED (STATUS=0x%08X)\n", final_status);
+        IOLog("(FakeIrisXE) [V246]    -> Engine not accepting work, check reset path\n");
     } else if (!elsp_latched) {
         failureType = V246FailureType::A_DescriptorWrong;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE A: ELSP NOT LATCHED\n");
-        IOLog("(FakeIrisXE) [V250]    -> Context descriptor wrong format or invalid\n");
-        IOLog("(FakeIrisXE) [V250]    -> Check: valid bit, LRC address encoding, pages field\n");
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE A: ELSP NOT LATCHED\n");
+        IOLog("(FakeIrisXE) [V246]    -> Context descriptor wrong format or invalid\n");
+        IOLog("(FakeIrisXE) [V246]    -> Check: valid bit, LRC address encoding, pages field\n");
     } else if (!ring_moved && elsp_latched) {
         failureType = V246FailureType::B_LrcWrong;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE B: ELSP LATCHED but HEAD=0\n");
-        IOLog("(FakeIrisXE) [V250]    -> LRC ring state incorrect\n");
-        IOLog("(FakeIrisXE) [V250]    -> Check: ring base, ring tail, ring ctl in LRC\n");
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE B: ELSP LATCHED but HEAD=0\n");
+        IOLog("(FakeIrisXE) [V246]    -> LRC ring state incorrect\n");
+        IOLog("(FakeIrisXE) [V246]    -> Check: ring base, ring tail, ring ctl in LRC\n");
     } else if (ring_moved && final_scratch != expectedValue) {
         failureType = V246FailureType::F_ScheduledNoExecution;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE F: HEAD moved but no writeback\n");
-        IOLog("(FakeIrisXE) [V250]    -> MI_STORE_DWORD_IMM not executed\n");
-        IOLog("(FakeIrisXE) [V250]    -> Check: packet encoding, GGTT addressing, ring enable\n");
-        IOLog("(FakeIrisXE) [V250]    -> ACTHD=0x%08X%08X (head moved to this)\n", final_acthd_hi, final_acthd_lo);
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE F: HEAD moved but no writeback\n");
+        IOLog("(FakeIrisXE) [V246]    -> MI_STORE_DWORD_IMM not executed\n");
+        IOLog("(FakeIrisXE) [V246]    -> Check: packet encoding, GGTT addressing, ring enable\n");
+        IOLog("(FakeIrisXE) [V246]    -> ACTHD=0x%08X%08X (head moved to this)\n", final_acthd_hi, final_acthd_lo);
     } else {
         failureType = V246FailureType::F_ScheduledNoExecution;
-        IOLog("(FakeIrisXE) [V250] ❌ FAILURE F: Unknown - staged but no execution\n");
-        IOLog("(FakeIrisXE) [V250]    -> Additional diagnostics needed\n");
+        IOLog("(FakeIrisXE) [V246] ❌ FAILURE F: Unknown - staged but no execution\n");
+        IOLog("(FakeIrisXE) [V246]    -> Additional diagnostics needed\n");
     }
     
-    IOLog("(FakeIrisXE) [V250] ==========================================\n");
-    IOLog("(FakeIrisXE) [V250] FAILURE TYPE: %c (%s)\n", (char)failureType, V246FailureName(failureType));
-    IOLog("(FakeIrisXE) [V250] ==========================================\n");
+    IOLog("(FakeIrisXE) [V246] ==========================================\n");
+    IOLog("(FakeIrisXE) [V246] FAILURE TYPE: %c (%s)\n", (char)failureType, V246FailureName(failureType));
+    IOLog("(FakeIrisXE) [V246] ==========================================\n");
     
     // V246: Only return success if scratch writeback
     return (final_scratch == expectedValue);
@@ -7850,7 +8140,7 @@ bool FakeIrisXEGuC::pollRcsExeclistProgress(uint32_t timeoutMs, RcsExeclistResou
 // ============================================================================
 // V241: executeRcsTestBatch - FIXED MI_STORE_DWORD_IMM encoding
 // Correct Gen12 format:
-// - DWord[0] = MI_STORE_DWORD_IMM | MI_USE_GGTT | length(3) = 0x10400003
+// - DWord[0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT = 0x10400002
 // - DWord[1] = low 32 bits of GGTT address
 // - DWord[2] = high 32 bits of GGTT address  
 // - DWord[3] = 32-bit immediate data
@@ -7872,59 +8162,365 @@ bool FakeIrisXEGuC::executeRcsTestBatch(RcsExeclistResources& res)
     
     uint32_t* batch = (uint32_t*)ringCpu;
     
-    // V261: Add MI_STORE_DWORD_IMM back - this is the PROOF OF EXECUTION
-    // We need to actually write to memory to prove the GPU executed commands
+    // Gen4+/Gen12 MI_STORE_DWORD_IMM packet format:
+    //   DW0: MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT
+    //   DW1: address low
+    //   DW2: address high
+    //   DW3: immediate data
+    batch[0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT;  // 0x10400002
     
-    // Use the existing MI_STORE_DWORD_IMM macro and add GGTT + length bits
-    // MI_STORE_DWORD_IMM | MI_USE_GGTT | (3 << 16) for 4 DWords total
-    const uint32_t MI_STORE_DWORD_IMM_CMD = MI_STORE_DWORD_IMM | (1 << 22) | (3 << 16);
+    // V241: FIXED order - address FIRST, then data
+    batch[1] = (uint32_t)(res.scratchGpuAddr & 0xFFFFFFFF);  // Address LOW
+    batch[2] = (uint32_t)(res.scratchGpuAddr >> 32);        // Address HIGH
+    batch[3] = 0xDEADBEEF;                                  // Data to store
+    batch[4] = MI_BATCH_BUFFER_END;                          // End of batch
     
-    // PIPE_CONTROL command
-    const uint32_t PIPE_CONTROL = (0x7A << 23) | (1 << 5) | (1 << 8) | (1 << 14) | (1 << 20);
+    __sync_synchronize();
+    OSSynchronizeIO();
     
-    unsigned d = 0;
+    // V241: Log the exact dwords for debugging
+    IOLog("(FakeIrisXE) [V241]   Batch dwords: [0]=0x%08X [1]=0x%08X [2]=0x%08X [3]=0x%08X [4]=0x%08X\n",
+          batch[0], batch[1], batch[2], batch[3], batch[4]);
+    IOLog("(FakeIrisXE) [V241]   Ring GPU VA: 0x%llx, Size: %zu bytes\n",
+          (unsigned long long)res.ringGpuAddr, res.ringSize);
+    IOLog("(FakeIrisXE) [V241]   MI_STORE_DWORD_IMM: Write 0xDEADBEEF to GGTT addr 0x%llx\n",
+          (unsigned long long)res.scratchGpuAddr);
     
-    // V261: MI_STORE_DWORD_IMM - Write to scratch memory
-    // This is what will prove execution!
-    batch[d++] = MI_STORE_DWORD_IMM_CMD;                 // DW0: Header
-    batch[d++] = (uint32_t)(res.scratchGpuAddr & 0xFFFFFFFF);  // DW1: Address LO
-    batch[d++] = (uint32_t)(res.scratchGpuAddr >> 32);        // DW2: Address HI
-    batch[d++] = 0xDEADBEEF;                              // DW3: Data to write
+    // V241: Update ring tail in LRC to point to end of commands
+    // The tail should be the byte offset of the last command written
+    // We wrote 5 DWords = 20 bytes
+    res.lrcTailUpdate = 20;  // 5 DWords * 4 bytes
     
-    // V261: PIPE_CONTROL - Force GPU synchronization
-    batch[d++] = PIPE_CONTROL;
-    batch[d++] = 0; // DW1
-    batch[d++] = 0; // DW2
-    batch[d++] = 0; // DW3
-    
-    // MI_BATCH_BUFFER_END
-    batch[d++] = MI_BATCH_BUFFER_END;
-    
-    uint32_t totalDWords = d;
-    uint32_t totalBytes = totalDWords * 4;
-    
-    IOLog("(FakeIrisXE) [V261] ===== MI_STORE_DWORD_IMM + PIPE_CONTROL =====\n");
-    IOLog("(FakeIrisXE) [V261]   Batch[0]=0x%08X (MI_STORE_DWORD_IMM)\n", batch[0]);
-    IOLog("(FakeIrisXE) [V261]   Batch[1]=0x%08X (Scratch Addr LO=0x%08X)\n", batch[1], batch[1]);
-    IOLog("(FakeIrisXE) [V261]   Batch[2]=0x%08X (Scratch Addr HI)\n", batch[2]);
-    IOLog("(FakeIrisXE) [V261]   Batch[3]=0x%08X (Data=0xDEADBEEF)\n", batch[3]);
-    IOLog("(FakeIrisXE) [V261]   Batch[4]=0x%08X (PIPE_CONTROL)\n", batch[4]);
-    IOLog("(FakeIrisXE) [V261]   Batch[8]=0x%08X (MI_BATCH_BUFFER_END)\n", batch[8]);
-    IOLog("(FakeIrisXE) [V261]   Total: %u DWords (%u bytes)\n", totalDWords, totalBytes);
-    
-    // V261: Update ring tail to match actual command size
-    res.lrcTailUpdate = totalBytes;
-    
-    IOLog("(FakeIrisXE) [V261]   Ring tail set to: %u bytes (%u DWords)\n",
-          res.lrcTailUpdate, totalDWords);
+    IOLog("(FakeIrisXE) [V241]   Ring tail should be set to: %u bytes (20 bytes = 5 DWords)\n",
+          res.lrcTailUpdate);
     
     return true;
 }
 
 // ============================================================================
-// V137: Correct Firmware Layout Derivation (Linux i915 method)
-// Based on intel_guc_fw.c - calculates correct offset using CSS fields
+// V248: BCS0 Blitter Pipeline Initialization for Display Scanout
+//
+// BCS0 (Blitter Command Streamer 0) is the GPU's 2D blit engine. It handles:
+//   - Surface-to-surface copy (XY_SRC_COPY_BLT)
+//   - Rectangle fill (XY_COLOR_BLT)
+//   - Display scanout (copying from IOSurface/composited buffer to primary framebuffer)
+//
+// This function mirrors the RCS0 EXEClist setup but for the BCS0 engine:
+//   1. Allocate BCS0 ring buffer (64KB, page-aligned in GGTT)
+//   2. Allocate BCS0 LRC (Logical Ring Context) - 4KB page
+//   3. Allocate BCS0 scratch page for writeback verification
+//   4. Write a MI_STORE_DWORD_IMM test command to the ring
+//   5. Build the BCS0 LRC with:
+//      - PDP (Page Directory Pointer) for paging
+//      - CONTEXT_CONTROL with CTX_Restore Inhibit (bit 11) = 1
+//      - Ring state area (HEAD, TAIL, BASE, CTL)
+//   6. Build BCS0 context descriptor (valid bit = 1)
+//   7. Submit BCS0 EXEClist context via ELSP port
+//   8. Verify BCS0 execution via scratch page writeback
+//
+// BCS0 Register Layout (Gen12/Tiger Lake):
+//   BCS0 engine base: MMIO 0x4000
+//   Ring registers:   BASE+0x08 (TAIL), BASE+0x04 (HEAD), BASE+0x38 (START), BASE+0x0C (CTL)
+//   EXEClist:         BASE+0x290 (ELSP LO), BASE+0x294 (ELSP HI)
+//   CSB:             BASE+0x1E0 (CTRL), BASE+0x1E4 (ADDR LO), BASE+0x1EC (READ_PTR)
+//   ACTHD:           BASE+0x3C0 (LO), BASE+0x3C4 (HI)
 // ============================================================================
+void FakeIrisXEGuC::initBCS0Pipeline()
+{
+    uint64_t v248StartTime = mach_absolute_time();
+
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
+    IOLog("(FakeIrisXE) [V248] BCS0 BLITTER PIPELINE INITIALIZATION\n");
+    IOLog("(FakeIrisXE) [V248] For display scanout and surface blit operations\n");
+    IOLog("(FakeIrisXE) [V248] ============================================\n");
+
+    if (!fOwner) {
+        IOLog("(FakeIrisXE) [V248] ❌ Invalid owner\n");
+        return;
+    }
+
+    uint32_t bcsBase = 0x4000;
+
+    // =========================================================================
+    // 1. BCS0 State Dump - Compare with working RCS0
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 1. BCS0 Current State...\n");
+
+    uint32_t bcs_mode   = fOwner->safeMMIORead(bcsBase + 0x9C);
+    uint32_t bcs_head   = fOwner->safeMMIORead(bcsBase + 0x04);
+    uint32_t bcs_tail   = fOwner->safeMMIORead(bcsBase + 0x08);
+    uint32_t bcs_ctl   = fOwner->safeMMIORead(bcsBase + 0x0C);
+    uint32_t bcs_status = fOwner->safeMMIORead(bcsBase + 0x10);
+    uint32_t bcs_mi_mode = fOwner->safeMMIORead(bcsBase + 0x9C);
+
+    IOLog("(FakeIrisXE) [V248]   BCS0 MODE:   0x%08X\n", bcs_mode);
+    IOLog("(FakeIrisXE) [V248]   BCS0 HEAD:   0x%08X\n", bcs_head);
+    IOLog("(FakeIrisXE) [V248]   BCS0 TAIL:   0x%08X\n", bcs_tail);
+    IOLog("(FakeIrisXE) [V248]   BCS0 CTL:    0x%08X\n", bcs_ctl);
+    IOLog("(FakeIrisXE) [V248]   BCS0 STATUS: 0x%08X\n", bcs_status);
+    IOLog("(FakeIrisXE) [V248]   BCS0 MI_MODE: 0x%08X\n", bcs_mi_mode);
+
+    uint32_t bcs_acthd_lo = fOwner->safeMMIORead(BCS0_ACTHD);
+    uint32_t bcs_acthd_hi = fOwner->safeMMIORead(BCS0_ACTHD_HI);
+    IOLog("(FakeIrisXE) [V248]   BCS0 ACTHD:  0x%08X%08X\n", bcs_acthd_hi, bcs_acthd_lo);
+
+    uint32_t elsp_lo = fOwner->safeMMIORead(BCS0_ELSP_SUBMIT_LO);
+    uint32_t elsp_hi = fOwner->safeMMIORead(BCS0_ELSP_SUBMIT_HI);
+    IOLog("(FakeIrisXE) [V248]   BCS0 ELSP:   LO=0x%08X HI=0x%08X\n", elsp_lo, elsp_hi);
+
+    bool bcsHalted = (bcs_status & 0xE000) == 0xE000;
+    IOLog("(FakeIrisXE) [V248]   BCS0 Halted: %s\n", bcsHalted ? "YES" : "NO");
+
+    // =========================================================================
+    // 2. Allocate BCS0 Ring Buffer (64KB)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 2. Allocating BCS0 Ring Buffer...\n");
+
+    size_t ringSize = 64 * 1024;
+    FakeIrisXEGEM* bcsRingGem = FakeIrisXEGEM::withSize(ringSize, 0);
+    if (!bcsRingGem) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to allocate BCS0 ring GEM\n");
+        return;
+    }
+
+    uint64_t bcsRingGpuVA = fOwner->ggttMap(bcsRingGem);
+    if (!bcsRingGpuVA) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to map BCS0 ring to GGTT\n");
+        bcsRingGem->release();
+        return;
+    }
+    IOLog("(FakeIrisXE) [V248]   BCS0 Ring: GPU VA=0x%016llX, Size=%zu KB\n",
+           (unsigned long long)bcsRingGpuVA, ringSize / 1024);
+
+    // =========================================================================
+    // 3. Allocate BCS0 LRC (Logical Ring Context - 4KB)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 3. Allocating BCS0 LRC Context...\n");
+
+    FakeIrisXEGEM* bcsLrcGem = FakeIrisXEGEM::withSize(4096, 0);
+    if (!bcsLrcGem) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to allocate BCS0 LRC GEM\n");
+        bcsRingGem->release();
+        return;
+    }
+
+    uint64_t bcsLrcGpuVA = fOwner->ggttMap(bcsLrcGem);
+    if (!bcsLrcGpuVA) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to map BCS0 LRC to GGTT\n");
+        bcsRingGem->release();
+        bcsLrcGem->release();
+        return;
+    }
+    IOLog("(FakeIrisXE) [V248]   BCS0 LRC: GPU VA=0x%016llX\n",
+           (unsigned long long)bcsLrcGpuVA);
+
+    // =========================================================================
+    // 4. Allocate BCS0 Scratch Page (for writeback verification)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 4. Allocating BCS0 Scratch Page...\n");
+
+    FakeIrisXEGEM* bcsScratchGem = FakeIrisXEGEM::withSize(4096, 0);
+    if (!bcsScratchGem) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to allocate BCS0 scratch GEM\n");
+        bcsRingGem->release();
+        bcsLrcGem->release();
+        return;
+    }
+
+    uint64_t bcsScratchGpuVA = fOwner->ggttMap(bcsScratchGem);
+    if (!bcsScratchGpuVA) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to map BCS0 scratch to GGTT\n");
+        bcsRingGem->release();
+        bcsLrcGem->release();
+        bcsScratchGem->release();
+        return;
+    }
+    IOLog("(FakeIrisXE) [V248]   BCS0 Scratch: GPU VA=0x%016llX\n",
+           (unsigned long long)bcsScratchGpuVA);
+
+    // =========================================================================
+    // 5. Write Test Command to BCS0 Ring
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 5. Writing test commands to BCS0 ring...\n");
+
+    uint8_t* bcsRingCpu = (uint8_t*)fOwner->ggttGetCPUAddr(bcsRingGem);
+    if (!bcsRingCpu) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to get BCS0 ring CPU address\n");
+        bcsRingGem->release();
+        bcsLrcGem->release();
+        bcsScratchGem->release();
+        return;
+    }
+
+    bzero(bcsRingCpu, ringSize);
+
+    uint32_t* bcsBatch = (uint32_t*)bcsRingCpu;
+
+    // MI_STORE_DWORD_IMM with GGTT addressing for writeback test:
+    // This writes 0xCAFEBABE to the scratch page to verify BCS0 execution
+    bcsBatch[0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT;  // 0x10400002
+    bcsBatch[1] = (uint32_t)(bcsScratchGpuVA & 0xFFFFFFFF);  // Scratch addr LO
+    bcsBatch[2] = (uint32_t)(bcsScratchGpuVA >> 32);         // Scratch addr HI
+    bcsBatch[3] = 0xCAFEBABE;  // Test value
+    bcsBatch[4] = MI_BATCH_BUFFER_END;  // End batch
+
+    __sync_synchronize();
+    OSSynchronizeIO();
+
+    uint32_t ringTailBytes = 20;  // 5 DWords * 4 bytes
+
+    IOLog("(FakeIrisXE) [V248]   BCS0 Ring batch: [0]=0x%08X [1]=0x%08X [2]=0x%08X [3]=0x%08X [4]=0x%08X\n",
+           bcsBatch[0], bcsBatch[1], bcsBatch[2], bcsBatch[3], bcsBatch[4]);
+    IOLog("(FakeIrisXE) [V248]   BCS0 scratch target: 0x%016llX\n",
+           (unsigned long long)bcsScratchGpuVA);
+
+    // =========================================================================
+    // 6. Build BCS0 LRC (Logical Ring Context)
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 6. Building BCS0 LRC...\n");
+
+    uint8_t* bcsLrcCpu = (uint8_t*)fOwner->ggttGetCPUAddr(bcsLrcGem);
+    if (!bcsLrcCpu) {
+        IOLog("(FakeIrisXE) [V248] ❌ Failed to get BCS0 LRC CPU address\n");
+        bcsRingGem->release();
+        bcsLrcGem->release();
+        bcsScratchGem->release();
+        return;
+    }
+
+    bzero(bcsLrcCpu, 4096);
+
+    // PDP0-3: Point to LRC itself for paging
+    uint64_t bcsPdp0 = bcsLrcGpuVA & ~0xFFFULL;
+    *(uint64_t*)(bcsLrcCpu + 0x00) = bcsPdp0;
+    *(uint64_t*)(bcsLrcCpu + 0x08) = 0;
+    *(uint64_t*)(bcsLrcCpu + 0x10) = 0;
+    *(uint64_t*)(bcsLrcCpu + 0x18) = 0;
+    IOLog("(FakeIrisXE) [V248]   PDP0: 0x%016llX\n", (unsigned long long)bcsPdp0);
+
+    // CONTEXT_CONTROL at offset 0x2C:
+    // Same as RCS0 - bits 0 (Load), 3 (Valid), 5 (Addr64), 11 (CTX_Restore Inhibit)
+    // The CTX_Restore Inhibit bit (11) is CRITICAL for EXEClist operation.
+    uint32_t bcs_ctx_ctrl = (1 << 0) | (1 << 3) | (1 << 5) | (1 << 11);
+    *(uint32_t*)(bcsLrcCpu + 0x2C) = bcs_ctx_ctrl;
+    IOLog("(FakeIrisXE) [V248]   CONTEXT_CONTROL @0x2C: 0x%08X\n", bcs_ctx_ctrl);
+    IOLog("(FakeIrisXE) [V248]     Bit[0]  LoadContext:      1\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[3]  ContextValid:    1\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[5]  AddressSpace:     1 (64-bit)\n");
+    IOLog("(FakeIrisXE) [V248]     Bit[11] CTX_RestoreInhibit: 1 (DO NOT reload)\n");
+
+    // TIMESTAMP at offset 0x30
+    *(uint32_t*)(bcsLrcCpu + 0x30) = 0x00010000;
+
+    // Ring State Area at offset 0x100
+    uint32_t rso = 0x100;
+    *(uint32_t*)(bcsLrcCpu + rso + 0x00) = 0;  // RING_HEAD = 0
+    *(uint32_t*)(bcsLrcCpu + rso + 0x04) = ringTailBytes;  // RING_TAIL = end of commands
+    *(uint32_t*)(bcsLrcCpu + rso + 0x08) = (uint32_t)(bcsRingGpuVA & 0xFFFFFFFF);  // RING_BASE LO
+    *(uint32_t*)(bcsLrcCpu + rso + 0x0C) = (uint32_t)(bcsRingGpuVA >> 32);  // RING_BASE HI
+    uint32_t bcsPages = ringSize / 4096;
+    *(uint32_t*)(bcsLrcCpu + rso + 0x10) = ((bcsPages - 1) << 12) | 1;  // RING_CTL
+
+    __sync_synchronize();
+    OSSynchronizeIO();
+
+    IOLog("(FakeIrisXE) [V248]   RING_HEAD    @0x%03X: 0x%08X\n", rso + 0x00, 0);
+    IOLog("(FakeIrisXE) [V248]   RING_TAIL    @0x%03X: 0x%08X\n", rso + 0x04, ringTailBytes);
+    IOLog("(FakeIrisXE) [V248]   RING_BASE_LO @0x%03X: 0x%08X\n", rso + 0x08,
+           (uint32_t)(bcsRingGpuVA & 0xFFFFFFFF));
+    IOLog("(FakeIrisXE) [V248]   RING_BASE_HI @0x%03X: 0x%08X\n", rso + 0x0C,
+           (uint32_t)(bcsRingGpuVA >> 32));
+
+    // =========================================================================
+    // 7. Build BCS0 Context Descriptor
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 7. Building BCS0 Context Descriptor...\n");
+
+    // Gen12 Context Descriptor format (same as RCS0):
+    //   DWord[0]: Bits[0]=Valid, Bits[12:31]=LRC address[31:12]
+    //   DWord[1]: Bits[0:11]=LRC pages-1, Bits[16:19]=Engine class, Bits[20:23]=Instance
+    uint64_t bcsCtxDesc = 0;
+    bcsCtxDesc |= 1ULL;  // Valid bit
+    uint64_t bcsLrcAligned = bcsLrcGpuVA & ~0xFFFULL;
+    bcsCtxDesc |= (bcsLrcAligned >> 12) << 12;  // LRC address
+    bcsCtxDesc |= (0ULL << 32);  // 1 page LRC (encoding 0 = 1 page)
+
+    uint32_t bcsDescLo = (uint32_t)(bcsCtxDesc & 0xFFFFFFFF);
+    uint32_t bcsDescHi = (uint32_t)(bcsCtxDesc >> 32);
+    IOLog("(FakeIrisXE) [V248]   BCS0 Context Desc: 0x%08X_%08X\n", bcsDescHi, bcsDescLo);
+    IOLog("(FakeIrisXE) [V248]   BCS0 LRC VA: 0x%016llX\n", (unsigned long long)bcsLrcGpuVA);
+
+    // =========================================================================
+    // 8. Submit BCS0 EXEClist Context
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 8. Submitting BCS0 EXEClist...\n");
+
+    // Clear any pending ELSP
+    fOwner->safeMMIOWrite(BCS0_ELSP_SUBMIT_LO, 0);
+    fOwner->safeMMIOWrite(BCS0_ELSP_SUBMIT_HI, 0);
+    IOSleep(1);
+
+    // Submit context descriptor via ELSP port
+    // The ELSP port is a 64-bit write: LO = lower 32 bits, HI = upper 32 bits
+    // The HW latches on the HI write.
+    fOwner->safeMMIOWrite(BCS0_ELSP_SUBMIT_LO, bcsDescLo);
+    fOwner->safeMMIOWrite(BCS0_ELSP_SUBMIT_HI, bcsDescHi);
+    IOSleep(5);
+
+    uint32_t elsp_post_lo = fOwner->safeMMIORead(BCS0_ELSP_SUBMIT_LO);
+    uint32_t elsp_post_hi = fOwner->safeMMIORead(BCS0_ELSP_SUBMIT_HI);
+    IOLog("(FakeIrisXE) [V248]   BCS0 ELSP after submit: LO=0x%08X HI=0x%08X\n",
+           elsp_post_lo, elsp_post_hi);
+
+    bool elspLatched = (elsp_post_hi != 0) || (elsp_post_lo != 0);
+    IOLog("(FakeIrisXE) [V248]   BCS0 ELSP Latched: %s\n", elspLatched ? "YES" : "NO");
+
+    // =========================================================================
+    // 9. Verify BCS0 Execution via Scratch Writeback
+    // =========================================================================
+    IOLog("(FakeIrisXE) [V248] 9. Verifying BCS0 execution...\n");
+
+    for (uint32_t poll = 0; poll < 50; poll++) {
+        IOSleep(10);
+
+        uint32_t acthd_lo = fOwner->safeMMIORead(BCS0_ACTHD);
+        uint32_t acthd_hi = fOwner->safeMMIORead(BCS0_ACTHD_HI);
+
+        void* scratchCpu = fOwner->ggttGetCPUAddr(bcsScratchGem);
+        uint32_t scratchVal = scratchCpu ? *(volatile uint32_t*)scratchCpu : 0;
+
+        if (scratchVal == 0xCAFEBABE) {
+            IOLog("(FakeIrisXE) [V248]   ✅ BCS0 WRITE PROVEN! Scratch=0x%08X (poll %u)\n",
+                   scratchVal, poll);
+            break;
+        }
+
+        if (poll == 49) {
+            IOLog("(FakeIrisXE) [V248]   ⚠️  BCS0 scratch: 0x%08X (expected 0xCAFEBABE)\n",
+                   scratchVal);
+            IOLog("(FakeIrisXE) [V248]   ⚠️  BCS0 ACTHD: 0x%08X%08X\n", acthd_hi, acthd_lo);
+        }
+    }
+
+    // =========================================================================
+    // 10. Final BCS0 State
+    // =========================================================================
+    uint32_t bcs_final_status = fOwner->safeMMIORead(bcsBase + 0x10);
+    uint32_t bcs_final_head   = fOwner->safeMMIORead(bcsBase + 0x04);
+    uint32_t bcs_final_tail   = fOwner->safeMMIORead(bcsBase + 0x08);
+    IOLog("(FakeIrisXE) [V248] 10. Final BCS0 State:\n");
+    IOLog("(FakeIrisXE) [V248]    STATUS: 0x%08X\n", bcs_final_status);
+    IOLog("(FakeIrisXE) [V248]    HEAD:   0x%08X\n", bcs_final_head);
+    IOLog("(FakeIrisXE) [V248]    TAIL:   0x%08X\n", bcs_final_tail);
+
+    // Note: BCS0 pipeline is for testing only - GEMs are local and freed on return
+    uint64_t v248EndTime = mach_absolute_time();
+    uint64_t v248Elapsed = (v248EndTime - v248StartTime) / 1000ULL;
+    IOLog("(FakeIrisXE) [V250] ============================================\n");
+    IOLog("(FakeIrisXE) [V250] BCS0 PIPELINE INIT COMPLETE (took %llu us)\n",
+           (unsigned long long)v248Elapsed);
+    IOLog("(FakeIrisXE) [V250] ============================================\n");
+}
 bool FakeIrisXEGuC::deriveLayoutFromCSS(const uint8_t* fwData, size_t fwSize,
                                          size_t* outPayloadOffset, size_t* outPayloadSize)
 {

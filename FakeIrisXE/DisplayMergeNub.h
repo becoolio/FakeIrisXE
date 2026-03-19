@@ -1,11 +1,11 @@
-#ifndef _IOKIT_DisplayMergeNub_H
-#define _IOKIT_DisplayMergeNub_H
+#ifndef _IOKIT_FakeIrisXEDisplayMergeNub_H
+#define _IOKIT_FakeIrisXEDisplayMergeNub_H
 
 #include <IOKit/IOService.h>
 
-class DisplayMergeNub : public IOService
+class FakeIrisXEDisplayMergeNub : public IOService
 {
-    OSDeclareDefaultStructors(DisplayMergeNub)
+    OSDeclareDefaultStructors(FakeIrisXEDisplayMergeNub)
     
 public:
     IOService *			probe(IOService *provider, SInt32 *score);

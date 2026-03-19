@@ -6,8 +6,6 @@
 //
 
 #include "FakeIrisXEBacklight.hpp"
-
-#include "FakeIrisXEBacklight.hpp"
 #include <IOKit/IOLib.h>
 
 
@@ -84,7 +82,11 @@ bool FakeIrisXEBacklight::start(IOService* provider) {
     if (curN) { setProperty("brightness", curN);    curN->release(); }
 
     // also publish vendor/display-index hints if available:
-    setProperty("AAPL,backlight-index", OSNumber::withNumber((uint64_t)1, 32) ); // optional
+    OSNumber* _nBlk = OSNumber::withNumber((uint64_t)1, 32);
+    if (_nBlk) {
+        setProperty("AAPL,backlight-index", _nBlk);
+        _nBlk->release();
+    }
 
     // Register so system discovers it
     registerService();

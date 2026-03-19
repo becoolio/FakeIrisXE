@@ -33,6 +33,18 @@ private:
     FakeIrisXEGEM* fGuCLogGem;
     uint32_t fGuCLogSize;
     
+    // V250: GuC CTB (Command Transport Buffer) GEM objects
+    FakeIrisXEGEM* fH2GDbGem;
+    FakeIrisXEGEM* fH2GCtbGem;
+    FakeIrisXEGEM* fG2HDbGem;
+    FakeIrisXEGEM* fG2HCtbGem;
+    
+    // V250: Cached GPU VAs for CTB registers
+    uint64_t fH2GDbGpuVA;
+    uint64_t fH2GCtbGpuVA;
+    uint64_t fG2HDbGpuVA;
+    uint64_t fG2HCtbGpuVA;
+    
     // V50: Mode tracking
     bool fGuCMode;  // true = GuC submission, false = Execlist fallback
 
@@ -213,6 +225,13 @@ private:
 
     // V221: RCS EXEClist Initialization with MI_STORE_DWORD_IMM Proof-of-Execution
     void initV221RCSExeclist();
+
+    // V248: BCS0 Blitter Pipeline Initialization for Display Scanout
+    // BCS0 (Blitter Command Streamer 0) is responsible for 2D operations including
+    // surface-to-surface copy (used for compositing and display scanout).
+    // This function initializes BCS0 with a ring buffer, LRC context, and EXEClist
+    // so that GPU-accelerated 2D blits can be submitted for display operations.
+    void initBCS0Pipeline();
     
     // V232: Early Power Well Initialization - BEFORE GT gets wedged
     void initV232EarlyPowerWells();
@@ -267,13 +286,11 @@ private:
         FakeIrisXEGEM* ringGem;
         FakeIrisXEGEM* lrcGem;
         FakeIrisXEGEM* scratchGem;
-        FakeIrisXEGEM* csbGem;       // V258: CSB buffer for completion status
         uint64_t ringGpuAddr;
         uint64_t lrcGpuAddr;
         uint64_t scratchGpuAddr;
-        uint64_t csbGpuAddr;         // V258: CSB GPU address
         size_t ringSize;
-        uint32_t lrcTailUpdate;      // V241: Ring tail byte offset for LRC
+        uint32_t lrcTailUpdate;  // V241: Ring tail byte offset for LRC
     };
     
     // V230: Context switching support - track multiple contexts

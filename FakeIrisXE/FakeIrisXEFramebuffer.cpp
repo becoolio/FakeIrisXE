@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V220 - RCS Unhalt + EXEClist Aggressive  ║\n");
+    IOLog("║    FAKEIRISXE V251 - No Stall + Correctness Audit     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -542,6 +542,7 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     // V138: Initialize BLT ring pointer
     fBltRing = nullptr;
     
+    IOLog("FakeIrisXEFramebuffer::init succeeded\n");
     return true;
 }
 
@@ -943,7 +944,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V204 - TigerLake Clock Gating Fix   ║\n");
+    IOLog("║     FAKEIRISXE V251 - Direct Execlist Proof Mode   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1069,7 +1070,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     // Disable memory access and I/O - full reset
     pciDevice->configWrite16(kIOPCIConfigCommand, 0);
-    IOSleep(100);
+    IOSleep(20);
     
     // V186: Dump full PCI config space for debugging
     IOLog("(FakeIrisXE) [V186] PCI Config Space:\n");
@@ -1113,7 +1114,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     // Re-enable memory access
     pciDevice->configWrite16(kIOPCIConfigCommand, 0x0006);  // Memory + Bus Master
-    IOSleep(100);
+    IOSleep(20);
     
     uint16_t pciCmd_after = pciDevice->configRead16(kIOPCIConfigCommand);
     uint16_t pciStat_after = pciDevice->configRead16(kIOPCIConfigStatus);
@@ -1129,7 +1130,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         IOLog("Using modern power management\n");
         pciDevice->enablePCIPowerManagement(kPCIPMCSPowerStateD0);
     }
-    IOSleep(100);
+    IOSleep(20);
 
     
     
@@ -1435,17 +1436,29 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
     // Audio device properties
     setProperty("hda-gfx", OSString::withCString("on-PCI"));
-    setProperty("hda-audio", OSNumber::withNumber(2, 32));  // HDAUDIO_FMT_CHANNELS_2
+    OSNumber* _n0 = OSNumber::withNumber(2, 32);
+    setProperty("hda-audio", _n0);
+    _n0->release(); // HDAUDIO_FMT_CHANNELS_2
     setProperty("hda-eld", OSData::withBytes((const void*)"\x00\x00\x00\x00\x00\x00\x00\x00", 8));  // ELD buffer
     
     // Audio codec vendor/product IDs (Intel HDA generic)
-    setProperty("codec-vendor-id", OSNumber::withNumber(0x808629AD, 32));  // Intel
-    setProperty("codec-id", OSNumber::withNumber(0xA0CF0000, 32));  // Generic
+    OSNumber* _n1 = OSNumber::withNumber(0x808629AD, 32);
+    setProperty("codec-vendor-id", _n1);
+    _n1->release(); // Intel
+    OSNumber* _n2 = OSNumber::withNumber(0xA0CF0000, 32);
+    setProperty("codec-id", _n2);
+    _n2->release(); // Generic
     
     // Audio capabilities
-    setProperty("audio-formats", OSNumber::withNumber(0x1C, 32));  // PCM 16/20/24-bit, stereo
-    setProperty("audio-max-channels", OSNumber::withNumber(2, 32));  // Stereo
-    setProperty("audio-sample-rate", OSNumber::withNumber(48000, 32));  // 48kHz
+    OSNumber* _n3 = OSNumber::withNumber(0x1C, 32);
+    setProperty("audio-formats", _n3);
+    _n3->release(); // PCM 16/20/24-bit, stereo
+    OSNumber* _n4 = OSNumber::withNumber(2, 32);
+    setProperty("audio-max-channels", _n4);
+    _n4->release(); // Stereo
+    OSNumber* _n5 = OSNumber::withNumber(48000, 32);
+    setProperty("audio-sample-rate", _n5);
+    _n5->release(); // 48kHz
     
     // HDMI/DP audio node
     setProperty("hdmiaudio", kOSBooleanTrue);
@@ -1587,7 +1600,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("AAPL,slot-name", OSData::withBytes((const void*)"\x00\x00\x00\x00Internal@2", 16));
     
     // V167: Add framebuffer index for proper routing
-    setProperty("AAPL,framebuffer-index", OSNumber::withNumber(0ULL, 32));
+    OSNumber* _num_0 = OSNumber::withNumber(0ULL, 32);
+    setProperty("AAPL,framebuffer-index", _num_0);
+    _num_0->release();
     
     // V167: Tell system this is the primary display
     setProperty("IODisplayConnectsToFB", kOSBooleanTrue);
@@ -1613,13 +1628,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         // Overriding these with OSNumber causes ApplePCIeAnalytics to fault.
     }
     
-    // V167: Metal/Hardware Rendering verification properties
-    setProperty("MetalPluginClassName", OSString::withCString("FakeIrisXEAccelerator"));
-    setProperty("MetalPluginBundleID", OSString::withCString("com.anomy.driver.FakeIrisXEFramebuffer"));
-    setProperty("MetalRenderer", OSString::withCString("Intel Iris Xe Graphics"));
-    setProperty("MetalFamilyID", OSNumber::withNumber(1ULL, 32));
-    setProperty("MetalVendorID", OSNumber::withNumber(0x8086, 32));
-    setProperty("MetalDeviceID", OSNumber::withNumber(0x9A49, 32));
+    // Keep acceleration-facing identity claims disabled until there is real
+    // execution proof and completion tracking.
     updateExecutionState(false, "startup");
     
     IOLog("[V167] Connector/framebuffer patch properties published\n");
@@ -1800,11 +1810,18 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         }
 
         setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
-        setProperty("IODisplaySerialNumber", OSNumber::withNumber((uint64_t)displaySerial, 32));
-        setProperty("IODisplayVendorID", OSNumber::withNumber((uint64_t)displayVendorID, 16));
-        setProperty("IODisplayProductID", OSNumber::withNumber((uint64_t)displayProductID, 16));
-        setProperty("DisplayVendorID", OSNumber::withNumber((uint64_t)displayVendorID, 32));
-        setProperty("DisplayProductID", OSNumber::withNumber((uint64_t)displayProductID, 32));
+        OSNumber* _nSer = OSNumber::withNumber((uint64_t)displaySerial, 32);
+        OSNumber* _nVid = OSNumber::withNumber((uint64_t)displayVendorID, 16);
+        OSNumber* _nPid = OSNumber::withNumber((uint64_t)displayProductID, 16);
+        setProperty("IODisplaySerialNumber", _nSer);
+        setProperty("IODisplayVendorID", _nVid);
+        setProperty("IODisplayProductID", _nPid);
+        OSNumber* _nDVid = OSNumber::withNumber((uint64_t)displayVendorID, 32);
+        OSNumber* _nDPid = OSNumber::withNumber((uint64_t)displayProductID, 32);
+        setProperty("DisplayVendorID", _nDVid);
+        setProperty("DisplayProductID", _nDPid);
+        _nSer->release(); _nVid->release(); _nPid->release();
+        _nDVid->release(); _nDPid->release();
         setProperty("IODisplayName", OSString::withCString(displayName));
         setProperty("DisplayProductName", OSString::withCString(displayName));
         setNumberProperty(this, kDisplayHorizontalImageSize, 286, 32);
@@ -1813,8 +1830,12 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         // Set Apple-specific properties for MacBook identity
         if (displayVendorID == 0x0610) {
             // Apple display - additional properties
-            setProperty("IODisplayPanelID", OSNumber::withNumber((uint64_t)0x0001, 16));
-            setProperty("AAPL,backlight-control-type", OSNumber::withNumber(1ULL, 32));
+            OSNumber* _nPID = OSNumber::withNumber((uint64_t)0x0001, 16);
+            setProperty("IODisplayPanelID", _nPID);
+            _nPID->release();
+            OSNumber* _num_4 = OSNumber::withNumber(1ULL, 32);
+            setProperty("AAPL,backlight-control-type", _num_4);
+            _num_4->release();
             setProperty("AAPL01-internal-panel", kOSBooleanTrue);
         }
         
@@ -1909,13 +1930,23 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("brightness-control", kOSBooleanTrue);
     setProperty("IOBacklight", kOSBooleanTrue);
     setProperty("IODisplayHasBacklight", kOSBooleanTrue);
-    setProperty("IODisplayCanRotate", OSNumber::withNumber(0ULL, 32));
+    OSNumber* _num_5 = OSNumber::withNumber(0ULL, 32);
+    setProperty("IODisplayCanRotate", _num_5);
+    _num_5->release();
     
     // V167: Backlight calibration
-    setProperty("brightness-level", OSNumber::withNumber(100ULL, 32));
-    setProperty("brightness-max", OSNumber::withNumber(100ULL, 32));
-    setProperty("brightness-min", OSNumber::withNumber(0ULL, 32));
-    setProperty("brightness-default", OSNumber::withNumber(75ULL, 32));
+    OSNumber* _num_6 = OSNumber::withNumber(100ULL, 32);
+    setProperty("brightness-level", _num_6);
+    _num_6->release();
+    OSNumber* _num_7 = OSNumber::withNumber(100ULL, 32);
+    setProperty("brightness-max", _num_7);
+    _num_7->release();
+    OSNumber* _num_8 = OSNumber::withNumber(0ULL, 32);
+    setProperty("brightness-min", _num_8);
+    _num_8->release();
+    OSNumber* _num_9 = OSNumber::withNumber(75ULL, 32);
+    setProperty("brightness-default", _num_9);
+    _num_9->release();
     
     // backlight-index / backlight-control-type must be OSNumber
     OSNumber *idx = OSNumber::withNumber((uint64_t)1ULL, 32);
@@ -1927,150 +1958,35 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     publishBrightnessProperties(this, 100, 0xFFFEu);
 
     
-    //optional
-    // Transparency and vibrancy support
-    setProperty("IOFBTranslucencySupport", kOSBooleanTrue);
-    setProperty("IOFBVibrantSupport", kOSBooleanTrue);
-    setProperty("IOFBAlphaBlending", kOSBooleanTrue);
-    setProperty("IOFBCompositeSupport", kOSBooleanTrue);
-
-    // Window server acceleration
-    setProperty("IOFBWSAASupport", kOSBooleanTrue);
-    setProperty("IOFBWSSupport", kOSBooleanTrue);
-
-    // Hardware compositing
-    setProperty("IOFBHardwareCompositing", kOSBooleanTrue);
-    setProperty("IOFBAutoCompositing", kOSBooleanTrue);
-    
-    // Replace your existing framebuffer properties with these:
-    setProperty("IOAccelerator", kOSBooleanTrue);
-    setProperty("IOAccelIndex", 0ULL, 32);
-    setProperty("IOAccelRevision", 2ULL, 32);
-
-    // Critical for Core Image
-    setProperty("CISupported", kOSBooleanTrue);
-    setProperty("CIAllowSoftwareRenderer", kOSBooleanFalse); // Force hardware
-    setProperty("CIContextUseSoftwareRenderer", kOSBooleanFalse);
-
-    // IOSurface capabilities
-    setProperty("IOSurfaceSupported", kOSBooleanTrue);
-    setProperty("IOSurfaceIsGlobal", kOSBooleanTrue);
-    setProperty("IOSurfaceCacheMode", 0ULL, 32);
-
-    // Additional acceleration hints
-    setProperty("IOAccelSurfaceSupported", kOSBooleanTrue);
-    setProperty("IOAccelCLContextSupported", kOSBooleanTrue);
-    setProperty("IOAccelGLContextSupported", kOSBooleanTrue);
-    // Enable IOSurface support - CRITICAL for transparency
-    setProperty("IOSurfaceSupport", kOSBooleanTrue);
-    setProperty("IOSurfaceIsGlobal", kOSBooleanTrue);
-
-    // Core Image acceleration
-    setProperty("CISupported", kOSBooleanTrue);
-    setProperty("CIBlurSupported", kOSBooleanTrue);
-    setProperty("CITransparencySupported", kOSBooleanTrue);
-
-    // ================================================
-    // V167: AGPM Power Management - FIX RECOGNITION
-    // ================================================
-    IOLog("[V167] Setting up AGPM power management...\n");
-    
-    // V167: Publish AGPM-facing identity with standard Data-typed PCI blobs.
-    const uint32_t agpmVendor = 0x8086;
-    const uint32_t agpmDevice = pciDevice ? pciDevice->configRead16(kIOPCIConfigDeviceID) : 0x9A49;
-    setDataProperty32(this, "vendor-id", agpmVendor);
-    setDataProperty32(this, "device-id", agpmDevice);
-    setDataProperty32(this, "subsystem-vendor-id", agpmVendor);
-    setDataProperty32(this, "subsystem-id", agpmDevice);
-    
-    // V167: Also set as OSNumber for other subsystems
-    setProperty("AGPMVendorID", OSNumber::withNumber(agpmVendor, 16));
-    setProperty("AGPMDeviceID", OSNumber::withNumber(agpmDevice, 16));
-    
-    // GPU name for AGPM matching
-    setProperty("IONameMatchedKey", OSString::withCString("Intel Iris Xe Graphics"));
-    setProperty("model", OSString::withCString("Intel(R) Iris(R) Xe Graphics"));
-    
-    // GPU Power States for AGPM (MacBookPro16,2 profile)
-    setProperty("agpu-pstates", OSArray::withObjects((const OSObject*[]){
-        OSNumber::withNumber(0ULL, 32),
-        OSNumber::withNumber(1ULL, 32),
-        OSNumber::withNumber(2ULL, 32),
-        OSNumber::withNumber(3ULL, 32)
-    }, 4));
-    
-    setProperty("agpu-pstate-names", OSArray::withObjects((const OSObject*[]){
-        OSString::withCString("low"),
-        OSString::withCString("medium"),
-        OSString::withCString("high"),
-        OSString::withCString("turbo")
-    }, 4));
-    
-    // V167: AGPM target profile - use MacBookPro16,2 which has Iris Xe
-    setProperty("AGXSelectedPowerProfile", OSString::withCString("MacBookPro16,2"));
-    setProperty("AGPMTargetProfile", OSString::withCString("MacBookPro16,2"));
-    
-    // AGPM connection properties
-    setProperty("AGPM_Enabled", kOSBooleanTrue);
-    setProperty("GPUPowerManagementEnabled", kOSBooleanTrue);
-    setProperty("IOGPUPowerManagement", kOSBooleanTrue);
-    
-    // Performance state - start at high for performance
-    setProperty("IOGPUSwitchState", OSNumber::withNumber(2ULL, 32));
-    setProperty("gpu-active-state", OSNumber::withNumber(2ULL, 32));
-    
-    // Performance level for Metal
-    setProperty("IOGPUTargetPerformanceLevel", OSNumber::withNumber(3ULL, 32));
-    
-    // GPU utilization hints
-    setProperty("GPUActivityHint", kOSBooleanTrue);
-    setProperty("GPUPerformanceMode", OSNumber::withNumber(1ULL, 32));
-    
-    // Power management caps
-    setProperty("IOGPUPowermanagementCapable", kOSBooleanTrue);
-    setProperty("IOGPUFreqThresholds", OSArray::withObjects((const OSObject*[]){
-        OSNumber::withNumber(100ULL, 32),
-        OSNumber::withNumber(400ULL, 32),
-        OSNumber::withNumber(800ULL, 32),
-        OSNumber::withNumber(1100ULL, 32)
-    }, 4));
-    
-    // Current frequency (report as high)
-    setNumberProperty(this, "IOGPUCurrentFreq", 1100ULL, 32);
-    setNumberProperty(this, "IOGPUMaxFreq", 1100ULL, 32);
-    setNumberProperty(this, "IOGPUMinFreq", 100ULL, 32);
-    
-    // Tell system we support DVFM (Dynamic Voltage Frequency Management)
-    setProperty("IOGPUDVFM", kOSBooleanTrue);
-    setProperty("IOGPUDVFMStates", OSNumber::withNumber(4ULL, 32));
-    
-    // V168: Additional AGPM properties
-    setProperty("agpu-min-voltage", OSNumber::withNumber(0ULL, 32));     // 0mV
-    setProperty("agpu-max-voltage", OSNumber::withNumber(1200000ULL, 32)); // 1200mV
-    setProperty("agpu-voltage-steps", OSArray::withObjects((const OSObject*[]){
-        OSNumber::withNumber(0ULL, 32),
-        OSNumber::withNumber(600000ULL, 32),
-        OSNumber::withNumber(900000ULL, 32),
-        OSNumber::withNumber(1200000ULL, 32)
-    }, 4));
-    
-    // V168: Performance table
-    setProperty("IOGPUPerfTable", OSArray::withObjects((const OSObject*[]){
-        OSNumber::withNumber(100ULL, 32),    // freq
-        OSNumber::withNumber(0ULL, 32),      // voltage
-        OSNumber::withNumber(5000ULL, 32),   // latency
-        OSNumber::withNumber(1ULL, 32),      // enabled
-    }, 4));
-    
-    // V168: Tell AGPM we have full control
-    setProperty("AGPMFullControl", kOSBooleanTrue);
-    setProperty("IOGPUPowerControl", kOSBooleanTrue);
-    
-    IOLog("[V170] ✅ AGPM power management properties set\n");
-    IOLog("[V170]    Target profile: MacBookPro16,2\n");
-    IOLog("[V170]    Power states: low, medium, high, turbo\n");
-    IOLog("[V170]    Max freq: 1100 MHz, Min freq: 100 MHz\n");
-    IOLog("[V170]    Initial state: high performance\n");
+    // Hold back compositor / surface / AGPM claims until command submission is
+    // proven with real completion evidence.
+    setProperty("IOFBTranslucencySupport", kOSBooleanFalse);
+    setProperty("IOFBVibrantSupport", kOSBooleanFalse);
+    setProperty("IOFBAlphaBlending", kOSBooleanFalse);
+    setProperty("IOFBCompositeSupport", kOSBooleanFalse);
+    setProperty("IOFBWSAASupport", kOSBooleanFalse);
+    setProperty("IOFBWSSupport", kOSBooleanFalse);
+    setProperty("IOFBHardwareCompositing", kOSBooleanFalse);
+    setProperty("IOFBAutoCompositing", kOSBooleanFalse);
+    setProperty("IOAccelerator", kOSBooleanFalse);
+    setProperty("CISupported", kOSBooleanFalse);
+    setProperty("CIAllowSoftwareRenderer", kOSBooleanTrue);
+    setProperty("CIContextUseSoftwareRenderer", kOSBooleanTrue);
+    setProperty("IOSurfaceSupported", kOSBooleanFalse);
+    setProperty("IOSurfaceSupport", kOSBooleanFalse);
+    setProperty("IOAccelSurfaceSupported", kOSBooleanFalse);
+    setProperty("IOAccelCLContextSupported", kOSBooleanFalse);
+    setProperty("IOAccelGLContextSupported", kOSBooleanFalse);
+    setProperty("CIBlurSupported", kOSBooleanFalse);
+    setProperty("CITransparencySupported", kOSBooleanFalse);
+    setProperty("AGPM_Enabled", kOSBooleanFalse);
+    setProperty("GPUPowerManagementEnabled", kOSBooleanFalse);
+    setProperty("IOGPUPowerManagement", kOSBooleanFalse);
+    setProperty("IOGPUPowermanagementCapable", kOSBooleanFalse);
+    setProperty("IOGPUDVFM", kOSBooleanFalse);
+    setProperty("AGPMFullControl", kOSBooleanFalse);
+    setProperty("IOGPUPowerControl", kOSBooleanFalse);
+    IOLog("[V251] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2226,19 +2142,29 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V45] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V251] Loading firmware (Intel PRM compliant)...\n");
 
     char runtimeArgBuf[16] = {0};
     bool runBootDiagFull = PE_parse_boot_argn("-fakeirisxe-diag", runtimeArgBuf, sizeof(runtimeArgBuf));
     bool runBootDiagQuick = PE_parse_boot_argn("-fakeirisxe-quickdiag", runtimeArgBuf, sizeof(runtimeArgBuf));
+    bool skipGuCInit = PE_parse_boot_argn("-fakeirisxe-noguc", runtimeArgBuf, sizeof(runtimeArgBuf));
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V45] Runtime toggles: diag_full=%u diag_quick=%u guc_fw_mode=apple-only\n",
+    IOLog("(FakeIrisXE) [V251] Runtime toggles: diag_full=%u diag_quick=%u skip_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
-          runBootDiagQuick ? 1U : 0U);
+          runBootDiagQuick ? 1U : 0U,
+          skipGuCInit ? 1U : 0U);
 
+    // V251: Skip GuC init if -fakeirisxe-noguc boot-arg is set
+    // This prevents IOKit stall during boot by avoiding long GuC timeouts
+    if (skipGuCInit) {
+        IOLog("(FakeIrisXE) [V251] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        fGuCEnabled = false;
+        fRcsRingValidated = false;
+        fCommandSubmissionReady = false;
+    } else {
     // V45: Program MOCS before GuC init
     IOLog("(FakeIrisXE) [V45] Programming MOCS...\n");
     if (!programMOCS()) {
@@ -2261,6 +2187,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         fGuCEnabled = true;
         IOLog("(FakeIrisXE) [V45] ✅ GuC submission enabled\n");
     }
+    }  // V251: end skipGuCInit
 
     if (true) {
 
@@ -2353,8 +2280,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             if (!fExeclist->setupExeclistPorts()) {
                 IOLog("FakeIrisXEFramebuffer: EXECLIST port setup FAILED\n");
             } else {
-                IOLog("FakeIrisXEFramebuffer: EXECLIST engine READY\n");
-                fExeclist->fIsReady = true;  // V206: Mark EXEClist as ready
+                IOLog("FakeIrisXEFramebuffer: EXECLIST ports programmed; execution remains unproven\n");
+                fExeclist->fIsReady = false;
+                setProperty("FakeIrisXEExeclistPortsReady", kOSBooleanTrue);
+                setProperty("FakeIrisXEExeclistExecutionProven", kOSBooleanFalse);
                 
                 if (runBootDiagFull) {
                     IOLog("FakeIrisXEFramebuffer: [V70] '-fakeirisxe-diag' detected - running comprehensive diagnostics...\n");
@@ -2379,7 +2308,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
                         IOLog("FakeIrisXEFramebuffer: [V62] Simple diagnostic test FAILED\n");
                     }
                 } else {
-                    IOLog("FakeIrisXEFramebuffer: [V70] Skipping boot diagnostics (use -fakeirisxe-quickdiag or -fakeirisxe-diag)\n");
+                    IOLog("FakeIrisXEFramebuffer: [V70] Skipping extra boot diagnostics (use -fakeirisxe-quickdiag or -fakeirisxe-diag)\n");
+                    IOLog("FakeIrisXEFramebuffer: [V70] Plain -fakeirisxe boot will still run one direct Execlist proof via testGPUExecution()\n");
                 }
             }
         
@@ -2491,46 +2421,58 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             
             // Create IOSurface-compatible framebuffer properties
             setProperty("IOFBScalerInfo", OSData::withBytes((void*)"\x00\x00\x00\x00", 4));
-            setProperty("IOFBTransform", OSNumber::withNumber((unsigned long long)0, 32));
-            setProperty("IOFBSignal", OSNumber::withNumber((unsigned long long)0, 32));
+            OSNumber* _nT = OSNumber::withNumber((unsigned long long)0, 32);
+            setProperty("IOFBTransform", _nT);
+            setProperty("IOFBSignal", _nT);
+            _nT->release();
             
             setProperty("IOFBHWCursor", kOSBooleanTrue);
             setProperty("IOFBAlphaCursor", kOSBooleanTrue);
             
             // Set up surface format for WindowServer
-            setProperty("IOSurfacePixelFormat", OSNumber::withNumber(0x42475241, 32)); // ARGB
-            setProperty("IOSurfaceBytesPerElement", OSNumber::withNumber(4, 32));
-            setProperty("IOSurfaceBytesPerRow", OSNumber::withNumber(7680, 32));
-            setProperty("IOSurfaceWidth", OSNumber::withNumber(1920, 32));
-            setProperty("IOSurfaceHeight", OSNumber::withNumber(1080, 32));
+            OSNumber* _n8 = OSNumber::withNumber(0x42475241, 32);
+            setProperty("IOSurfacePixelFormat", _n8);
+            _n8->release(); // ARGB
+            OSNumber* _num_17 = OSNumber::withNumber(4, 32);
+            setProperty("IOSurfaceBytesPerElement", _num_17);
+            _num_17->release();
+            OSNumber* _num_18 = OSNumber::withNumber(7680, 32);
+            setProperty("IOSurfaceBytesPerRow", _num_18);
+            _num_18->release();
+            OSNumber* _num_19 = OSNumber::withNumber(1920, 32);
+            setProperty("IOSurfaceWidth", _num_19);
+            _num_19->release();
+            OSNumber* _num_20 = OSNumber::withNumber(1080, 32);
+            setProperty("IOSurfaceHeight", _num_20);
+            _num_20->release();
             
-            IOLog("[V89] ✅ WindowServer integration properties set\n");
-            IOLog("[V89] ✅ Display acceleration enabled\n");
-            IOLog("[V89] ✅ IOSurface format configured\n");
+            IOLog("[V89] WindowServer framebuffer properties staged\n");
+            IOLog("[V89] Acceleration remains disabled until execution proof exists\n");
+            IOLog("[V89] IOSurface metadata exported for diagnostic compatibility only\n");
             
             // V90: IOAccelerator Initialization
             IOLog("\n");
             IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-            IOLog("║  V90: IOACCELERATOR HOOKS INITIALIZED                        ║\n");
+            IOLog("║  V90: IOACCELERATOR HOOKS STAGED                             ║\n");
             IOLog("╚══════════════════════════════════════════════════════════════╝\n");
             IOLog("\n");
-            IOLog("[V90] Surface management ready:\n");
+            IOLog("[V90] Surface management staging:\n");
             IOLog("      Max surfaces: %u\n", kMaxSurfaces);
             IOLog("      Format: ARGB8888\n");
-            IOLog("[V90] 2D Blit operations: Ready\n");
-            IOLog("[V90] Command submission: Ready (execlist)\n");
+            IOLog("[V90] 2D Blit operations: not yet execution-proven\n");
+            IOLog("[V90] Command submission: diagnostic only\n");
             IOLog("\n");
             
             // V91: 2D Blit Command Support
             IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-            IOLog("║  V91: 2D BLIT COMMANDS ACTIVE                                ║\n");
+            IOLog("║  V91: 2D BLIT COMMANDS NOT YET PROVEN                        ║\n");
             IOLog("╚══════════════════════════════════════════════════════════════╝\n");
             IOLog("\n");
             IOLog("[V91] Intel Blitter Commands:\n");
-            IOLog("      XY_SRC_COPY_BLT (0x53): Ready\n");
-            IOLog("      XY_COLOR_BLT (0x50): Ready\n");
-            IOLog("      XY_SETUP_BLT (0x01): Ready\n");
-            IOLog("[V91] GPU Hardware Acceleration: Active\n");
+            IOLog("      XY_SRC_COPY_BLT (0x53): staged only\n");
+            IOLog("      XY_COLOR_BLT (0x50): staged only\n");
+            IOLog("      XY_SETUP_BLT (0x01): staged only\n");
+            IOLog("[V91] GPU Hardware Acceleration: not yet proven\n");
             IOLog("\n");
             
             // V92: Debug Infrastructure & Advanced Features
@@ -2573,7 +2515,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             setProperty("IOFBDisplayOnline", kOSBooleanTrue);
             
             // Expose V93 status for user-space tools
-            setProperty("IOFBAccelRevision", OSNumber::withNumber(93, 32));
+            OSNumber* _num_21 = OSNumber::withNumber(93, 32);
+            setProperty("IOFBAccelRevision", _num_21);
+            _num_21->release();
             
             IOLog("[V93] Display verification complete. Ready for integration testing.\n");
             IOLog("\n");
@@ -2713,8 +2657,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  WINDOWSERVER INTEGRATION                                    ║\n");
     IOLog("║  Aperture Range:  ✅ CONFIGURED\n");
-    IOLog("║  Client Memory:   %s\n", fGuCEnabled ? "✅ SUPPORTED (Types 0,1,2)" : "⚠️ SKIPPED (phase-1 safety mode)");
-    IOLog("║  Surface Mapping: %s\n", fGuCEnabled ? "✅ READY" : "⚠️ SKIPPED (phase-1 safety mode)");
+    IOLog("║  Client Memory:   %s\n", fCommandSubmissionReady ? "⚠️ UNVERIFIED RUNTIME PATH" : "DISABLED / DIAGNOSTIC ONLY");
+    IOLog("║  Surface Mapping: %s\n", fCommandSubmissionReady ? "⚠️ UNVERIFIED" : "NOT YET PROVEN");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
     
@@ -2733,7 +2677,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed Successfully (V178)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V251, execution still diagnostic)\n");
     return true;
 
 }
@@ -3485,7 +3429,7 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     }
     wr(panelControlNew, rd(panelControlNew) | (1u << 31) | (1u << 30) | 0x8u);
     wr(panelControlOld, rd(panelControlOld) | (1u << 31) | (1u << 30));
-    IOSleep(100);  // Longer delay for panel power
+    IOSleep(20);  // V251: Reduced from 100ms to prevent stall
     
     // Step 2: Wait for panel power ready (CRITICAL)
     IOLog("[V131] Step 2: Waiting for panel power ready...\n");
@@ -3518,7 +3462,7 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     ddi &= ~(7u << 24);
     ddi |= (1u << 24);  // x1 width for eDP
     wr(DDI_BUF_CTL_A, ddi);
-    IOSleep(20);
+    IOSleep(5);
     IOLog("[V131] DDI_BUF_CTL_A = 0x%08X\n", rd(DDI_BUF_CTL_A));
     
     // Step 4: Enable Pipe A
@@ -3527,7 +3471,7 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     pipeconf |= (1u << 31);  // Enable
     pipeconf |= (1u << 30);  // Progressive
     wr(PIPECONF_A, pipeconf);
-    IOSleep(20);
+    IOSleep(5);
     IOLog("[V131] PIPECONF_A = 0x%08X\n", rd(PIPECONF_A));
     
     // Step 5: Enable Transcoder A
@@ -3535,7 +3479,7 @@ IOReturn FakeIrisXEFramebuffer::enableController() {
     uint32_t trans = rd(TRANS_CONF_A);
     trans |= (1u << 31);  // Enable
     wr(TRANS_CONF_A, trans);
-    IOSleep(20);
+    IOSleep(5);
     IOLog("[V131] TRANS_CONF_A = 0x%08X\n", rd(TRANS_CONF_A));
     
     // Step 6: Force display online
@@ -3836,7 +3780,7 @@ void FakeIrisXEFramebuffer::disableController() {
 
 
 bool FakeIrisXEFramebuffer::getIsUsable() const {
-    return true;
+    return fullyInitialized && displayOnline && controllerEnabled && !shuttingDown;
 }
 
 
@@ -3844,16 +3788,29 @@ bool FakeIrisXEFramebuffer::getIsUsable() const {
 
 
 
+// V248: Timing constants - appleTimingID 0x7F signals macOS to use native timing
+// This matches the V275 working configuration where macOS derives timing from
+// EDID/display capabilities rather than trusting our provided values.
+// CoreDisplay's build_mode_list_if_needed crashes when it doesn't recognize
+// our timing data, so 0x7F acts as a "fallback to native" signal.
+#ifndef kIOTimingID_TigerLake_Fallback
+#define kIOTimingID_TigerLake_Fallback 0x7F
+#endif
+
 IOReturn FakeIrisXEFramebuffer::getTimingInfoForDisplayMode(
     IODisplayModeID displayMode,
     IOTimingInformation* infoOut)
 {
-    // V74: Enhanced timing info for all supported display modes
+    // V248: Fixed timing - use appleTimingID=0x7F like V275 working version.
+    // V275 had IOTimingInformation=all-zeros and returned 0x7F as the timing ID.
+    // The system then falls back to deriving timing from EDID/display capabilities.
+    // This approach avoids CoreDisplay crashes that occurred with V276-V282
+    // when detailed timing values were provided (causing build_mode_list_if_needed
+    // assertions in CoreDisplay::AssertTracer).
     if (!infoOut) {
         return kIOReturnBadArgument;
     }
 
-    // Find matching mode in our display modes
     const DisplayModeInfo* modeInfo = nullptr;
     for (uint32_t i = 0; i < kNumDisplayModes; i++) {
         if (displayMode == s_displayModes[i].modeID) {
@@ -3863,34 +3820,22 @@ IOReturn FakeIrisXEFramebuffer::getTimingInfoForDisplayMode(
     }
 
     if (!modeInfo) {
-        IOLog("[V74] getTimingInfoForDisplayMode(): unsupported mode %u\n", displayMode);
+        IOLog("[V248] getTimingInfoForDisplayMode(): unsupported mode %u\n", displayMode);
         return kIOReturnUnsupportedMode;
     }
 
     bzero(infoOut, sizeof(IOTimingInformation));
 
-    infoOut->appleTimingID = kIOTimingIDDefault;
+    // V248: Use 0x7F as appleTimingID - this is the key fix from V275.
+    // macOS interprets this as "use native timing from display" rather than
+    // trying to validate our detailed timing against its expectations.
+    // The IOTimingInformation structure remains all-zeros (no detailed timing
+    // blocks), which is the V275 pattern that avoided CoreDisplay assertions.
+    infoOut->appleTimingID = kIOTimingID_TigerLake_Fallback;
     infoOut->flags         = kIOTimingInfoValid_AppleTimingID;
 
-    // V74: Stable timing profile
-    switch (modeInfo->modeID) {
-        case 1: // 1920x1080 @ 60Hz
-            infoOut->detailedInfo.v1.horizontalActive = 1920;
-            infoOut->detailedInfo.v1.horizontalBlanking = 280;
-            infoOut->detailedInfo.v1.horizontalSyncOffset = 60;
-            infoOut->detailedInfo.v1.horizontalSyncWidth = 40;
-            infoOut->detailedInfo.v1.verticalActive = 1080;
-            infoOut->detailedInfo.v1.verticalBlanking = 45;
-            infoOut->detailedInfo.v1.verticalSyncOffset = 3;
-            infoOut->detailedInfo.v1.verticalSyncWidth = 5;
-            infoOut->detailedInfo.v1.pixelClock = 148500000;
-            IOLog("[V74] getTimingInfoForDisplayMode(): 1920x1080 @ 60Hz\n");
-            break;
-
-        default:
-            IOLog("[V74] getTimingInfoForDisplayMode(): unknown mode %u\n", displayMode);
-            return kIOReturnUnsupportedMode;
-    }
+    IOLog("[V248] getTimingInfoForDisplayMode(): mode=%u (appleTimingID=0x7F, native timing)\n",
+          displayMode);
 
     return kIOReturnSuccess;
 }
@@ -4318,26 +4263,53 @@ IOReturn FakeIrisXEFramebuffer::setPowerState(unsigned long state,
 
 
 
+// V248: Enhanced display mode bounds validation.
+// The CoreDisplay crash in build_mode_list_if_needed occurs when:
+//   1. getDisplayModeCount returns an unexpected value (0 or > reasonable limit)
+//   2. getInformationForDisplayMode returns kIOReturnUnsupportedMode for a valid mode ID
+//   3. getTimingInfoForDisplayMode returns inconsistent timing data
+//   4. Mode dimensions are 0 or exceed hardware limits
+//
+// Our fixes:
+//   - Always report exactly 1 valid mode (1920x1080)
+//   - Mode ID is always 1 (matches getDisplayModes output)
+//   - Timing uses 0x7F appleTimingID to avoid CoreDisplay validation
+//   - Dimensions validated before returning (no 0-width/height)
+//   - Null pointer checks on all output parameters
+// ============================================================================
 IOItemCount FakeIrisXEFramebuffer::getDisplayModeCount(void)
 {
-    IOLog("[V73] getDisplayModeCount(): returning %u modes\n", kNumDisplayModes);
+    // V248: Ensure we always return a valid, non-zero mode count.
+    // CoreDisplay will assert if this returns 0.
+    // We only support 1 mode (1920x1080).
+    static_assert(kNumDisplayModes == 1, "Expected exactly 1 display mode");
+    IOLog("[V248] getDisplayModeCount(): returning %u modes\n", kNumDisplayModes);
     return kNumDisplayModes;
 }
 
-
-
-
 IOReturn FakeIrisXEFramebuffer::getDisplayModes(IODisplayModeID *allDisplayModes)
 {
+    // V248: Added comprehensive null-pointer and bounds validation.
     if (!allDisplayModes) {
-        IOLog("[V73] getDisplayModes(): null pointer\n");
+        IOLog("[V248] getDisplayModes(): ❌ NULL output pointer\n");
         return kIOReturnBadArgument;
     }
 
-    // Return mode IDs for all supported modes
+    // V248: Sanity check - kNumDisplayModes must be > 0
+    if (kNumDisplayModes == 0 || kNumDisplayModes > 16) {
+        IOLog("[V248] getDisplayModes(): ❌ Invalid mode count %u\n", kNumDisplayModes);
+        return kIOReturnError;
+    }
+
     for (uint32_t i = 0; i < kNumDisplayModes; i++) {
+        // V248: Validate mode ID is non-zero before reporting
+        if (s_displayModes[i].modeID == 0) {
+            IOLog("[V248] getDisplayModes(): ❌ Invalid mode ID 0 at index %u\n", i);
+            return kIOReturnError;
+        }
         allDisplayModes[i] = s_displayModes[i].modeID;
-        IOLog("[V73] getDisplayModes(): mode %u = %s\n", i+1, s_displayModes[i].name);
+        IOLog("[V248] getDisplayModes(): mode[%u] = ID=%u (%s)\n",
+               i, s_displayModes[i].modeID, s_displayModes[i].name);
     }
     return kIOReturnSuccess;
 }
@@ -4348,9 +4320,10 @@ IOReturn FakeIrisXEFramebuffer::getDisplayModes(IODisplayModeID *allDisplayModes
 UInt64 FakeIrisXEFramebuffer::getPixelFormatsForDisplayMode(
     IODisplayModeID mode, IOIndex depth)
 {
-    IOLog("[V73] getPixelFormatsForDisplayMode(mode=%u depth=%u)\n", mode, depth);
+    // V248: Enhanced validation - ensure mode is in our supported list
+    IOLog("[V248] getPixelFormatsForDisplayMode(mode=%u depth=%u)\n", mode, depth);
 
-    // Check if mode is valid
+    // V248: Validate mode is one of our supported modes
     bool validMode = false;
     for (uint32_t i = 0; i < kNumDisplayModes; i++) {
         if (mode == s_displayModes[i].modeID) {
@@ -4358,15 +4331,14 @@ UInt64 FakeIrisXEFramebuffer::getPixelFormatsForDisplayMode(
             break;
         }
     }
-    
+
+    // V248: Only support depth 0 (32bpp ARGB) on aperture 0 (system aperture)
     if (!validMode || depth != 0)
         return 0;
 
-    return (1ULL << 0); // ARGB8888
+    // Return ARGB8888 format (bit 0 set in the format mask)
+    return (1ULL << 0);
 }
-
-
-
 
 IOReturn FakeIrisXEFramebuffer::getPixelInformation(
     IODisplayModeID mode,
@@ -4374,22 +4346,37 @@ IOReturn FakeIrisXEFramebuffer::getPixelInformation(
     IOPixelAperture aperture,
     IOPixelInformation *info)
 {
+    // V248: Enhanced validation
+    if (!info) {
+        IOLog("[V248] getPixelInformation(): ❌ NULL info pointer\n");
+        return kIOReturnBadArgument;
+    }
+
     // Find the mode info
     const DisplayModeInfo* modeInfo = nullptr;
     for (uint32_t i = 0; i < kNumDisplayModes; i++) {
         if (mode == s_displayModes[i].modeID) {
-            modeInfo = (DisplayModeInfo*)&s_displayModes[i];
+            modeInfo = &s_displayModes[i];
             break;
         }
     }
-    
+
+    // V248: Reject invalid modes, depths, or apertures
     if (!modeInfo || depth != 0 || aperture != kIOFBSystemAperture) {
-        IOLog("[V73] getPixelInformation(): bad args (mode=%u depth=%u ap=%u)\n",
+        IOLog("[V248] getPixelInformation(): ❌ Invalid args (mode=%u depth=%u ap=%u)\n",
               (unsigned)mode, (int)depth, (unsigned)aperture);
         return kIOReturnBadArgument;
     }
 
-    IOLog("[V73] getPixelInformation(): %ux%u\n", modeInfo->width, modeInfo->height);
+    // V248: Validate dimensions are within reasonable bounds
+    if (modeInfo->width == 0 || modeInfo->width > 8192 ||
+        modeInfo->height == 0 || modeInfo->height > 8192) {
+        IOLog("[V248] getPixelInformation(): ❌ Invalid dimensions %ux%u\n",
+               modeInfo->width, modeInfo->height);
+        return kIOReturnError;
+    }
+
+    IOLog("[V248] getPixelInformation(): %ux%u\n", modeInfo->width, modeInfo->height);
 
     bzero(info, sizeof(IOPixelInformation));
 
@@ -4570,8 +4557,10 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
     info->nominalHeight = modeInfo->height;
     info->refreshRate   = (60 << 16);  // 60 Hz fixed-point
 
-    // CoreDisplay expects these for timing lookup
-    info->reserved[0] = kIOTimingIDDefault;
+    // V248: Use 0x7F appleTimingID to match getTimingInfoForDisplayMode.
+    // Both methods must report the same timing ID or CoreDisplay will
+    // assert in build_mode_list_if_needed when comparing the two sources.
+    info->reserved[0] = kIOTimingID_TigerLake_Fallback;
     info->reserved[1] = kIOTimingInfoValid_AppleTimingID;
     
     IOLog("[V131] ✅ Mode info: %dx%d @ 60Hz\n", modeInfo->width, modeInfo->height);
@@ -5727,8 +5716,8 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
     setProperty("HardwareAccelerated", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("GPURendering", ready ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("MetalSupported", ready ? kOSBooleanTrue : kOSBooleanFalse);
-    setProperty("MetalDevice", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("MetalSupported", kOSBooleanFalse);
+    setProperty("MetalDevice", kOSBooleanFalse);
     IOLog("(FakeIrisXE) [V171] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
@@ -6027,9 +6016,9 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
     // Improvement 8: Engine Reset Before Ring Init (as Linux does)
     IOLog("(FakeIrisXE) [V210] 8/10: Engine reset before ring init...\n");
     safeMMIOWrite(0x20D0, 0x00000001);  // Request reset
-    IOSleep(10);
+    IOSleep(5);
     safeMMIOWrite(0x20D0, 0x00000000);  // Release reset
-    IOSleep(20);
+    IOSleep(10);
     uint32_t reset_status = safeMMIORead(0x20D0);
     IOLog("(FakeIrisXE) [V210] Engine reset: 0x%08X\n", reset_status);
     
@@ -6116,7 +6105,7 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
         safeMMIOWrite(0x20D8, 0x00000000);  // DEBUG_CTRL1 = 0
         IOSleep(5);
         safeMMIOWrite(0x20D8, 0x00000001);  // Trigger reset
-        IOSleep(50);
+        IOSleep(10);
         
         // Step 3: Clear GT_ERROR
         IOLog("(FakeIrisXE) [V212] Step 3: Clear GT_ERROR\n");
@@ -6237,154 +6226,20 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V151] ============================================\n");
-    IOLog("(FakeIrisXE)[V151] GPU EXECUTION TEST - COMPREHENSIVE DIAGNOSTICS\n");
-    IOLog("(FakeIrisXE)[V151] ============================================\n");
-    
-    if (!fExeclist || !fRcsRing) {
-        IOLog("(FakeIrisXE)[V151] ❌ No Execlist or Ring available\n");
+    IOLog("(FakeIrisXE)[V251] ============================================\n");
+    IOLog("(FakeIrisXE)[V251] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V251] ============================================\n");
+
+    if (!fExeclist) {
+        IOLog("(FakeIrisXE)[V251] ❌ No EXECLIST owner available\n");
         return false;
     }
 
-    if (!validateRcsRingState("gpu-test-pre", true)) {
-        IOLog("(FakeIrisXE)[V151] ❌ Ring validation failed before test submission\n");
-        return false;
-    }
-    
-    // V151: Check power and forcewake first
-    IOLog("(FakeIrisXE)[V151] --- POWER STATUS ---\n");
-    
-    // Check FORCEWAKE status
-    uint32_t forcewakeReq = safeMMIORead(0xA00C);  // FORCEWAKE_REQ
-    uint32_t forcewakeAck = safeMMIORead(0xA00D);  // FORCEWAKE_ACK  
-    uint32_t forcewakeAck2 = safeMMIORead(0x130044); // Alternative ACK register
-    IOLog("(FakeIrisXE)[V151] FORCEWAKE: REQ=0x%08X ACK=0x%08X ACK2=0x%08X\n", 
-          forcewakeReq, forcewakeAck, forcewakeAck2);
-    
-    // Check GT power status
-    uint32_t gtlc0 = safeMMIORead(0x1381B4);  // GTLC0
-    uint32_t gtlc1 = safeMMIORead(0x1381B8);  // GTLC1
-    uint32_t gtlcP = safeMMIORead(0x1381BC);   // GTLCx_PUBLISHED
-    IOLog("(FakeIrisXE)[V151] GT POWER: GTLC0=0x%08X GTLC1=0x%08X PUBLISHED=0x%08X\n",
-          gtlc0, gtlc1, gtlcP);
-    
-    // Check render power well
-    uint32_t renderPWR = safeMMIORead(0xA010);  // Render power well status
-    IOLog("(FakeIrisXE)[V151] Render PWR Status: 0x%08X\n", renderPWR);
-    
-    IOLog("(FakeIrisXE)[V151] --- RING REGISTERS ---\n");
-    
-    // Read all ring registers
-    uint32_t ringStart = safeMMIORead(kTglRcsRingStart);
-    uint32_t ringHead = safeMMIORead(kTglRcsRingHead);
-    uint32_t ringTail = safeMMIORead(kTglRcsRingTail);
-    uint32_t ringCtl = safeMMIORead(kTglRcsRingCtl);
-    uint32_t ringStatus = safeMMIORead(RCS0_EXECLIST_STATUS_LO);
-    uint32_t ringHWS = 0;
-    
-    IOLog("(FakeIrisXE)[V151] START: 0x%08X\n", ringStart);
-    IOLog("(FakeIrisXE)[V151] HEAD:  0x%08X (GPU read position)\n", ringHead);
-    IOLog("(FakeIrisXE)[V151] TAIL:  0x%08X (CPU write position)\n", ringTail);
-    IOLog("(FakeIrisXE)[V151] CTL:   0x%08X (EN=%s SIZE=%dKB)\n", ringCtl,
-          (ringCtl & 0x1) ? "YES" : "NO",
-          (ringCtl & 0x3FF000) >> 12);
-    IOLog("(FakeIrisXE)[V151] STATUS: 0x%08X (IDLE=%s)\n", ringStatus,
-          (ringStatus & 0x1) ? "YES" : "NO");
-    IOLog("(FakeIrisXE)[V151] HWS:   0x%08X\n", ringHWS);
-    
-    // Check if ring is enabled
-    bool ringEnabled = (ringCtl & 0x1) != 0;
-    bool ringReady = ringEnabled && fRcsRingValidated;
-    
-    IOLog("(FakeIrisXE)[V151] Ring Enabled: %s\n", ringEnabled ? "✅ YES" : "❌ NO");
-    IOLog("(FakeIrisXE)[V151] Ring Ready: %s\n", ringReady ? "✅ YES" : "❌ NO");
-    
-    if (!ringEnabled) {
-        IOLog("(FakeIrisXE)[V151] ❌ RING NOT ENABLED - Cannot submit commands!\n");
-        return false;
-    }
-    
-    // Read initial ring state
-    IOLog("(FakeIrisXE)[V151] --- SUBMITTING TEST BATCH ---\n");
-    uint32_t ringHeadStart = ringHead;
-    uint32_t ringTailStart = ringTail;
-    IOLog("(FakeIrisXE)[V151] Before: HEAD=0x%08X TAIL=0x%08X\n", ringHeadStart, ringTailStart);
-    
-    // Create a simple test batch buffer with MI_NOOP + MI_BATCH_END
-    const size_t batchSize = 64;
-    FakeIrisXEGEM* testBatch = FakeIrisXEGEM::withSize(batchSize, 0);
-    if (!testBatch) {
-        IOLog("(FakeIrisXE)[V150] ❌ Test batch GEM allocation failed\n");
-        return false;
-    }
-    
-    testBatch->pin();
-    uint64_t batchGGTT = ggttMap(testBatch);
-    if (batchGGTT == 0) {
-        IOLog("(FakeIrisXE)[V150] ❌ Test batch GGTT mapping failed\n");
-        testBatch->unpin();
-        testBatch->release();
-        return false;
-    }
-    
-    // Write MI_NOOP commands to batch buffer
-    IOBufferMemoryDescriptor* md = testBatch->memoryDescriptor();
-    void* cpuPtr = md->getBytesNoCopy();
-    uint32_t* cmds = (uint32_t*)cpuPtr;
-    
-    // MI_NOOP x 8 (each NOOP is 4 bytes = 1 dword)
-    for (int i = 0; i < 14; i++) {
-        cmds[i] = 0x00000000;  // MI_NOOP
-    }
-    cmds[14] = 0x05000000;  // MI_BATCH_END (without Reloc)
-    
-    IOLog("(FakeIrisXE)[V151] Test batch @ GGTT=0x%llx (CPU %p)\n", batchGGTT, cpuPtr);
-    
-    // Submit via Execlist
-    bool submitResult = fExeclist->submitForContext(
-        fExeclist->lookupHwContext(0),
-        testBatch
-    );
-    
-    if (!submitResult) {
-        IOLog("(FakeIrisXE)[V151] ❌ Batch submission failed\n");
-        testBatch->unpin();
-        testBatch->release();
-        return false;
-    }
-    
-    IOLog("(FakeIrisXE)[V151] Batch submitted, waiting for completion...\n");
-    
-    // Wait a bit for GPU to process
-    IOSleep(50);
-    
-    // Read final ring state
-    uint32_t ringHeadEnd = safeMMIORead(kTglRcsRingHead);
-    uint32_t ringTailEnd = safeMMIORead(kTglRcsRingTail);
-    ringStatus = safeMMIORead(0x2038);
-    
-    IOLog("(FakeIrisXE)[V151] Final:   HEAD=0x%08X TAIL=0x%08X STATUS=0x%08X\n", 
-          ringHeadEnd, ringTailEnd, ringStatus);
-    
-    // Check if ring advanced
-    bool ringAdvanced = (ringHeadEnd != ringHeadStart) || (ringTailEnd != ringTailStart);
-    
-    if (ringAdvanced) {
-        IOLog("(FakeIrisXE)[V151] ✅ GPU EXECUTED COMMANDS! Ring advanced.\n");
-    } else {
-        IOLog("(FakeIrisXE)[V151] ⚠️  Ring did NOT advance - GPU may not be executing\n");
-    }
-    
-    // Check status register for completion
-    bool gpuIdle = (ringStatus & 0x1) != 0;  // Bit 0 = GPU idle
-    IOLog("(FakeIrisXE)[V151] GPU Idle: %s\n", gpuIdle ? "YES" : "NO");
-    
-    testBatch->unpin();
-    testBatch->release();
-    
-    IOLog("(FakeIrisXE)[V151] ============================================\n");
-    
-    return ringAdvanced;
+    IOLog("(FakeIrisXE)[V251] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    bool success = fExeclist->testBatchSubmission();
+    IOLog("(FakeIrisXE)[V251] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V251] ============================================\n");
+    return success;
 }
 
 // V138: Create BLT ring for 2D operations
@@ -6461,8 +6316,8 @@ uint32_t FakeIrisXEFramebuffer::submitBatch(FakeIrisXEGEM* batchGem, size_t batc
             IOLog("FakeIrisXEFramebuffer: submitBatch - using EXEClist fallback path\n");
             bool success = fExeclist->submitBatchExeclist(batchGem);
             if (success) {
-                IOLog("FakeIrisXEFramebuffer: submitBatch - EXEClist fallback SUCCESS\n");
-                return 1;  // Return success
+                IOLog("FakeIrisXEFramebuffer: submitBatch - EXEClist fallback submitted diagnostically, but completion is unproven\n");
+                return 0;
             }
             IOLog("FakeIrisXEFramebuffer: submitBatch - EXEClist fallback FAILED\n");
         }
@@ -6556,11 +6411,15 @@ uint32_t FakeIrisXEFramebuffer::submitBatch(FakeIrisXEGEM* batchGem, size_t batc
 #endif
 
 #ifndef MI_BATCH_BUFFER_END
-#define MI_BATCH_BUFFER_END    (0xA << 23)
+#define MI_BATCH_BUFFER_END    MI_INSTR(0x0A, 0)
 #endif
 
 #ifndef MI_STORE_DWORD_IMM
-#define MI_STORE_DWORD_IMM     MI_INSTR(0x20, 0)
+#define MI_STORE_DWORD_IMM     MI_INSTR(0x20, 1)
+#endif
+
+#ifndef MI_STORE_DWORD_IMM_GEN4
+#define MI_STORE_DWORD_IMM_GEN4 MI_INSTR(0x20, 2)
 #endif
 
 #ifndef MI_USE_GGTT
@@ -6604,17 +6463,17 @@ static FakeIrisXEGEM* createTailBatchAndMap(FakeIrisXEFramebuffer* fb, uint64_t 
     bzero(tailDesc->getBytesNoCopy(), 4096);
 
     // Build tail batch:
-    // [0] = MI_STORE_DWORD_IMM | MI_USE_GGTT
-    // [1] = seq (immediate)
-    // [2] = low32(fenceGpuAddr)
-    // [3] = high32(fenceGpuAddr)
+    // [0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT
+    // [1] = low32(fenceGpuAddr)
+    // [2] = high32(fenceGpuAddr)
+    // [3] = seq (immediate)
     // [4] = MI_BATCH_BUFFER_END
 
     uint32_t* p = (uint32_t*)tailDesc->getBytesNoCopy();
-    p[0] = MI_STORE_DWORD_IMM | MI_USE_GGTT;
-    p[1] = seq;
-    p[2] = (uint32_t)(fenceGpuAddr & 0xFFFFFFFFULL);
-    p[3] = (uint32_t)(fenceGpuAddr >> 32);
+    p[0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT;
+    p[1] = (uint32_t)(fenceGpuAddr & 0xFFFFFFFFULL);
+    p[2] = (uint32_t)(fenceGpuAddr >> 32);
+    p[3] = seq;
     p[4] = MI_BATCH_BUFFER_END;
     // flush CPU writes
     __sync_synchronize();
@@ -7485,7 +7344,7 @@ bool FakeIrisXEFramebuffer::diagnoseGuCSubmissionFailure()
     IOLog("  FW Loaded: %s\n", (status & 0x2) ? "YES" : "NO");
     IOLog("  Comm Established: %s\n", (status & 0x4) ? "YES" : "NO");
     
-    return true;
+    return false;
 }
 
 // ============================================================================
@@ -7493,15 +7352,8 @@ bool FakeIrisXEFramebuffer::diagnoseGuCSubmissionFailure()
 // ============================================================================
 bool FakeIrisXEFramebuffer::testGuCCommandExecution()
 {
-    IOLog("(FakeIrisXE) [V43] testGuCCommandExecution(): Testing GuC command execution\n");
-    
-    if (!fGuC) {
-        IOLog("(FakeIrisXE) [V43] GuC not available for test\n");
-        return false;
-    }
-    
-    IOLog("(FakeIrisXE) [V43] Command execution test would run here\n");
-    return true;
+    IOLog("(FakeIrisXE) [V43] testGuCCommandExecution(): GuC command execution test not implemented\n");
+    return false;
 }
 
 // ============================================================================
@@ -7569,17 +7421,94 @@ uint64_t FakeIrisXEFramebuffer::mapGEMToGGTT(FakeIrisXEGEM* gem) {
     return gpuAddr;
 }
 
+// V248: Proper GGTT entry invalidation for Gen12/Tiger Lake.
+// When unmapping a GEM from GGTT, we must:
+//   1. Clear the PTE valid bit (bit 57 on Gen12) in the GGTT PTE array
+//   2. Issue a memory barrier to ensure the CPU write is globally visible
+//   3. Flush the GPU's GTT/TLB cache so stale translations are discarded
+//
+// Gen12 GGTT PTE format (64-bit):
+//   Bit 57  = Valid (1=present, 0=not present)
+//   Bit 58  = Page Size (0=4KB, 1=2MB/1GB depending on context)
+//   Bit 59  = PAT/XLBS (cache attributes)
+//   Bits 51:12 = Physical page address [51:12]
+//   Bits 63:60 = Reserved/Pat
+//
+// TLB/GTT cache flush on Gen12 requires writing to the GTT cache invalidate
+// register at PCI config space + GTT cache invalidation, or via the
+// GTTMMADR space. We use the existing GTT_WRITE_FLUSH path and add a
+// read-back barrier to ensure completion.
 void FakeIrisXEFramebuffer::unmapGEMFromGGTT(uint64_t gpuAddr) {
     if (gpuAddr == 0) {
         return;
     }
-    
-    // For now, just log the unmap request
-    // In a full implementation, we'd walk the GGTT and invalidate entries
-    IOLog("[V90] unmapGEMFromGGTT: Unmapping GPU addr 0x%llx\n", (unsigned long long)gpuAddr);
-    
-    // TODO: Implement proper GGTT entry invalidation
-    // This would involve finding the PTE and clearing the valid bit
+
+    if (!fGGTT) {
+        IOLog("[V248] unmapGEMFromGGTT: GGTT not initialized, cannot invalidate\n");
+        return;
+    }
+
+    // V248: We need to find how many pages were mapped starting at gpuAddr.
+    // Since the original ggttMap stores pages in fNextGGTTOffset progression,
+    // we don't track individual mappings. We invalidate exactly 1 page
+    // for the surface entry. For multi-page unmap, callers should use
+    // ggttUnmap(gpuAddr, numPages) directly.
+    //
+    // Here we implement a targeted single-page invalidation for the
+    // surface management use case (unmapGEMFromGGTT is called from
+    // destroySurface for single-surface teardown).
+    uint64_t gttIndex = (gpuAddr >> 12);
+    uint64_t gttOffsetBytes = gttIndex * sizeof(uint64_t);
+
+    if ((gttOffsetBytes + sizeof(uint64_t)) > fGGTTSize) {
+        IOLog("[V248] unmapGEMFromGGTT: GPU addr 0x%llx out of GGTT range\n",
+              (unsigned long long)gpuAddr);
+        return;
+    }
+
+    volatile uint64_t* ptePtr = reinterpret_cast<volatile uint64_t*>(fGGTT) + gttIndex;
+    uint64_t oldPte = *ptePtr;
+
+    // V248: Clear the entire PTE to zero. This clears bit 57 (Valid) and
+    // all other fields, making the translation invalid from the GPU's view.
+    *ptePtr = 0ULL;
+
+    // V248: Memory barrier — ensure the CPU write is globally visible before
+    // the GPU can observe it. This is required on x86_64 after any MMIO or
+    // uncached write that the GPU might snoop.
+    __sync_synchronize();
+
+    // V248: Verify the clear was written
+    uint64_t verifyPte = *ptePtr;
+    if (verifyPte != 0) {
+        IOLog("[V248] unmapGEMFromGGTT: WARNING — PTE verify failed (wrote 0, read 0x%llx)\n",
+              (unsigned long long)verifyPte);
+    }
+
+    IOLog("[V248] GGTT[%llu]: 0x%016llx -> 0x%016llx (GPU VA 0x%llx) invalidated\n",
+          (unsigned long long)gttIndex,
+          (unsigned long long)oldPte,
+          (unsigned long long)verifyPte,
+          (unsigned long long)gpuAddr);
+
+    // V248: GTT cache/TLB flush.
+    // On Tiger Lake, the GTT TLB is flushed automatically when the valid
+    // bit transitions from 1->0 in many cases. For a more robust flush,
+    // we perform a GTT cache invalidation via the PCI config space.
+    // On Gen12, this is typically done through the GTTMMADR register or
+    // via a dedicated invalidate command. We use the same mechanism as
+    // the existing ggttMap: write GTT_WRITE_FLUSH.
+    //
+    // The GTT_WRITE_FLUSH register (0x1082C0) is a write-only register that,
+    // when written, forces the GPU to flush all pending GTT write buffers.
+    safeMMIOWrite(0x1082C0, 1);
+
+    // Additional read-back as a completion barrier — some Gen12 platforms
+    // require reading back a status register to confirm flush completion.
+    uint32_t flushStatus = safeMMIORead(0x1082C0);
+    (void)flushStatus;  // Acknowledge but don't fail on read
+
+    IOLog("[V248] GGTT TLB flush complete (status=0x%08x)\n", flushStatus);
 }
 
 // ============================================================
@@ -7744,7 +7673,6 @@ IOReturn FakeIrisXEFramebuffer::blitSurface(uint64_t srcSurfaceId, uint64_t dstS
 
 IOReturn FakeIrisXEFramebuffer::copyToFramebuffer(uint64_t surfaceId, uint32_t x, uint32_t y)
 {
-    // Find surface
     SurfaceInfo* surf = nullptr;
     for (uint32_t i = 0; i < kMaxSurfaces; i++) {
         if (fSurfaces[i].inUse && fSurfaces[i].id == surfaceId) {
@@ -7754,27 +7682,47 @@ IOReturn FakeIrisXEFramebuffer::copyToFramebuffer(uint64_t surfaceId, uint32_t x
     }
     
     if (!surf) {
-        IOLog("[V90] ❌ Copy to FB failed: surface not found\n");
+        IOLog("[V90] copyToFramebuffer: surface %llu not found\n", surfaceId);
         return kIOReturnNotFound;
     }
     
-    IOLog("[V90] Copy surface %llu to framebuffer at (%u, %u)\n", surfaceId, x, y);
+    if (!fExeclist || !fRcsRing) {
+        IOLog("[V90] copyToFramebuffer: GPU infrastructure not ready\n");
+        return kIOReturnNotReady;
+    }
     
-    // TODO: Submit XY_SRC_COPY_BLT to copy surface to primary framebuffer
-    // This is the critical path for WindowServer to display content
-    
-    return kIOReturnSuccess;
+    IOReturn r = submitBlitXY_SRC_COPY(surf, surf, 0, 0, x, y, surf->width, surf->height);
+    if (r != kIOReturnSuccess) {
+        IOLog("[V90] copyToFramebuffer: blit failed with 0x%x\n", r);
+    }
+    return r;
 }
 
 IOReturn FakeIrisXEFramebuffer::fillRect(uint32_t x, uint32_t y, uint32_t width, 
                                          uint32_t height, uint32_t color)
 {
-    IOLog("[V90] FillRect: (%u, %u) size %ux%u color=0x%08x\n", x, y, width, height, color);
+    if (!fExeclist || !fRcsRing) {
+        IOLog("[V90] fillRect: GPU infrastructure not ready\n");
+        return kIOReturnNotReady;
+    }
     
-    // TODO: Submit XY_COLOR_BLT to fill rectangle
-    // This is used for clears and solid fills in compositing
+    if (width == 0 || height == 0) {
+        return kIOReturnBadArgument;
+    }
     
-    return kIOReturnSuccess;
+    SurfaceInfo* surf = nullptr;
+    for (uint32_t i = 0; i < kMaxSurfaces; i++) {
+        if (fSurfaces[i].inUse) {
+            surf = &fSurfaces[i];
+            break;
+        }
+    }
+    
+    if (!surf) {
+        return kIOReturnNotFound;
+    }
+    
+    return submitBlitXY_COLOR_BLT(surf, x, y, width, height, color);
 }
 
 IOReturn FakeIrisXEFramebuffer::submit2DCommandBuffer(void* commands, size_t size)
@@ -7782,37 +7730,31 @@ IOReturn FakeIrisXEFramebuffer::submit2DCommandBuffer(void* commands, size_t siz
     IOLog("[V90] submit2DCommandBuffer: %zu bytes\n", size);
     
     if (!fExeclist || !fRcsRing) {
-        IOLog("[V90] ❌ Cannot submit - execlist not ready\n");
+        IOLog("[V90] submit2DCommandBuffer: GPU infrastructure not ready\n");
         return kIOReturnNotReady;
     }
     
-    // TODO: Parse command buffer and submit via execlist
-    // This is the main entry point for WindowServer command submission
-    
-    return kIOReturnSuccess;
+    return kIOReturnUnsupported;
 }
 
 IOReturn FakeIrisXEFramebuffer::submitBlitCommand(uint32_t opcode, void* data, size_t size)
 {
     IOLog("[V90] submitBlitCommand: opcode=%u, size=%zu\n", opcode, size);
     
-    // Handle common blit opcodes
-    switch (opcode) {
-        case 0x46: // XY_SRC_COPY_BLT
-            IOLog("[V90]   -> XY_SRC_COPY_BLT\n");
-            break;
-        case 0x50: // XY_COLOR_BLT
-            IOLog("[V90]   -> XY_COLOR_BLT\n");
-            break;
-        case 0x52: // XY_PIXEL_BLT
-            IOLog("[V90]   -> XY_PIXEL_BLT\n");
-            break;
-        default:
-            IOLog("[V90]   -> Unknown opcode 0x%02x\n", opcode);
-            break;
+    if (!fExeclist || !fRcsRing) {
+        return kIOReturnNotReady;
     }
     
-    return kIOReturnSuccess;
+    switch (opcode) {
+        case 0x46: // XY_SRC_COPY_BLT
+        case 0x50: // XY_COLOR_BLT
+        case 0x52: // XY_PIXEL_BLT
+            IOLog("[V90]   -> opcode recognized but not implemented\n");
+            return kIOReturnUnsupported;
+        default:
+            IOLog("[V90]   -> Unknown opcode 0x%02x\n", opcode);
+            return kIOReturnUnsupported;
+    }
 }
 
 // ============================================================
@@ -7990,8 +7932,7 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_SRC_COPY(
     }
     
     IOLog("[V91] ✅ Blit submitted with sequence %u\n", seqNum);
-    
-    // Note: batchGem is retained by submission, will be released on completion
+    batchGem->release();
     return kIOReturnSuccess;
 }
 
@@ -8330,6 +8271,7 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_COLOR_BLT_Full(
     // V93: Track GPU command submission
     trackGPUCommandSubmitted();
     
+    batchGem->release();
     return kIOReturnSuccess;
 }
 
@@ -8404,6 +8346,7 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_SETUP_CLIP(
     fV92ClipCount++;
     IOLog("[V92] ✅ Clip set: (%u,%u)-(%u,%u)\n", left, top, right, bottom);
     
+    batchGem->release();
     return kIOReturnSuccess;
 }
 

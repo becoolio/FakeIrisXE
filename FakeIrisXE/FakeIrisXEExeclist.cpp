@@ -34,6 +34,522 @@ static const uint32_t kExecStatusPrimaryHi = RCS0_EXECLIST_STATUS_HI;
 static const uint32_t kExecStatusLegacyLo  = 0x2230;
 static const uint32_t kExecStatusLegacyHi  = 0x2234;
 
+namespace {
+
+static const uint32_t kExecGtErrorReg = 0x18E04;
+static const uint32_t kExecRcsStatusReg = TGL_RCS0_BASE + 0x10;
+static const uint32_t kExecActhdLo = TGL_RCS0_BASE + 0x74;
+static const uint32_t kExecActhdHi = TGL_RCS0_BASE + 0x5C;
+static const uint32_t kExecBbAddrLo = TGL_RCS0_BASE + 0x140;
+static const uint32_t kExecBbAddrHi = TGL_RCS0_BASE + 0x168;
+static const uint32_t kExecCcidReg = TGL_RCS0_BASE + 0x180;
+static const uint32_t kExecContextControlReg = TGL_RCS0_BASE + 0x244;
+
+static const uint32_t kExecStatusSlot1Valid = (1u << 3);
+static const uint32_t kExecStatusSlot0Valid = (1u << 4);
+static const uint32_t kExecStatusSlot1Active = (1u << 17);
+static const uint32_t kExecStatusSlot0Active = (1u << 18);
+
+static const uint32_t kProofExpectedValue = 0xDEADBEEFu;
+static const uint32_t kProofScratchInitial = 0xBADBAD00u;
+static const uint32_t kProofRingSize = 64u * 1024u;
+static const uint32_t kProofContextControl = (1u << 0) | (1u << 3) | (1u << 5) | (1u << 11);
+static const uint32_t kCtxDescValid = (1u << 0);
+static const uint32_t kCtxDescPrivilege = (1u << 8);
+static const uint32_t kCtxDescForceRestore = (1u << 2);
+static const uint32_t kCtxDescAddressingModeShift = 3u;
+static const uint32_t kCtxDescLegacy64B = 3u;
+static const uint32_t kCtxDescSwCtxIdShiftInHi = 5u;
+static const uint32_t kCtxDescEngineInstanceShiftInHi = 16u;
+static const uint32_t kCtxDescEngineClassShiftInHi = 29u;
+static const uint32_t kCtxDescRenderClass = 0u;
+static const uint32_t kCtxDescRenderInstance = 0u;
+
+enum ProofFailureType {
+    None,
+    DescriptorWrong,
+    LrcLayoutWrong,
+    RingStateWrong,
+    MiPacketWrong,
+    EngineHardHalted,
+    NoSchedulingProgress,
+};
+
+struct RcsProofResources {
+    FakeIrisXEGEM* ringGem = nullptr;
+    FakeIrisXEGEM* lrcGem = nullptr;
+    FakeIrisXEGEM* scratchGem = nullptr;
+    uint64_t ringGpuAddr = 0;
+    uint64_t lrcGpuAddr = 0;
+    uint64_t scratchGpuAddr = 0;
+    uint32_t ringTailBytes = 0;
+    uint32_t ringCtl = 0;
+    uint32_t expectedValue = kProofExpectedValue;
+    uint32_t swContextId = 1;
+    uint32_t descLo = 0;
+    uint32_t descHi = 0;
+};
+
+static const char* proofFailureLabel(ProofFailureType type)
+{
+    switch (type) {
+        case DescriptorWrong:
+            return "A_DESCRIPTOR_FORMAT_WRONG";
+        case LrcLayoutWrong:
+            return "B_LRC_LAYOUT_WRONG";
+        case RingStateWrong:
+            return "C_RING_STATE_WRONG";
+        case MiPacketWrong:
+            return "D_MI_PACKET_WRONG";
+        case EngineHardHalted:
+            return "E_RCS_HARD_HALTED";
+        case NoSchedulingProgress:
+            return "F_NO_SCHEDULING_PROGRESS";
+        default:
+            return "NONE";
+    }
+}
+
+static void logProofDwords(const char* label, const uint32_t* words, uint32_t count)
+{
+    if (!label || !words) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < count; ++i) {
+        IOLog("(FakeIrisXE) [V221] %s[%u] = 0x%08X\n", label, i, words[i]);
+    }
+}
+
+static void cleanupProofGem(FakeIrisXEExeclist* self,
+                            FakeIrisXEGEM*& gem,
+                            uint64_t& gpuAddr,
+                            uint32_t sizeBytes)
+{
+    if (!self || !self->fOwner || !gem) {
+        gpuAddr = 0;
+        gem = nullptr;
+        return;
+    }
+
+    if (gpuAddr) {
+        const uint32_t pages = (sizeBytes + 4095u) / 4096u;
+        self->fOwner->ggttUnmap(gpuAddr, pages);
+        gpuAddr = 0;
+    }
+
+    gem->unpin();
+    gem->release();
+    gem = nullptr;
+}
+
+static void releaseProofResources(FakeIrisXEExeclist* self, RcsProofResources& res)
+{
+    if (!self || !self->fOwner) {
+        return;
+    }
+
+    cleanupProofGem(self, res.scratchGem, res.scratchGpuAddr, 4096u);
+    cleanupProofGem(self, res.lrcGem, res.lrcGpuAddr, 4096u);
+    cleanupProofGem(self, res.ringGem, res.ringGpuAddr, kProofRingSize);
+}
+
+static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& res)
+{
+    if (!self || !self->fOwner) {
+        return false;
+    }
+
+    IOLog("(FakeIrisXE) [V221] Allocating direct Execlist proof resources...\n");
+
+    res.ringGem = FakeIrisXEGEM::withSize(kProofRingSize, 0);
+    if (!res.ringGem) {
+        IOLog("(FakeIrisXE) [V221] ❌ Ring allocation failed\n");
+        return false;
+    }
+    res.ringGem->pin();
+    res.ringGpuAddr = self->fOwner->ggttMap(res.ringGem) & ~0xFFFULL;
+    if (!res.ringGpuAddr) {
+        IOLog("(FakeIrisXE) [V221] ❌ Ring GGTT mapping failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+
+    res.lrcGem = FakeIrisXEGEM::withSize(4096, 0);
+    if (!res.lrcGem) {
+        IOLog("(FakeIrisXE) [V221] ❌ LRC allocation failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+    res.lrcGem->pin();
+    res.lrcGpuAddr = self->fOwner->ggttMap(res.lrcGem) & ~0xFFFULL;
+    if (!res.lrcGpuAddr) {
+        IOLog("(FakeIrisXE) [V221] ❌ LRC GGTT mapping failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+
+    res.scratchGem = FakeIrisXEGEM::withSize(4096, 0);
+    if (!res.scratchGem) {
+        IOLog("(FakeIrisXE) [V221] ❌ Scratch allocation failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+    res.scratchGem->pin();
+    res.scratchGpuAddr = self->fOwner->ggttMap(res.scratchGem) & ~0xFFFULL;
+    if (!res.scratchGpuAddr) {
+        IOLog("(FakeIrisXE) [V221] ❌ Scratch GGTT mapping failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+
+    void* scratchCpu = self->fOwner->ggttGetCPUAddr(res.scratchGem);
+    if (!scratchCpu) {
+        IOLog("(FakeIrisXE) [V221] ❌ Scratch CPU mapping failed\n");
+        releaseProofResources(self, res);
+        return false;
+    }
+
+    *(volatile uint32_t*)scratchCpu = kProofScratchInitial;
+    __sync_synchronize();
+    OSSynchronizeIO();
+
+    IOLog("(FakeIrisXE) [V221]   Ring GPU VA:    0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V221]   LRC GPU VA:     0x%016llX\n", (unsigned long long)res.lrcGpuAddr);
+    IOLog("(FakeIrisXE) [V221]   Scratch GPU VA: 0x%016llX\n", (unsigned long long)res.scratchGpuAddr);
+    IOLog("(FakeIrisXE) [V221]   Scratch init:   0x%08X\n", kProofScratchInitial);
+    return true;
+}
+
+static bool buildProofCommandStream(FakeIrisXEExeclist* self, RcsProofResources& res)
+{
+    if (!self || !self->fOwner || !res.ringGem) {
+        return false;
+    }
+
+    uint32_t* ringCpu = (uint32_t*)self->fOwner->ggttGetCPUAddr(res.ringGem);
+    if (!ringCpu) {
+        IOLog("(FakeIrisXE) [V221] ❌ Ring CPU mapping failed\n");
+        return false;
+    }
+
+    bzero(ringCpu, kProofRingSize);
+    ringCpu[0] = MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT;
+    ringCpu[1] = (uint32_t)(res.scratchGpuAddr & 0xFFFFFFFFULL);
+    ringCpu[2] = (uint32_t)(res.scratchGpuAddr >> 32);
+    ringCpu[3] = res.expectedValue;
+    ringCpu[4] = MI_BATCH_BUFFER_END;
+    res.ringTailBytes = 5u * sizeof(uint32_t);
+    res.ringCtl = RING_CTL_SIZE(kProofRingSize) | RING_VALID;
+
+    __sync_synchronize();
+    OSSynchronizeIO();
+
+    IOLog("(FakeIrisXE) [V221] ========== RCS TEST COMMAND STREAM ==========" "\n");
+    IOLog("(FakeIrisXE) [V221]   Packet: MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT\n");
+    IOLog("(FakeIrisXE) [V221]   Ring GPU VA: 0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V221]   Ring size:   %u bytes\n", kProofRingSize);
+    IOLog("(FakeIrisXE) [V221]   Ring head:   0 bytes\n");
+    IOLog("(FakeIrisXE) [V221]   Ring tail:   %u bytes\n", res.ringTailBytes);
+    IOLog("(FakeIrisXE) [V221]   Ring ctl:    0x%08X\n", res.ringCtl);
+    logProofDwords("RingDW", ringCpu, 16);
+
+    return true;
+}
+
+static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
+{
+    if (!self || !self->fOwner || !res.lrcGem) {
+        return false;
+    }
+
+    uint8_t* lrcCpu = (uint8_t*)self->fOwner->ggttGetCPUAddr(res.lrcGem);
+    if (!lrcCpu) {
+        IOLog("(FakeIrisXE) [V221] ❌ LRC CPU mapping failed\n");
+        return false;
+    }
+
+    bzero(lrcCpu, 4096);
+
+    const uint64_t pdp0 = res.lrcGpuAddr & ~0xFFFULL;
+    *(uint64_t*)(lrcCpu + 0x00) = pdp0;
+    *(uint64_t*)(lrcCpu + 0x08) = 0;
+    *(uint64_t*)(lrcCpu + 0x10) = 0;
+    *(uint64_t*)(lrcCpu + 0x18) = 0;
+    *(uint32_t*)(lrcCpu + 0x2C) = kProofContextControl;
+    *(uint32_t*)(lrcCpu + 0x30) = 0x00010000u;
+    *(uint32_t*)(lrcCpu + 0x100) = 0u;
+    *(uint32_t*)(lrcCpu + 0x104) = res.ringTailBytes;
+    *(uint32_t*)(lrcCpu + 0x108) = (uint32_t)(res.ringGpuAddr & 0xFFFFFFFFULL);
+    *(uint32_t*)(lrcCpu + 0x10C) = (uint32_t)(res.ringGpuAddr >> 32);
+    *(uint32_t*)(lrcCpu + 0x110) = res.ringCtl;
+
+    __sync_synchronize();
+    OSSynchronizeIO();
+
+    IOLog("(FakeIrisXE) [V221] ========== GEN12 RCS LRC ==========" "\n");
+    IOLog("(FakeIrisXE) [V221]   PDP0:        0x%016llX\n", (unsigned long long)pdp0);
+    IOLog("(FakeIrisXE) [V221]   CONTEXT_CTL: 0x%08X\n", kProofContextControl);
+    IOLog("(FakeIrisXE) [V221]   RING_BASE:   0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V221]   RING_HEAD:   0\n");
+    IOLog("(FakeIrisXE) [V221]   RING_TAIL:   %u bytes\n", res.ringTailBytes);
+    IOLog("(FakeIrisXE) [V221]   RING_CTL:    0x%08X\n", res.ringCtl);
+    return true;
+}
+
+static void buildProofDescriptor(RcsProofResources& res)
+{
+    const uint32_t addressMode = (kCtxDescLegacy64B << kCtxDescAddressingModeShift);
+    const uint32_t flags = kCtxDescValid | kCtxDescPrivilege | kCtxDescForceRestore | addressMode;
+
+    res.descLo = ((uint32_t)(res.lrcGpuAddr & 0xFFFFF000ULL)) | flags;
+    res.descHi = ((res.swContextId & 0x7FFu) << kCtxDescSwCtxIdShiftInHi) |
+                 ((kCtxDescRenderInstance & 0x3Fu) << kCtxDescEngineInstanceShiftInHi) |
+                 ((kCtxDescRenderClass & 0x7u) << kCtxDescEngineClassShiftInHi);
+
+    IOLog("(FakeIrisXE) [V221] ========== CONTEXT DESCRIPTOR ==========" "\n");
+    IOLog("(FakeIrisXE) [V221]   DWord0: 0x%08X\n", res.descLo);
+    IOLog("(FakeIrisXE) [V221]   DWord1: 0x%08X\n", res.descHi);
+    IOLog("(FakeIrisXE) [V221]   Address field: 0x%08X -> GPU VA 0x%016llX\n",
+          res.descLo & 0xFFFFF000u,
+          (unsigned long long)(res.descLo & 0xFFFFF000u));
+    IOLog("(FakeIrisXE) [V221]   Valid: %u Privilege: %u ForceRestore: %u AddressMode: 0x%X\n",
+          (res.descLo & kCtxDescValid) ? 1u : 0u,
+          (res.descLo & kCtxDescPrivilege) ? 1u : 0u,
+          (res.descLo & kCtxDescForceRestore) ? 1u : 0u,
+          (res.descLo >> kCtxDescAddressingModeShift) & 0x3u);
+    IOLog("(FakeIrisXE) [V221]   SW context ID: %u EngineClass: %u EngineInstance: %u\n",
+          (res.descHi >> kCtxDescSwCtxIdShiftInHi) & 0x7FFu,
+          (res.descHi >> kCtxDescEngineClassShiftInHi) & 0x7u,
+          (res.descHi >> kCtxDescEngineInstanceShiftInHi) & 0x3Fu);
+}
+
+static bool singleResetAttemptIfNeeded(FakeIrisXEExeclist* self)
+{
+    if (!self || !self->fOwner) {
+        return false;
+    }
+
+    const uint32_t statusBefore = self->mmioRead32(kExecRcsStatusReg);
+    const uint32_t gtErrorBefore = self->fOwner->safeMMIORead(kExecGtErrorReg);
+    const bool haltedBefore = (statusBefore & 0xE000u) == 0xE000u;
+    const bool wedgedBefore = (gtErrorBefore & 0x80000000u) != 0;
+
+    IOLog("(FakeIrisXE) [V221] Pre-submit RCS status=0x%08X GT_ERROR=0x%08X\n", statusBefore, gtErrorBefore);
+    if (!haltedBefore && !wedgedBefore) {
+        return true;
+    }
+
+    IOLog("(FakeIrisXE) [V221] RCS looks halted/wedged; performing one focused reset attempt\n");
+    self->mmioWrite32(RCS0_RESET_CTRL, 0x00000001u);
+    IOSleep(5);
+    self->mmioWrite32(RCS0_RESET_CTRL, 0x00000000u);
+    IOSleep(5);
+
+    const uint32_t statusAfter = self->mmioRead32(kExecRcsStatusReg);
+    const uint32_t gtErrorAfter = self->fOwner->safeMMIORead(kExecGtErrorReg);
+    IOLog("(FakeIrisXE) [V221] Post-reset RCS status=0x%08X GT_ERROR=0x%08X\n", statusAfter, gtErrorAfter);
+    return ((statusAfter & 0xE000u) != 0xE000u) && ((gtErrorAfter & 0x80000000u) == 0);
+}
+
+static bool submitProofDescriptor(FakeIrisXEExeclist* self, const RcsProofResources& res)
+{
+    if (!self) {
+        return false;
+    }
+
+    const uint32_t preLo = self->mmioRead32(kExecElspPrimaryLo);
+    const uint32_t preHi = self->mmioRead32(kExecElspPrimaryHi);
+    const uint32_t preStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
+    const uint32_t preStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+
+    IOLog("(FakeIrisXE) [V221] Pre-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X\n",
+          preLo, preHi, preStatusLo, preStatusHi);
+
+    self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
+    self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+    self->mmioWrite32(RCS0_EXECLIST_CONTROL, 0x1u);
+    IOSleep(1);
+
+    const uint32_t postLo = self->mmioRead32(kExecElspPrimaryLo);
+    const uint32_t postHi = self->mmioRead32(kExecElspPrimaryHi);
+    const uint32_t postStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
+    const uint32_t postStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+
+    IOLog("(FakeIrisXE) [V221] Post-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X\n",
+          postLo, postHi, postStatusLo, postStatusHi);
+
+    return true;
+}
+
+static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, ProofFailureType& failure)
+{
+    if (!self || !self->fOwner || !res.scratchGem) {
+        failure = LrcLayoutWrong;
+        return false;
+    }
+
+    volatile uint32_t* scratchCpu = (volatile uint32_t*)self->fOwner->ggttGetCPUAddr(res.scratchGem);
+    if (!scratchCpu) {
+        failure = LrcLayoutWrong;
+        return false;
+    }
+
+    const uint32_t initialElspLo = self->mmioRead32(kExecElspPrimaryLo);
+    const uint32_t initialElspHi = self->mmioRead32(kExecElspPrimaryHi);
+    const uint32_t initialStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
+    const uint32_t initialStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+    const uint32_t initialCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
+
+    bool elspAccepted = false;
+    bool schedulingProgress = false;
+    bool ringStateLoaded = false;
+    bool ringConsumed = false;
+
+    IOLog("(FakeIrisXE) [V221] ========== EXECUTION POLL ==========" "\n");
+
+    for (uint32_t poll = 0; poll < 100; ++poll) {
+        IOSleep(10);
+
+        const uint32_t rcsHead = self->mmioRead32(kExecRingHeadReg);
+        const uint32_t rcsTail = self->mmioRead32(kExecRingTailReg);
+        const uint32_t rcsStart = self->mmioRead32(kExecRingStartReg);
+        const uint32_t rcsCtl = self->mmioRead32(kExecRingCtlReg);
+        const uint32_t rcsStatus = self->mmioRead32(kExecRcsStatusReg);
+        const uint32_t elspLo = self->mmioRead32(kExecElspPrimaryLo);
+        const uint32_t elspHi = self->mmioRead32(kExecElspPrimaryHi);
+        const uint32_t execlistStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
+        const uint32_t execlistStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+        const uint32_t csbCtrl = self->mmioRead32(RCS0_CSB_CTRL);
+        const uint32_t csbAddrLo = self->mmioRead32(RCS0_CSB_ADDR_LO);
+        const uint32_t csbAddrHi = self->mmioRead32(RCS0_CSB_ADDR_HI);
+        const uint32_t csbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
+        const uint32_t csbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
+        const uint32_t acthdLo = self->mmioRead32(kExecActhdLo);
+        const uint32_t acthdHi = self->mmioRead32(kExecActhdHi);
+        const uint32_t bbAddrLo = self->mmioRead32(kExecBbAddrLo);
+        const uint32_t bbAddrHi = self->mmioRead32(kExecBbAddrHi);
+        const uint32_t ccid = self->mmioRead32(kExecCcidReg);
+        const uint32_t ctxCtrl = self->mmioRead32(kExecContextControlReg);
+        const uint32_t gtError = self->fOwner->safeMMIORead(kExecGtErrorReg);
+        const uint32_t scratchValue = *scratchCpu;
+
+        const bool halted = (rcsStatus & 0xE000u) == 0xE000u;
+        const bool wedged = (gtError & 0x80000000u) != 0;
+        const bool statusValid = (execlistStatusLo & (kExecStatusSlot0Valid | kExecStatusSlot1Valid)) != 0;
+        const bool statusActive = (execlistStatusLo & (kExecStatusSlot0Active | kExecStatusSlot1Active)) != 0;
+
+        elspAccepted |= (elspLo != initialElspLo) || (elspHi != initialElspHi) ||
+                        (execlistStatusLo != initialStatusLo) || (execlistStatusHi != initialStatusHi);
+        schedulingProgress |= statusValid || statusActive || (ccid != 0) || (csbWrite != initialCsbWrite);
+        ringStateLoaded |= ((rcsStart & 0xFFFFF000u) == (uint32_t)(res.ringGpuAddr & 0xFFFFF000ULL)) &&
+                           ((rcsCtl & 0x001FF001u) == (res.ringCtl & 0x001FF001u));
+        ringConsumed |= ((rcsHead & 0x001FFFFCu) != 0) || acthdLo || acthdHi || bbAddrLo || bbAddrHi;
+
+        if ((poll % 5u) == 0u || scratchValue == res.expectedValue || halted || wedged) {
+            IOLog("(FakeIrisXE) [V221] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X RCS H/T/S=%08X/%08X/%08X\n",
+                  poll, elspLo, elspHi, execlistStatusLo, execlistStatusHi, rcsHead, rcsTail, rcsStatus);
+            IOLog("(FakeIrisXE) [V221]         CSB ctrl=%08X addr=%08X%08X rp=%08X wp=%08X CCID=%08X CTXCTL=%08X\n",
+                  csbCtrl, csbAddrHi, csbAddrLo, csbRead, csbWrite, ccid, ctxCtrl);
+            IOLog("(FakeIrisXE) [V221]         ACTHD=%08X%08X BBADDR=%08X%08X GT_ERR=%08X SCRATCH=%08X\n",
+                  acthdHi, acthdLo, bbAddrHi, bbAddrLo, gtError, scratchValue);
+        }
+
+        if (scratchValue == res.expectedValue) {
+            IOLog("(FakeIrisXE) [V221] ✅ SUCCESS: scratch changed from 0x%08X to 0x%08X\n",
+                  kProofScratchInitial, scratchValue);
+            failure = None;
+            return true;
+        }
+
+        if (halted || wedged) {
+            failure = EngineHardHalted;
+            return false;
+        }
+    }
+
+    if (!elspAccepted) {
+        failure = DescriptorWrong;
+    } else if (!schedulingProgress) {
+        failure = NoSchedulingProgress;
+    } else if (!ringStateLoaded) {
+        failure = LrcLayoutWrong;
+    } else if (!ringConsumed) {
+        failure = RingStateWrong;
+    } else {
+        failure = MiPacketWrong;
+    }
+
+    return false;
+}
+
+static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
+{
+    if (!self || !self->fOwner) {
+        return false;
+    }
+
+    RcsProofResources res;
+    ProofFailureType failure = None;
+    bool success = false;
+
+    IOLog("(FakeIrisXE) [V221] ============================================\n");
+    IOLog("(FakeIrisXE) [V221] DIRECT EXECLIST SCRATCH-WRITE PROOF (%s)\n", label ? label : "unknown");
+    IOLog("(FakeIrisXE) [V221] ============================================\n");
+
+    if (!allocateProofResources(self, res)) {
+        failure = LrcLayoutWrong;
+        goto done;
+    }
+
+    if (!singleResetAttemptIfNeeded(self)) {
+        failure = EngineHardHalted;
+        goto done;
+    }
+
+    if (!buildProofCommandStream(self, res)) {
+        failure = MiPacketWrong;
+        goto done;
+    }
+
+    if (!buildProofLrc(self, res)) {
+        failure = LrcLayoutWrong;
+        goto done;
+    }
+
+    buildProofDescriptor(res);
+
+    if (!self->fOwner->forcewakeRenderHold(5000)) {
+        IOLog("(FakeIrisXE) [V221] ❌ Failed to acquire forcewake for proof submission\n");
+        failure = EngineHardHalted;
+        goto done;
+    }
+
+    if (!submitProofDescriptor(self, res)) {
+        self->fOwner->forcewakeRenderRelease();
+        failure = DescriptorWrong;
+        goto done;
+    }
+
+    success = pollProofProgress(self, res, failure);
+    self->fOwner->forcewakeRenderRelease();
+
+done:
+    self->fIsReady = success;
+    self->fOwner->setProperty("FakeIrisXEExeclistExecutionProven", success ? kOSBooleanTrue : kOSBooleanFalse);
+    self->fOwner->setProperty("FakeIrisXERcsProofFailure", proofFailureLabel(failure));
+    self->fOwner->updateExecutionState(success, success ? "rcs-scratch-writeback" : proofFailureLabel(failure));
+
+    if (!success) {
+        IOLog("(FakeIrisXE) [V221] ❌ FAILURE TYPE: %s\n", proofFailureLabel(failure));
+    }
+
+    releaseProofResources(self, res);
+    return success;
+}
+
+} // namespace
+
 // FACTORY
 FakeIrisXEExeclist* FakeIrisXEExeclist::withOwner(FakeIrisXEFramebuffer* owner)
 {
@@ -229,13 +745,14 @@ void FakeIrisXEExeclist::processCsbEntriesV57() {
         return;
     }
     
-    // Read CSB write pointer (updated by GPU)
-    // In real implementation, this would be read from a hardware register
-    // or from the ppHWSP (per-process hardware status page)
-    uint32_t write_ptr = fCsbWriteIndex; // Placeholder - should read from HW
+    // Read CSB write pointer from hardware (GPU updates this when it produces entries)
+    // RCS0_CSB_WRITE_PTR[7:0] = current write pointer value
+    uint32_t csb_write_ptr_reg = mmioRead32(RCS0_CSB_WRITE_PTR);
+    uint32_t write_ptr = csb_write_ptr_reg & 0xFF;  // Bits [7:0]
     uint32_t read_ptr = fCsbReadIndex;
     
-    IOLog("[V57] CSB Read Ptr: %d, Write Ptr: %d\n", read_ptr, write_ptr);
+    IOLog("[V250] CSB Read Ptr: %d, Write Ptr (HW): 0x%08X -> %d, CSB CTRL: 0x%08X\n",
+          read_ptr, csb_write_ptr_reg, write_ptr, csb_ctrl);
     
     uint32_t processed = 0;
     while (read_ptr != write_ptr && processed < fCsbEntryCount) {
@@ -391,11 +908,16 @@ bool FakeIrisXEExeclist::createHwContext()
     if (!fCsbGem) {
         IOLog("(FakeIrisXE) [Exec] No CSB alloc\n");
         fCsbGGTT = 0;
+        return false;
     } else {
         fCsbGem->pin();
         fCsbGGTT = fOwner->ggttMap(fCsbGem);
-        if (fCsbGGTT)
+        if (fCsbGGTT) {
             fCsbGGTT &= ~0xFFFULL;
+        } else {
+            IOLog("(FakeIrisXE) [Exec] ggttMap(CSB) failed\n");
+            return false;
+        }
     }
 
 
@@ -443,165 +965,50 @@ bool FakeIrisXEExeclist::setupExeclistPorts()
         return false;
     }
 
-    if (!fLrcGGTT) {
-        IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: missing fLrcGGTT\n");
+    if (!fCsbGGTT) {
+        IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: missing CSB backing\n");
         return false;
     }
 
-    // ---------- 1) Hold forcewake and ensure engine interrupts ----------
-    if (!fOwner->forcewakeRenderHold(5000 /*ms*/)) {
+    if (!fOwner->forcewakeRenderHold(5000)) {
         IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: forcewake hold failed\n");
         return false;
     }
-    // Make sure the engine can auto-wake / interrupt itself
+
     fOwner->ensureEngineInterrupts();
 
-    
-    // verify GT awake (read same regs as before but now while forcewake is held)
-    uint32_t gt_status = mmioRead32(0x13805C);
-    uint32_t forcewake_ack = mmioRead32(0x130044);
+    uint32_t rcsStatus = mmioRead32(kExecRcsStatusReg);
+    uint32_t gtError = fOwner->safeMMIORead(kExecGtErrorReg);
+    const bool halted = (rcsStatus & 0xE000u) == 0xE000u;
+    const bool wedged = (gtError & 0x80000000u) != 0;
 
-    if ((gt_status == 0x0) || ((forcewake_ack & 0xF) == 0x0)) {
-        IOLog("⚠️ GPU verification failed (after hold): GT_STATUS=0x%08X, ACK=0x%08X — still waking up\n",
-              gt_status, forcewake_ack);
-        // clean up: release the hold since we are aborting
+    IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: preflight RCS_STATUS=0x%08X GT_ERROR=0x%08X\n",
+          rcsStatus, gtError);
+
+    if (halted || wedged) {
+        IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: one focused reset attempt before proof path\n");
+        mmioWrite32(RCS0_RESET_CTRL, 0x00000001u);
+        IOSleep(5);
+        mmioWrite32(RCS0_RESET_CTRL, 0x00000000u);
+        IOSleep(5);
+        rcsStatus = mmioRead32(kExecRcsStatusReg);
+        gtError = fOwner->safeMMIORead(kExecGtErrorReg);
+        IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: post-reset RCS_STATUS=0x%08X GT_ERROR=0x%08X\n",
+              rcsStatus, gtError);
     }
 
-    IOLog("✅ GPU verified awake: GT_STATUS=0x%08X, ACK=0x%08X\n", gt_status, forcewake_ack);
-    
-    
-    
-    
-    // ---------- V180: Engine Init Prerequisites before ELSP ----------
-    // ELSP won't latch unless RCS engine is properly initialized
-    // Configure RCS0_RING_MODE, RCS0_GFX_MODE, RCS0_RESET_CTRL first
-    
-    // V181: Try RESET first - pulse reset to ensure engine is in known state
-    // Then configure mode registers
-    IOLog("(FakeIrisXE) [Exec] V181 Engine Init: RESET pulsing...\n");
-    
-    // Pulse reset: set bit 0, wait, clear
-    mmioWrite32(RCS0_RESET_CTRL, 0x00000001);  // Request reset
-    IOSleep(10);
-    mmioWrite32(RCS0_RESET_CTRL, 0x00000000);  // Release reset
-    IOSleep(10);
-    
-    // Read current values first
-    uint32_t ring_mode = mmioRead32(RCS0_RING_MODE);
-    uint32_t gfx_mode = mmioRead32(RCS0_GFX_MODE);
-    uint32_t reset_ctrl = mmioRead32(RCS0_RESET_CTRL);
-    IOLog("(FakeIrisXE) [Exec] V181 Engine Init: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
-          ring_mode, gfx_mode, reset_ctrl);
-    
-    // Configure RING_MODE - enable ring buffer
-    // Bit 0: Ring Buffer Enable
-    mmioWrite32(RCS0_RING_MODE, 0x00000001);
-    IOSleep(1);
-    
-    // Configure GFX_MODE - enable graphics mode
-    // For Gen12, need to set bit 0 and possibly others
-    mmioWrite32(RCS0_GFX_MODE, 0x00000003);
-    IOSleep(1);
-    
-    // Verify writes
-    uint32_t ring_mode_after = mmioRead32(RCS0_RING_MODE);
-    uint32_t gfx_mode_after = mmioRead32(RCS0_GFX_MODE);
-    uint32_t reset_ctrl_after = mmioRead32(RCS0_RESET_CTRL);
-    IOLog("(FakeIrisXE) [Exec] V181 Engine Init After: RING_MODE=0x%08x GFX_MODE=0x%08x RESET_CTRL=0x%08x\n",
-          ring_mode_after, gfx_mode_after, reset_ctrl_after);
+    const uint32_t csbLo = (uint32_t)(fCsbGGTT & 0xFFFFFFFFULL);
+    const uint32_t csbHi = (uint32_t)(fCsbGGTT >> 32);
+    mmioWrite32(RCS0_CSB_ADDR_LO, csbLo);
+    mmioWrite32(RCS0_CSB_ADDR_HI, csbHi);
+    mmioWrite32(RCS0_CSB_CTRL, 0x1u);
 
-    
-    
-    
-    // ---------- 2) Program ELSP submit port (LRC pointer) while wake held ----------
-    // V179: Dual ELSP Audit - Try both primary and legacy banks
-    const uint64_t lrc = fLrcGGTT & ~0xFFFULL;
-    uint32_t elsp_lo = (uint32_t)(lrc & 0xFFFFFFFFULL);
-    uint32_t elsp_hi = (uint32_t)(lrc >> 32);
-    
-    // Try primary ELSP first (0x2290/0x2294 - CORRECTED from 0x2C290)
-    IOLog("(FakeIrisXE) [Exec] Trying PRIMARY ELSP (0x2290/0x2294) with LRC=0x%llx\n", lrc);
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_LO, elsp_lo);
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_HI, elsp_hi);
-    
-    // small delay so posted writes land
-    IOSleep(2);
-    
-    // Readback checks for primary ELSP
-    uint32_t r_elsp_lo_primary = mmioRead32(RCS0_EXECLIST_SUBMITPORT_LO);
-    uint32_t r_elsp_hi_primary = mmioRead32(RCS0_EXECLIST_SUBMITPORT_HI);
-    IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP readback LO=0x%08x HI=0x%08x (expected LO=0x%08x HI=0x%08x)\n",
-          r_elsp_lo_primary, r_elsp_hi_primary, elsp_lo, elsp_hi);
-          
-    bool primary_latched = (r_elsp_lo_primary == elsp_lo && r_elsp_hi_primary == elsp_hi);
-    
-    // If primary didn't latch, try legacy ELSP (0x2258/0x225C)
-    if (!primary_latched) {
-        IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP did not latch, trying LEGACY ELSP (0x2258/0x225C)\n");
-        mmioWrite32(kExecElspLegacyLo, elsp_lo);
-        mmioWrite32(kExecElspLegacyHi, elsp_hi);
-        
-        // small delay so posted writes land
-        IOSleep(2);
-        
-        // Readback checks for legacy ELSP
-        uint32_t r_elsp_lo_legacy = mmioRead32(kExecElspLegacyLo);
-        uint32_t r_elsp_hi_legacy = mmioRead32(kExecElspLegacyHi);
-        IOLog("(FakeIrisXE) [Exec] LEGACY ELSP readback LO=0x%08x HI=0x%08x (expected LO=0x%08x HI=0x%08x)\n",
-              r_elsp_lo_legacy, r_elsp_hi_legacy, elsp_lo, elsp_hi);
-              
-        if (r_elsp_lo_legacy == elsp_lo && r_elsp_hi_legacy == elsp_hi) {
-            IOLog("(FakeIrisXE) [Exec] LEGACY ELSP latched successfully!\n");
-            // Use legacy ELSP for the rest of the function
-            // (we've already written to it above)
-        } else {
-            IOLog("(FakeIrisXE) [Exec] Neither ELSP latched — aborting safe setup\n");
-            fOwner->forcewakeRenderRelease();
-            return false;
-        }
-    } else {
-        IOLog("(FakeIrisXE) [Exec] PRIMARY ELSP latched successfully!\n");
-    }
+    const uint32_t csbReadbackLo = mmioRead32(RCS0_CSB_ADDR_LO);
+    const uint32_t csbReadbackHi = mmioRead32(RCS0_CSB_ADDR_HI);
+    const uint32_t csbCtrl = mmioRead32(RCS0_CSB_CTRL);
+    IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: CSB addr=0x%08X%08X ctrl=0x%08X\n",
+          csbReadbackHi, csbReadbackLo, csbCtrl);
 
-    
-    
-    // Program CSB pointer if present
-    // Program CSB BASE registers (GEN12 mandatory)
-    if (fCsbGGTT) {
-        uint32_t csb_lo = (uint32_t)(fCsbGGTT & 0xFFFFFFFFULL);
-        uint32_t csb_hi = (uint32_t)(fCsbGGTT >> 32);
-
-        mmioWrite32(RCS0_CSB_ADDR_LO, csb_lo);
-        mmioWrite32(RCS0_CSB_ADDR_HI, csb_hi);
-        mmioWrite32(RCS0_CSB_CTRL, 0x1); // enable CSB tracking if needed
-    }
-
-    
-    
-    
-    // Readback checks (do not assume writes are posted)
-    uint32_t r_elsp_lo = mmioRead32(RCS0_EXECLIST_SUBMITPORT_LO);
-    uint32_t r_elsp_hi = mmioRead32(RCS0_EXECLIST_SUBMITPORT_HI);
-    IOLog("(FakeIrisXE) [Exec] ELSP readback LO=0x%08x HI=0x%08x (expected LO=0x%08x HI=0x%08x)\n",
-          r_elsp_lo, r_elsp_hi, elsp_lo, elsp_hi);
-
-    if (r_elsp_lo != elsp_lo || r_elsp_hi != elsp_hi) {
-        IOLog("(FakeIrisXE) [Exec] ELSP readback mismatch — aborting safe setup\n");
-        fOwner->forcewakeRenderRelease();
-        return false;
-    }
-
-    
-    if (fCsbGGTT) {
-        uint32_t r_csb_lo = mmioRead32(CSB_ADDR_LO);
-        uint32_t r_csb_hi = mmioRead32(CSB_ADDR_HI);
-        IOLog("(FakeIrisXE) [Exec] CSB readback LO=0x%08x HI=0x%08x\n", r_csb_lo, r_csb_hi);
-        // non-fatal; log only (CSB optional)
-    }
-
-    
-    
-    // GEN12 Execlist + CSB interrupt pipeline
     constexpr uint32_t IRQS =
           (1 << 12)  // CONTEXT_COMPLETE
         | (1 << 13)  // CONTEXT_SWITCH
@@ -612,12 +1019,8 @@ bool FakeIrisXEExeclist::setupExeclistPorts()
     mmioWrite32(GEN11_GFX_MSTR_IRQ_MASK, 0x0);
     mmioWrite32(GEN11_GFX_MSTR_IRQ, IRQS);
 
-    
-    
-    
-    // ---------- 3) Keep the forcewake held. Do NOT kick here if you expect submit() later.
-    // We return success while still holding the hold; submitBatch() MUST keep the hold across the ELSP kick.
-    IOLog("(FakeIrisXE) [Exec] setupExeclistPorts SUCCESS (no kick) - FUZZ: leaving forcewake held for submit path\n");
+    fOwner->forcewakeRenderRelease();
+    IOLog("(FakeIrisXE) [Exec] setupExeclistPorts: CSB/IRQ path staged; submission is owned by V221 direct proof path\n");
     return true;
 }
 
@@ -693,90 +1096,8 @@ FakeIrisXEGEM* FakeIrisXEExeclist::createRealBatchBuffer(const uint8_t* data, si
 // ------------------------------------------------------------
 bool FakeIrisXEExeclist::submitBatchExeclist(FakeIrisXEGEM* batchGem)
 {
-    if (!batchGem || !fOwner) {
-        IOLog("(FakeIrisXE) [Exec] submitBatchExeclist: missing batch or owner\n");
-        return false;
-    }
-
-    // Ensure GEM is pinned
-    batchGem->pin();
-
-    // Get GGTT address from framebuffer
-    uint64_t batchGGTT = fOwner->ggttMap(batchGem);
-    if (batchGGTT == 0) {
-        IOLog("(FakeIrisXE) [Exec] FAILED: ggttMap(batchGem)=0\n");
-        return false;
-    }
-    batchGGTT &= ~0xFFFULL;
-
-    IOLog("(FakeIrisXE) [Exec] Submit batch @ GGTT=0x%llx\n", batchGGTT);
-
-    // Allocate an execlist "queue descriptor"
-    FakeIrisXEGEM* listGem = FakeIrisXEGEM::withSize(4096, 0);
-    if (!listGem) {
-        IOLog("(FakeIrisXE) [Exec] listGem alloc failed\n");
-        return false;
-    }
-
-    IOBufferMemoryDescriptor* md = listGem->memoryDescriptor();
-    if (!md) {
-        listGem->release();
-        IOLog("(FakeIrisXE) [Exec] listGem missing memoryDescriptor\n");
-        return false;
-    }
-
-    // Fill descriptor
-    void* cpuPtr = md->getBytesNoCopy();
-    bzero(cpuPtr, md->getLength());
-
-    uint64_t* q = (uint64_t*)cpuPtr;
-    q[0] = batchGGTT;   // first entry = batch buffer GPU address
-
-    // pin & map listGem
-    listGem->pin();
-    uint64_t listGGTT = fOwner->ggttMap(listGem);
-    if (listGGTT == 0) {
-        IOLog("(FakeIrisXE) [Exec] FAILED: ggttMap(listGem)=0\n");
-        listGem->unpin();
-        listGem->release();
-        return false;
-    }
-
-    IOLog("(FakeIrisXE) [Exec] ELSP list @ GGTT=0x%llx\n", listGGTT);
-
-    // Program ELSP submit port
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_LO, (uint32_t)(listGGTT & 0xFFFFFFFFULL));
-    mmioWrite32(RCS0_EXECLIST_SUBMITPORT_HI, (uint32_t)(listGGTT >> 32));
-
-    // Kick exec list
-    mmioWrite32(RCS0_EXECLIST_CONTROL, 0x1);
-
-    IOLog("(FakeIrisXE) [Exec] ExecList kicked\n");
-
-    bool completed = false;
-    uint64_t start = mach_absolute_time();
-    const uint64_t limit_ns = 250ULL * 1000000ULL;
-
-    while (true) {
-        uint32_t status = mmioRead32(RCS0_EXECLIST_STATUS_LO);
-        if (status != 0) {
-            IOLog("(FakeIrisXE) [Exec] STATUS=0x%08x\n", status);
-            completed = true;
-            break;
-        }
-
-        if (mach_absolute_time() - start > limit_ns) {
-            IOLog("(FakeIrisXE) [Exec] submitBatchExeclist timed out waiting for status\n");
-            break;
-        }
-
-        IOSleep(1);
-    }
-
-    listGem->unpin();
-    listGem->release();
-
-    return completed;
+    (void)batchGem;
+    return runRcsScratchWriteProof(this, "submitBatchExeclist");
 }
 
 
@@ -1048,6 +1369,14 @@ bool FakeIrisXEExeclist::submitBatchWithExeclist(
         FakeIrisXERing*       ring,
         uint32_t              timeoutMs)
 {
+    (void)fb;
+    (void)batchGem;
+    (void)batchSize;
+    (void)ring;
+    (void)timeoutMs;
+    return runRcsScratchWriteProof(this, "submitBatchWithExeclist");
+
+#if 0
     if (!fb || !ring) {
         IOLog("[Exec] submitBatchWithExeclist: invalid args (fb/ring)\n");
         return false;
@@ -1252,6 +1581,7 @@ bool FakeIrisXEExeclist::submitBatchWithExeclist(
     // batchGem is owned by caller.
 
     return success;
+#endif
 }
 
 
@@ -1709,212 +2039,17 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
 
 bool FakeIrisXEExeclist::runDiagnosticTest()
 {
-    IOLog("[V60] ============================================================\n");
-    IOLog("[V60] STARTING DIAGNOSTIC TEST - V57 Infrastructure Verification\n");
-    IOLog("[V60] ============================================================\n");
-    
-    // Step 1: Dump initial ring buffer status
-    IOLog("[V60] Step 1: Checking initial ring buffer state...\n");
-    dumpRingBufferStatus("Pre-Test");
-    
-    // Step 2: Dump initial execlist status
-    IOLog("[V60] Step 2: Checking initial execlist state...\n");
-    dumpExeclistStatus("Pre-Test");
-    
-    // Step 3: Create and submit test batch
-    IOLog("[V60] Step 3: Creating test batch buffer...\n");
-    if (!createAndSubmitTestBatch()) {
-        IOLog("[V60] ❌ FAILED: Could not create/submit test batch\n");
-        return false;
-    }
-    
-    // Step 4: Dump post-submit status
-    IOLog("[V60] Step 4: Checking post-submit state...\n");
-    dumpRingBufferStatus("Post-Submit");
-    dumpExeclistStatus("Post-Submit");
-    
-    // Step 5: Verify completion
-    IOLog("[V60] Step 5: Verifying command completion...\n");
-    if (!verifyCommandCompletion()) {
-        IOLog("[V60] ⚠️ WARNING: Command completion not verified (may need polling)\n");
-    }
-    
-    IOLog("[V60] ============================================================\n");
-    IOLog("[V60] DIAGNOSTIC TEST COMPLETE\n");
-    IOLog("[V60] ============================================================\n");
-    
-    return true;
+    return runRcsScratchWriteProof(this, "runDiagnosticTest");
 }
 
 bool FakeIrisXEExeclist::createAndSubmitTestBatch()
 {
-    IOLog("[V60] ============================================================\n");
-    IOLog("[V60] createAndSubmitTestBatch() - STARTING\n");
-    IOLog("[V60] ============================================================\n");
-    
-    // Step 1: Create a 4KB batch buffer
-    IOLog("[V60] Step 1: Allocating batch buffer GEM (size=4096)...\n");
-    const size_t batchSize = 4096;
-    FakeIrisXEGEM* batchGem = FakeIrisXEGEM::withSize(batchSize, 0);
-    if (!batchGem) {
-        IOLog("[V60] ❌ FAILED Step 1: Could not allocate batch buffer GEM\n");
-        return false;
-    }
-    IOLog("[V60] ✅ Step 1: GEM allocated successfully=%p\n", batchGem);
-    
-    // Step 2: Get memory descriptor
-    IOLog("[V60] Step 2: Getting memory descriptor...\n");
-    IOBufferMemoryDescriptor* md = batchGem->memoryDescriptor();
-    if (!md) {
-        IOLog("[V60] ❌ FAILED Step 2: Batch buffer has no memory descriptor\n");
-        batchGem->release();
-        return false;
-    }
-    IOLog("[V60] ✅ Step 2: Memory descriptor obtained=%p\n", md);
-    
-    // Step 3: Get CPU pointer
-    IOLog("[V60] Step 3: Getting CPU pointer...\n");
-    uint32_t* commands = (uint32_t*)md->getBytesNoCopy();
-    if (!commands) {
-        IOLog("[V60] ❌ FAILED Step 3: Could not get CPU pointer to batch buffer\n");
-        batchGem->release();
-        return false;
-    }
-    IOLog("[V60] ✅ Step 3: CPU pointer obtained=%p\n", commands);
-    
-    // Step 4: Clear the buffer
-    IOLog("[V60] Step 4: Clearing buffer...\n");
-    bzero(commands, batchSize);
-    IOLog("[V60] ✅ Step 4: Buffer cleared\n");
-    
-    // Step 5: Build command sequence
-    IOLog("[V60] Step 5: Building command sequence...\n");
-    int idx = 0;
-    
-    // Command 0-7: MI_NOOP (8 dwords of padding)
-    for (int i = 0; i < 8; i++) {
-        commands[idx++] = MI_NOOP;
-    }
-    IOLog("[V60]   Wrote %d MI_NOOP commands\n", 8);
-    
-    // Command 8: MI_FLUSH_DW (5 dwords)
-    commands[idx++] = MI_FLUSH_DW | (1 << 22) | (1 << 21); // post-sync, write dword
-    commands[idx++] = 0; // high 32 bits of address
-    commands[idx++] = 0; // low 32 bits of address
-    commands[idx++] = 0xDEADBEEF; // immediate data
-    commands[idx++] = 0; // unused
-    IOLog("[V60]   Wrote MI_FLUSH_DW command\n");
-    
-    // Command 13: MI_BATCH_BUFFER_END
-    commands[idx++] = MI_BATCH_BUFFER_END;
-    IOLog("[V60]   Wrote MI_BATCH_BUFFER_END command\n");
-    
-    IOLog("[V60] ✅ Step 5: Commands written (total %d dwords)\n", idx);
-    
-    // Step 6: Pin batch buffer
-    IOLog("[V60] Step 6: Pinning batch buffer...\n");
-    batchGem->pin();
-    IOLog("[V60] ✅ Step 6: Batch buffer pinned\n");
-    
-    // Step 7: Map to GGTT
-    IOLog("[V60] Step 7: Mapping to GGTT...\n");
-    uint64_t batchGGTT = fOwner->ggttMap(batchGem);
-    IOLog("[V60]   ggttMap returned: 0x%016llX\n", batchGGTT);
-    if (batchGGTT == 0) {
-        IOLog("[V60] ❌ FAILED Step 7: ggttMap returned 0\n");
-        batchGem->unpin();
-        batchGem->release();
-        return false;
-    }
-    batchGGTT &= ~0xFFFULL;
-    IOLog("[V60] ✅ Step 7: GGTT mapped at 0x%016llX\n", batchGGTT);
-    
-    // Step 8: Get/lookup context
-    IOLog("[V60] Step 8: Getting test context (ctxId=0xDEAD)...\n");
-    XEHWContext* testCtx = lookupHwContext(0xDEAD);
-    IOLog("[V60]   lookupHwContext(0xDEAD) returned: %p\n", testCtx);
-    
-    if (!testCtx) {
-        IOLog("[V60]   Context not found, creating new context...\n");
-        testCtx = createHwContextFor(0xDEAD, 0);
-        IOLog("[V60]   createHwContextFor(0xDEAD, 0) returned: %p\n", testCtx);
-        if (!testCtx) {
-            IOLog("[V60] ❌ FAILED Step 8: Could not create test context\n");
-            batchGem->unpin();
-            batchGem->release();
-            return false;
-        }
-        IOLog("[V60] ✅ Step 8: Context created successfully\n");
-    } else {
-        IOLog("[V60] ✅ Step 8: Existing context found and reused\n");
-    }
-    
-    // Step 9: Submit batch
-    IOLog("[V60] Step 9: Submitting batch via execlist...\n");
-    IOLog("[V60]   submitForContext ctx=%p batch=%p\n", testCtx, batchGem);
-    if (!submitForContext(testCtx, batchGem)) {
-        IOLog("[V60] ❌ FAILED Step 9: submitForContext() returned false\n");
-        batchGem->unpin();
-        batchGem->release();
-        return false;
-    }
-    IOLog("[V60] ✅ Step 9: Batch submitted successfully\n");
-    
-    IOLog("[V60] ============================================================\n");
-    IOLog("[V60] createAndSubmitTestBatch() - COMPLETE SUCCESS\n");
-    IOLog("[V60]   Context: 0xDEAD\n");
-    IOLog("[V60]   Batch GGTT: 0x%016llX\n", batchGGTT);
-    IOLog("[V60] ============================================================\n");
-    
-    return true;
+    return runRcsScratchWriteProof(this, "createAndSubmitTestBatch");
 }
 
 bool FakeIrisXEExeclist::verifyCommandCompletion()
 {
-    IOLog("[V60] Verifying command completion...\n");
-    
-    // Wait a short time for GPU to process
-    IOLog("[V60]   Waiting 100ms for GPU processing...\n");
-    IOSleep(100);
-    
-    // Check ring buffer head/tail
-    uint32_t ring_head = mmioRead32(RING_HEAD);
-    uint32_t ring_tail = mmioRead32(RING_TAIL);
-    
-    IOLog("[V60]   Ring state after wait:\n");
-    IOLog("[V60]     HEAD: 0x%04X\n", ring_head & 0xFFFF);
-    IOLog("[V60]     TAIL: 0x%04X\n", ring_tail & 0xFFFF);
-    
-    if ((ring_head & 0xFFFF) == (ring_tail & 0xFFFF)) {
-        IOLog("[V60]   ✅ HEAD == TAIL (GPU consumed all commands)\n");
-    } else {
-        IOLog("[V60]   ⚠️  HEAD != TAIL (GPU still processing or stalled)\n");
-        IOLog("[V60]        Difference: %d bytes\n", 
-              (ring_tail - ring_head) & 0xFFFF);
-    }
-    
-    // Check execlist status
-    uint32_t status_lo = mmioRead32(0x2230); // RING_EXECLIST_STATUS_LO
-    uint32_t status_hi = mmioRead32(0x2234); // RING_EXECLIST_STATUS_HI
-    
-    bool slot0_active = (status_lo >> 2) & 1;
-    bool slot1_active = (status_lo >> 3) & 1;
-    
-    IOLog("[V60]   Execlist state:\n");
-    IOLog("[V60]     Slot 0 active: %s\n", slot0_active ? "YES" : "NO");
-    IOLog("[V60]     Slot 1 active: %s\n", slot1_active ? "YES" : "NO");
-    
-    if (!slot0_active && !slot1_active) {
-        IOLog("[V60]   ✅ No active contexts (GPU idle)\n");
-    } else {
-        IOLog("[V60]   ⚠️  Contexts still active\n");
-    }
-    
-    // Process any CSB entries
-    IOLog("[V60]   Processing CSB entries...\n");
-    processCsbEntriesV57();
-    
-    return true; // Return true even if not fully complete (it's a diagnostic)
+    return runRcsScratchWriteProof(this, "verifyCommandCompletion");
 }
 
 // ============================================================================
@@ -2061,63 +2196,8 @@ bool FakeIrisXEExeclist::testContextCreation()
 
 bool FakeIrisXEExeclist::testBatchSubmission()
 {
-    IOLog("[V62]   Testing batch buffer submission...\n");
-    
-    // Create simple batch buffer with just MI_BATCH_BUFFER_END
-    FakeIrisXEGEM* batch = FakeIrisXEGEM::withSize(4096, 0);
-    if (!batch) {
-        IOLog("[V62]   ❌ Batch GEM allocation FAILED\n");
-        return false;
-    }
-    
-    IOBufferMemoryDescriptor* md = batch->memoryDescriptor();
-    if (!md) {
-        IOLog("[V62]   ❌ Batch memory descriptor FAILED\n");
-        batch->release();
-        return false;
-    }
-    
-    uint32_t* cmds = (uint32_t*)md->getBytesNoCopy();
-    if (!cmds) {
-        IOLog("[V62]   ❌ Batch CPU pointer FAILED\n");
-        batch->release();
-        return false;
-    }
-    
-    // Simple command: MI_BATCH_BUFFER_END
-    cmds[0] = MI_BATCH_BUFFER_END;
-    IOLog("[V62]   Wrote MI_BATCH_BUFFER_END\n");
-    
-    // Get context
-    XEHWContext* ctx = lookupHwContext(0xBEEF);
-    if (!ctx) {
-        IOLog("[V62]   Creating context for submission...\n");
-        ctx = createHwContextFor(0xBEEF, 0);
-        if (!ctx) {
-            IOLog("[V62]   ❌ Context creation FAILED\n");
-            batch->release();
-            return false;
-        }
-    }
-    
-    // Submit
-    IOLog("[V62]   Submitting batch...\n");
-    batch->pin();
-    uint64_t batchGGTT = fOwner->ggttMap(batch) & ~0xFFFULL;
-    IOLog("[V62]   Batch GGTT: 0x%016llX\n", batchGGTT);
-    
-    if (!submitForContext(ctx, batch)) {
-        IOLog("[V62]   ❌ Batch submission FAILED\n");
-        batch->unpin();
-        batch->release();
-        return false;
-    }
-    
-    IOLog("[V62]   ✅ Batch submitted successfully\n");
-    
-    // Note: Don't release batch here - it's now managed by the submission queue
-    
-    return true;
+    IOLog("[V62]   Testing direct Execlist scratch-write proof...\n");
+    return runRcsScratchWriteProof(this, "testBatchSubmission");
 }
 
 // ============================================================================
@@ -2277,18 +2357,19 @@ bool FakeIrisXEExeclist::waitForCommandCompletion(uint32_t timeoutMs)
         
         // If both slots are idle, command completed
         if (!slot0_active && !slot1_active) {
-            // Check CSB for completion
+            // Check CSB for completion using hardware write pointer
             if (fCsbGem) {
                 IOBufferMemoryDescriptor* md = fCsbGem->memoryDescriptor();
                 if (md) {
                     volatile uint64_t* csb = (volatile uint64_t*)md->getBytesNoCopy();
-                    if (csb && fCsbReadIndex != fCsbWriteIndex) {
+                    uint32_t csb_write_hw = mmioRead32(RCS0_CSB_WRITE_PTR) & 0xFF;
+                    if (csb && fCsbReadIndex != csb_write_hw) {
                         uint64_t entry = csb[fCsbReadIndex % fCsbEntryCount];
                         uint32_t csb_status = (uint32_t)(entry & 0xFFFFFFFF);
-                        IOLog("[V139] CSB entry: status=0x%08X\n", csb_status);
+                        IOLog("[V250] CSB entry: status=0x%08X\n", csb_status);
                         
                         if (csb_status & CSB_STATUS_COMPLETE) {
-                            IOLog("[V139] ✅ Command completed successfully!\n");
+                            IOLog("[V250] Command completed successfully!\n");
                             return true;
                         }
                     }
