@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V265 - Direct Execlist Proof Mode      ║\n");
+    IOLog("║    FAKEIRISXE V267 - Direct Execlist Proof Mode      ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -949,7 +949,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V265 - Direct Execlist Proof Mode   ║\n");
+    IOLog("║     FAKEIRISXE V267 - Direct Execlist Proof Mode   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1991,7 +1991,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V265] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V267] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2128,7 +2128,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V265] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
+        IOLog("(FakeIrisXE) [V267] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2156,13 +2156,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V265] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V267] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V265] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V267] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
@@ -2173,7 +2173,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // This follows the current master plan and avoids boot-time stalls while we validate
     // the direct Execlist scratch-write path.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V265] ⚠️ Skipping GuC init (%s)\n",
+        IOLog("(FakeIrisXE) [V267] ⚠️ Skipping GuC init (%s)\n",
               directProofMode && !forceGuCInit ? "direct-proof default policy" : "-fakeirisxe-noguc set");
         fGuCEnabled = false;
         fRcsRingValidated = false;
@@ -2328,7 +2328,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V265] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V267] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2696,7 +2696,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V265, execution still diagnostic)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V267, execution still diagnostic)\n");
     return true;
 
 }
@@ -6238,19 +6238,19 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V265] ============================================\n");
-    IOLog("(FakeIrisXE)[V265] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V265] ============================================\n");
+    IOLog("(FakeIrisXE)[V267] ============================================\n");
+    IOLog("(FakeIrisXE)[V267] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V267] ============================================\n");
 
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V265] ❌ No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V267] ❌ No EXECLIST owner available\n");
         return false;
     }
 
-    IOLog("(FakeIrisXE)[V265] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V267] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V265] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V265] ============================================\n");
+    IOLog("(FakeIrisXE)[V267] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V267] ============================================\n");
     return success;
 }
 

@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V265 - pre-prime Gen12 legacy RB regs before first Execlist load</string>
+	<string>FakeIrisXe V267 - correct RCS AUX_INV reg and Linux semaphore wait completion</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.264</string>
+	<string>1.0.266</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.264</string>
+	<string>1.0.266</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>
