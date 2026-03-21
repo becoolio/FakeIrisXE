@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.260</string>
+     	<string>1.0.261</string>
      	<key>CFBundleShortVersionString</key>
-     	<string>1.0.260</string>
+     	<string>1.0.261</string>
 	<key>CFBundleGetInfoString</key>
-	     	<string>FakeIrisXe V261 - 16-page render context image, Linux-sized WA page layout</string>
+	     	<string>FakeIrisXe V262 - render PPGTT enable, 48-bit ring mode, 16-page context</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
