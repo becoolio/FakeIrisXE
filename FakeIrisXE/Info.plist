@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.268</string>
+     	<string>1.0.269</string>
      	<key>CFBundleShortVersionString</key>
-     	<string>1.0.268</string>
+     	<string>1.0.269</string>
  	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V269 - recover RING_CTL valid bit after ELSP submit</string>
+     	     	<string>FakeIrisXe V270 - raw mmioWrite32 + delays for ring recover, explicit ring seed in LRC</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
