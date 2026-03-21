@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.261</string>
+     	<string>1.0.264</string>
      	<key>CFBundleShortVersionString</key>
-     	<string>1.0.261</string>
+     	<string>1.0.264</string>
 	<key>CFBundleGetInfoString</key>
-	     	<string>FakeIrisXe V262 - render PPGTT enable, 48-bit ring mode, 16-page context</string>
+	     	<string>FakeIrisXe V265 - pre-prime Gen12 legacy RB regs before first Execlist load</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

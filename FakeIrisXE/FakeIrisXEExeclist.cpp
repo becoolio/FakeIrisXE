@@ -48,6 +48,10 @@ static const uint32_t kExecRingMiModeReg = TGL_RCS0_BASE + 0x09C;
 static const uint32_t kExecRingModeGen7Reg = TGL_RCS0_BASE + 0x29C;
 static const uint32_t kExecHwsPgaReg = TGL_RCS0_BASE + 0x080;
 static const uint32_t kExecHwstamReg = TGL_RCS0_BASE + 0x098;
+static const uint32_t kExecRbStartLoReg = GEN12_RCS0_RBSTART;
+static const uint32_t kExecRbStartHiReg = GEN12_RCS0_RBSTART + 0x4u;
+static const uint32_t kExecRbHeadReg = GEN12_RCS0_RBHEAD;
+static const uint32_t kExecRbTailReg = GEN12_RCS0_RBTAIL;
 
 static const uint32_t kExecCsbEntryCount = 12u;
 static const uint32_t kExecCsbOffsetBytes = 0x40u;
@@ -79,7 +83,7 @@ static const uint32_t kProofPerCtxBbOffset = (kProofRenderContextPages + 1u) * 4
 static const uint32_t kProofContextControl = 0x00090009u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V262";
+static const char* kExeclistVersion = "V265";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -179,6 +183,11 @@ static const uint64_t kProofPpgttEntryFlags = 0x003ULL;
 static const uint32_t kProofRcsGpr0Mmio = 0x2600u;
 static const uint32_t kProofRcsCtxTimestampMmio = 0x23A8u;
 static const uint32_t kProofRcsCmdBufCctlMmio = 0x2084u;
+static const uint32_t kProofGen12CsDebugMode2Mmio = 0x20D8u;
+static const uint32_t kProofGen12AuxInvMmio = 0x42C8u;
+static const uint32_t kProofInstructionStateCacheInvalidate = (1u << 6);
+static const uint32_t kProofAuxInvBit = (1u << 0);
+static const uint32_t kMiLoadRegisterImmBase = (0x22u << 23);
 static const uint32_t kMiLoadRegisterMemGen8 = (0x29u << 23) | 2u;
 static const uint32_t kMiSrmLrmGlobalGtt = (1u << 22);
 static const uint32_t kMiLoadRegisterReg = (0x2Au << 23) | 1u;
@@ -202,6 +211,23 @@ static void emitRegStateLri(uint32_t* regs,
     for (uint32_t i = 0; i < count; ++i) {
         regs[idx++] = mmioRegs[i];
         regs[idx++] = 0u;
+    }
+}
+
+static void seedRegStateLriValuesFromLiveMmio(FakeIrisXEExeclist* self,
+                                              uint32_t* regs,
+                                              uint32_t headerIndex,
+                                              const uint32_t* mmioRegs,
+                                              uint32_t count)
+{
+    if (!self || !regs || !mmioRegs || !count) {
+        return;
+    }
+
+    uint32_t pairIndex = headerIndex + 1u;
+    for (uint32_t i = 0; i < count; ++i) {
+        regs[pairIndex + 1u] = self->mmioRead32(mmioRegs[i]);
+        pairIndex += 2u;
     }
 }
 
@@ -258,6 +284,12 @@ static uint32_t buildProofIndirectCtxCommands(const RcsProofResources& res, uint
         indirectCtx[idx++] = dstReg;
     };
 
+    auto emitLri = [&](uint32_t reg, uint32_t value, uint32_t& idx) {
+        indirectCtx[idx++] = kMiLoadRegisterImmBase | (1u << 16) | 1u;
+        indirectCtx[idx++] = reg;
+        indirectCtx[idx++] = value;
+    };
+
     uint32_t idx = 0;
     emitLrm(kProofRcsGpr0Mmio, ctxTimestampAddr, idx);
     emitLrr(kProofRcsGpr0Mmio, kProofRcsCtxTimestampMmio, idx);
@@ -265,6 +297,10 @@ static uint32_t buildProofIndirectCtxCommands(const RcsProofResources& res, uint
     emitLrm(kProofRcsGpr0Mmio, cmdBufCctlAddr, idx);
     emitLrr(kProofRcsGpr0Mmio, kProofRcsCmdBufCctlMmio, idx);
     emitLrm(kProofRcsGpr0Mmio, gpr0ValueAddr, idx);
+    emitLri(kProofGen12AuxInvMmio, maskedBitEnable(kProofAuxInvBit), idx);
+    emitLri(kProofGen12CsDebugMode2Mmio,
+            maskedBitEnable(kProofInstructionStateCacheInvalidate),
+            idx);
 
     while (((idx * sizeof(uint32_t)) & 63u) != 0u) {
         indirectCtx[idx++] = MI_NOOP;
@@ -300,7 +336,7 @@ static void logProofDwords(const char* label, const uint32_t* words, uint32_t co
     }
 
     for (uint32_t i = 0; i < count; ++i) {
-        IOLog("(FakeIrisXE) [V262] %s[%u] = 0x%08X\n", label, i, words[i]);
+        IOLog("(FakeIrisXE) [V265] %s[%u] = 0x%08X\n", label, i, words[i]);
     }
 }
 
@@ -345,7 +381,7 @@ static bool allocateProofCpuPage(FakeIrisXEGEM*& gem,
 {
     gem = FakeIrisXEGEM::withSize(kProofPml4Bytes, 0);
     if (!gem) {
-        IOLog("(FakeIrisXE) [V262] ❌ %s allocation failed\n", label ? label : "CPU page");
+        IOLog("(FakeIrisXE) [V265] ❌ %s allocation failed\n", label ? label : "CPU page");
         return false;
     }
 
@@ -354,14 +390,14 @@ static bool allocateProofCpuPage(FakeIrisXEGEM*& gem,
     uint64_t segLen = 0;
     physAddr = gem->getPhysicalSegment(0, &segLen) & ~0xFFFULL;
     if (!physAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ %s physical address acquisition failed\n", label ? label : "CPU page");
+        IOLog("(FakeIrisXE) [V265] ❌ %s physical address acquisition failed\n", label ? label : "CPU page");
         cleanupProofCpuGem(gem, physAddr);
         return false;
     }
 
     IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
     if (!md || !md->getBytesNoCopy()) {
-        IOLog("(FakeIrisXE) [V262] ❌ %s CPU mapping failed\n", label ? label : "CPU page");
+        IOLog("(FakeIrisXE) [V265] ❌ %s CPU mapping failed\n", label ? label : "CPU page");
         cleanupProofCpuGem(gem, physAddr);
         return false;
     }
@@ -387,7 +423,7 @@ static bool buildProofPageTables(RcsProofResources& res)
     uint64_t scratchSegLen = 0;
     const uint64_t scratchPhys = res.scratchGem->getPhysicalSegment(0, &scratchSegLen) & ~0xFFFULL;
     if (!scratchPhys) {
-        IOLog("(FakeIrisXE) [V262] ❌ Scratch physical address acquisition failed for PPGTT setup\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Scratch physical address acquisition failed for PPGTT setup\n");
         return false;
     }
 
@@ -396,7 +432,7 @@ static bool buildProofPageTables(RcsProofResources& res)
     uint64_t* const pd = (uint64_t*)pdMd->getBytesNoCopy();
     uint64_t* const pt = (uint64_t*)ptMd->getBytesNoCopy();
     if (!pml4 || !pdpt || !pd || !pt) {
-        IOLog("(FakeIrisXE) [V262] ❌ Page-table CPU pointer missing\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Page-table CPU pointer missing\n");
         return false;
     }
 
@@ -413,7 +449,7 @@ static bool buildProofPageTables(RcsProofResources& res)
     __sync_synchronize();
     OSSynchronizeIO();
 
-    IOLog("(FakeIrisXE) [V262]   PPGTT scratch VA: 0x%016llX -> phys 0x%016llX\n",
+    IOLog("(FakeIrisXE) [V265]   PPGTT scratch VA: 0x%016llX -> phys 0x%016llX\n",
           (unsigned long long)kProofPpgttScratchVa,
           (unsigned long long)scratchPhys);
     return true;
@@ -440,52 +476,52 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
         return false;
     }
 
-    IOLog("(FakeIrisXE) [V262] Allocating direct Execlist proof resources...\n");
+    IOLog("(FakeIrisXE) [V265] Allocating direct Execlist proof resources...\n");
 
     res.ringGem = FakeIrisXEGEM::withSize(kProofRingSize, 0);
     if (!res.ringGem) {
-        IOLog("(FakeIrisXE) [V262] ❌ Ring allocation failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Ring allocation failed\n");
         return false;
     }
     res.ringGem->pin();
     res.ringGpuAddr = self->fOwner->ggttMap(res.ringGem) & ~0xFFFULL;
     if (!res.ringGpuAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ Ring GGTT mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Ring GGTT mapping failed\n");
         releaseProofResources(self, res);
         return false;
     }
 
     res.lrcGem = FakeIrisXEGEM::withSize(kProofContextBytes, 0);
     if (!res.lrcGem) {
-        IOLog("(FakeIrisXE) [V262] ❌ Context allocation failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Context allocation failed\n");
         releaseProofResources(self, res);
         return false;
     }
     res.lrcGem->pin();
     res.lrcGpuAddr = self->fOwner->ggttMap(res.lrcGem) & ~0xFFFULL;
     if (!res.lrcGpuAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ Context GGTT mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Context GGTT mapping failed\n");
         releaseProofResources(self, res);
         return false;
     }
 
     res.scratchGem = FakeIrisXEGEM::withSize(4096, 0);
     if (!res.scratchGem) {
-        IOLog("(FakeIrisXE) [V262] ❌ Scratch allocation failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Scratch allocation failed\n");
         releaseProofResources(self, res);
         return false;
     }
     res.scratchGem->pin();
     res.scratchGpuAddr = self->fOwner->ggttMap(res.scratchGem) & ~0xFFFULL;
     if (!res.scratchGpuAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ Scratch GGTT mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Scratch GGTT mapping failed\n");
         releaseProofResources(self, res);
         return false;
     }
 
     void* scratchCpu = self->fOwner->ggttGetCPUAddr(res.scratchGem);
     if (!scratchCpu) {
-        IOLog("(FakeIrisXE) [V262] ❌ Scratch CPU mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Scratch CPU mapping failed\n");
         releaseProofResources(self, res);
         return false;
     }
@@ -496,7 +532,7 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
 
     res.pml4Gem = FakeIrisXEGEM::withSize(kProofPml4Bytes, 0);
     if (!res.pml4Gem) {
-        IOLog("(FakeIrisXE) [V262] ❌ PML4 allocation failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ PML4 allocation failed\n");
         releaseProofResources(self, res);
         return false;
     }
@@ -504,7 +540,7 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
 
     IOBufferMemoryDescriptor* pml4Md = res.pml4Gem->memoryDescriptor();
     if (!pml4Md || !pml4Md->getBytesNoCopy()) {
-        IOLog("(FakeIrisXE) [V262] ❌ PML4 CPU mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ PML4 CPU mapping failed\n");
         releaseProofResources(self, res);
         return false;
     }
@@ -513,7 +549,7 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
     uint64_t pml4SegLen = 0;
     res.pml4PhysAddr = res.pml4Gem->getPhysicalSegment(0, &pml4SegLen) & ~0xFFFULL;
     if (!res.pml4PhysAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ PML4 physical address acquisition failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ PML4 physical address acquisition failed\n");
         releaseProofResources(self, res);
         return false;
     }
@@ -521,7 +557,7 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
     const uint64_t sharedHwsGpuAddr = self->fCsbGGTT & ~0xFFFULL;
     res.csbGpuAddr = sharedHwsGpuAddr + kExecCsbOffsetBytes;
     if (!res.csbGpuAddr) {
-        IOLog("(FakeIrisXE) [V262] ❌ Shared CSB backing is missing; direct proof must use the staged Execlist owner HWS/CSB page\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Shared CSB backing is missing; direct proof must use the staged Execlist owner HWS/CSB page\n");
         releaseProofResources(self, res);
         return false;
     }
@@ -539,16 +575,16 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
         return false;
     }
 
-    IOLog("(FakeIrisXE) [V262]   Ring GPU VA:    0x%016llX\n", (unsigned long long)res.ringGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   CTX GPU VA:     0x%016llX\n", (unsigned long long)res.lrcGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   Scratch GPU VA: 0x%016llX\n", (unsigned long long)res.scratchGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   Shared HWS VA:  0x%016llX\n", (unsigned long long)sharedHwsGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   Shared CSB VA:  0x%016llX\n", (unsigned long long)res.csbGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   PML4 phys:      0x%016llX\n", (unsigned long long)res.pml4PhysAddr);
-    IOLog("(FakeIrisXE) [V262]   PDPT phys:      0x%016llX\n", (unsigned long long)res.pdptPhysAddr);
-    IOLog("(FakeIrisXE) [V262]   PD phys:        0x%016llX\n", (unsigned long long)res.pdPhysAddr);
-    IOLog("(FakeIrisXE) [V262]   PT phys:        0x%016llX\n", (unsigned long long)res.ptPhysAddr);
-    IOLog("(FakeIrisXE) [V262]   Scratch init:   0x%08X\n", kProofScratchInitial);
+    IOLog("(FakeIrisXE) [V265]   Ring GPU VA:    0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   CTX GPU VA:     0x%016llX\n", (unsigned long long)res.lrcGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   Scratch GPU VA: 0x%016llX\n", (unsigned long long)res.scratchGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   Shared HWS VA:  0x%016llX\n", (unsigned long long)sharedHwsGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   Shared CSB VA:  0x%016llX\n", (unsigned long long)res.csbGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   PML4 phys:      0x%016llX\n", (unsigned long long)res.pml4PhysAddr);
+    IOLog("(FakeIrisXE) [V265]   PDPT phys:      0x%016llX\n", (unsigned long long)res.pdptPhysAddr);
+    IOLog("(FakeIrisXE) [V265]   PD phys:        0x%016llX\n", (unsigned long long)res.pdPhysAddr);
+    IOLog("(FakeIrisXE) [V265]   PT phys:        0x%016llX\n", (unsigned long long)res.ptPhysAddr);
+    IOLog("(FakeIrisXE) [V265]   Scratch init:   0x%08X\n", kProofScratchInitial);
     return true;
 }
 
@@ -560,7 +596,7 @@ static bool buildProofCommandStream(FakeIrisXEExeclist* self, RcsProofResources&
 
     uint32_t* ringCpu = (uint32_t*)self->fOwner->ggttGetCPUAddr(res.ringGem);
     if (!ringCpu) {
-        IOLog("(FakeIrisXE) [V262] ❌ Ring CPU mapping failed\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Ring CPU mapping failed\n");
         return false;
     }
 
@@ -577,16 +613,36 @@ static bool buildProofCommandStream(FakeIrisXEExeclist* self, RcsProofResources&
     __sync_synchronize();
     OSSynchronizeIO();
 
-    IOLog("(FakeIrisXE) [V262] ========== RCS TEST COMMAND STREAM ==========" "\n");
-    IOLog("(FakeIrisXE) [V262]   Packet: MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT\n");
-    IOLog("(FakeIrisXE) [V262]   Ring GPU VA: 0x%016llX\n", (unsigned long long)res.ringGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   Ring size:   %u bytes\n", kProofRingSize);
-    IOLog("(FakeIrisXE) [V262]   Ring head:   0 bytes\n");
-    IOLog("(FakeIrisXE) [V262]   Ring tail:   %u bytes\n", res.ringTailBytes);
-    IOLog("(FakeIrisXE) [V262]   Ring ctl:    0x%08X\n", res.ringCtl);
+    IOLog("(FakeIrisXE) [V265] ========== RCS TEST COMMAND STREAM ==========" "\n");
+    IOLog("(FakeIrisXE) [V265]   Packet: MI_STORE_DWORD_IMM_GEN4 | MI_USE_GGTT\n");
+    IOLog("(FakeIrisXE) [V265]   Ring GPU VA: 0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   Ring size:   %u bytes\n", kProofRingSize);
+    IOLog("(FakeIrisXE) [V265]   Ring head:   0 bytes\n");
+    IOLog("(FakeIrisXE) [V265]   Ring tail:   %u bytes\n", res.ringTailBytes);
+    IOLog("(FakeIrisXE) [V265]   Ring ctl:    0x%08X\n", res.ringCtl);
     logProofDwords("RingDW", ringCpu, 16);
 
     return true;
+}
+
+static void preprimeLegacyRingState(FakeIrisXEExeclist* self, const RcsProofResources& res)
+{
+    if (!self) {
+        return;
+    }
+
+    self->mmioWrite32(kExecRbStartLoReg, (uint32_t)(res.ringGpuAddr & 0xFFFFFFFFULL));
+    self->mmioWrite32(kExecRbStartHiReg, (uint32_t)(res.ringGpuAddr >> 32));
+    self->mmioWrite32(kExecRbHeadReg, 0u);
+    self->mmioWrite32(kExecRbTailReg, res.ringTailBytes);
+
+    const uint32_t rbStartLo = self->mmioRead32(kExecRbStartLoReg);
+    const uint32_t rbStartHi = self->mmioRead32(kExecRbStartHiReg);
+    const uint32_t rbHead = self->mmioRead32(kExecRbHeadReg);
+    const uint32_t rbTail = self->mmioRead32(kExecRbTailReg);
+
+    IOLog("(FakeIrisXE) [V265] Pre-primed legacy RB regs: START=0x%08X%08X HEAD=0x%08X TAIL=0x%08X\n",
+          rbStartHi, rbStartLo, rbHead, rbTail);
 }
 
 static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
@@ -597,7 +653,7 @@ static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
 
     uint8_t* lrcCpu = (uint8_t*)self->fOwner->ggttGetCPUAddr(res.lrcGem);
     if (!lrcCpu) {
-    IOLog("(FakeIrisXE) [V262] ❌ Context CPU mapping failed\n");
+    IOLog("(FakeIrisXE) [V265] ❌ Context CPU mapping failed\n");
         return false;
     }
 
@@ -618,16 +674,27 @@ static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
 
     uint32_t idx = 0;
     regState[idx++] = 0u;
+    const uint32_t lri0Index = idx;
     emitRegStateLri(regState, idx, kGen12RcsLri0Regs, 13u, true);
     idx += 5u;
+    const uint32_t lri1Index = idx;
     emitRegStateLri(regState, idx, kGen12RcsLri1Regs, 9u, true);
+    const uint32_t lri2Index = idx;
     emitRegStateLri(regState, idx, kGen12RcsLri2Regs, 3u, true);
     idx += 6u;
+    const uint32_t lriRpcsIndex = idx;
     emitRegStateLri(regState, idx, kGen12RcsRpcsReg, 1u, false);
     idx += 13u;
+    const uint32_t lri3Index = idx;
     emitRegStateLri(regState, idx, kGen12RcsLri3Regs, 51u, true);
     idx += 1u;
     regState[idx++] = MI_BATCH_BUFFER_END | 1u;
+
+    seedRegStateLriValuesFromLiveMmio(self, regState, lri0Index, kGen12RcsLri0Regs, 13u);
+    seedRegStateLriValuesFromLiveMmio(self, regState, lri1Index, kGen12RcsLri1Regs, 9u);
+    seedRegStateLriValuesFromLiveMmio(self, regState, lri2Index, kGen12RcsLri2Regs, 3u);
+    seedRegStateLriValuesFromLiveMmio(self, regState, lriRpcsIndex, kGen12RcsRpcsReg, 1u);
+    seedRegStateLriValuesFromLiveMmio(self, regState, lri3Index, kGen12RcsLri3Regs, 51u);
 
     regState[kCtxContextControlIndex] = kProofContextControl;
     regState[kCtxRingHeadIndex] = 0u;
@@ -655,23 +722,26 @@ static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
     __sync_synchronize();
     OSSynchronizeIO();
 
-    IOLog("(FakeIrisXE) [V262] ========== GEN12 RCS CONTEXT OBJECT ==========" "\n");
-    IOLog("(FakeIrisXE) [V262]   Context pages: %u total (%u-page render ctx + %u WA pages)\n",
+    IOLog("(FakeIrisXE) [V265] ========== GEN12 RCS CONTEXT OBJECT ==========" "\n");
+    IOLog("(FakeIrisXE) [V265]   Context pages: %u total (%u-page render ctx + %u WA pages)\n",
           kProofContextPages, kProofRenderContextPages, kProofWaContextPages);
-    IOLog("(FakeIrisXE) [V262]   RegState @ +0x%X LRI0=0x%08X LRI1=0x%08X LRI2=0x%08X LRI3=0x%08X LRI4=0x%08X\n",
+    IOLog("(FakeIrisXE) [V265]   RegState @ +0x%X LRI0=0x%08X LRI1=0x%08X LRI2=0x%08X LRI3=0x%08X LRI4=0x%08X\n",
           kProofRegStateOffset, regState[1], regState[33], regState[52], regState[65], regState[81]);
-    IOLog("(FakeIrisXE) [V262]   CONTEXT_CTL slot: 0x%08X (Linux-style masked restore-inhibit + inhibit-sync-switch)\n",
+    IOLog("(FakeIrisXE) [V265]   CONTEXT_CTL slot: 0x%08X (Linux-style masked restore-inhibit + inhibit-sync-switch)\n",
           regState[kCtxContextControlIndex]);
-    IOLog("(FakeIrisXE) [V262]   PDP0 PML4 phys: 0x%016llX\n", (unsigned long long)res.pml4PhysAddr);
-    IOLog("(FakeIrisXE) [V262]   IndirectCtx GGTT: 0x%016llX size=%uB offset=0x%03X firstDW=0x%08X\n",
+    IOLog("(FakeIrisXE) [V265]   PDP0 PML4 phys: 0x%016llX\n", (unsigned long long)res.pml4PhysAddr);
+    IOLog("(FakeIrisXE) [V265]   IndirectCtx GGTT: 0x%016llX size=%uB offset=0x%03X firstDW=0x%08X\n",
           (unsigned long long)indirectCtxGpuAddr, indirectCtxBytes, regState[kCtxIndirectCtxOffsetIndex], indirectCtx[0]);
-    IOLog("(FakeIrisXE) [V262]   PerCtxBB GGTT:   0x%016llX flags=0x%08X firstDW=0x%08X\n",
+    IOLog("(FakeIrisXE) [V265]   PerCtxBB GGTT:   0x%016llX flags=0x%08X firstDW=0x%08X\n",
           (unsigned long long)perCtxBbGpuAddr, regState[kCtxPerCtxBbPtrIndex] & 0xFFFu, perCtxBb[0]);
-    IOLog("(FakeIrisXE) [V262]   RING_BASE:       0x%016llX\n", (unsigned long long)res.ringGpuAddr);
-    IOLog("(FakeIrisXE) [V262]   RING_HEAD:       %u\n", regState[kCtxRingHeadIndex]);
-    IOLog("(FakeIrisXE) [V262]   RING_TAIL:       %u bytes (qword aligned)\n", regState[kCtxRingTailIndex]);
-    IOLog("(FakeIrisXE) [V262]   RING_CTL:        0x%08X\n", regState[kCtxRingCtlIndex]);
-    IOLog("(FakeIrisXE) [V262]   Live RPCS:       0x%08X Live CMD_BUF_CCTL: 0x%08X\n", liveRpcs, liveCmdBufCctl);
+    IOLog("(FakeIrisXE) [V265]   RING_BASE:       0x%016llX\n", (unsigned long long)res.ringGpuAddr);
+    IOLog("(FakeIrisXE) [V265]   RING_HEAD:       %u\n", regState[kCtxRingHeadIndex]);
+    IOLog("(FakeIrisXE) [V265]   RING_TAIL:       %u bytes (qword aligned)\n", regState[kCtxRingTailIndex]);
+    IOLog("(FakeIrisXE) [V265]   RING_CTL:        0x%08X\n", regState[kCtxRingCtlIndex]);
+    IOLog("(FakeIrisXE) [V265]   Live RPCS:       0x%08X Live CMD_BUF_CCTL: 0x%08X\n", liveRpcs, liveCmdBufCctl);
+    IOLog("(FakeIrisXE) [V265]   Live seed:       BBADDR_LO=0x%08X BBADDR_HI=0x%08X MI_MODE=0x%08X\n",
+          self->mmioRead32(0x2140u), self->mmioRead32(0x2168u), self->mmioRead32(0x209Cu));
+    IOLog("(FakeIrisXE) [V265]   Indirect WA:     AUX_INV + instruction-state-cache invalidate appended\n");
     return true;
 }
 
@@ -686,20 +756,20 @@ static void buildProofDescriptor(RcsProofResources& res)
                  ((kCtxDescRenderInstance & 0x3Fu) << kCtxDescEngineInstanceShiftInHi) |
                  ((kCtxDescRenderClass & 0x7u) << kCtxDescEngineClassShiftInHi);
 
-    IOLog("(FakeIrisXE) [V262] ========== CONTEXT DESCRIPTOR ==========" "\n");
-    IOLog("(FakeIrisXE) [V262]   DWord0: 0x%08X\n", res.descLo);
-    IOLog("(FakeIrisXE) [V262]   DWord1: 0x%08X\n", res.descHi);
-    IOLog("(FakeIrisXE) [V262]   Address field: 0x%08X -> GPU VA 0x%016llX\n",
+    IOLog("(FakeIrisXE) [V265] ========== CONTEXT DESCRIPTOR ==========" "\n");
+    IOLog("(FakeIrisXE) [V265]   DWord0: 0x%08X\n", res.descLo);
+    IOLog("(FakeIrisXE) [V265]   DWord1: 0x%08X\n", res.descHi);
+    IOLog("(FakeIrisXE) [V265]   Address field: 0x%08X -> GPU VA 0x%016llX\n",
           res.descLo & 0xFFFFF000u,
           (unsigned long long)(res.descLo & 0xFFFFF000u));
-    IOLog("(FakeIrisXE) [V262]   Flags: VALID=%u PRIV=%u FORCE_RESTORE=%u ADDR_MODE=%u\n",
+    IOLog("(FakeIrisXE) [V265]   Flags: VALID=%u PRIV=%u FORCE_RESTORE=%u ADDR_MODE=%u\n",
           (res.descLo & kCtxDescValid) ? 1u : 0u,
           (res.descLo & kCtxDescPrivilege) ? 1u : 0u,
           (res.descLo & kCtxDescForceRestore) ? 1u : 0u,
           (res.descLo >> kCtxDescAddressingModeShift) & 0x3u);
-    IOLog("(FakeIrisXE) [V262]   Context pages: %u (descriptor does not encode page count on Gen11+)\n",
+    IOLog("(FakeIrisXE) [V265]   Context pages: %u (descriptor does not encode page count on Gen11+)\n",
           kProofContextPages);
-    IOLog("(FakeIrisXE) [V262]   SW context ID: %u EngineClass: %u EngineInstance: %u\n",
+    IOLog("(FakeIrisXE) [V265]   SW context ID: %u EngineClass: %u EngineInstance: %u\n",
           (res.descHi >> kCtxDescSwCtxIdShiftInHi) & 0x7FFu,
           (res.descHi >> kCtxDescEngineClassShiftInHi) & 0x7u,
           (res.descHi >> kCtxDescEngineInstanceShiftInHi) & 0x3Fu);
@@ -716,12 +786,12 @@ static bool singleResetAttemptIfNeeded(FakeIrisXEExeclist* self)
     const bool haltedBefore = (statusBefore & 0xE000u) == 0xE000u;
     const bool wedgedBefore = (gtErrorBefore & 0x80000000u) != 0;
 
-    IOLog("(FakeIrisXE) [V262] Pre-submit RCS status=0x%08X GT_ERROR=0x%08X\n", statusBefore, gtErrorBefore);
+    IOLog("(FakeIrisXE) [V265] Pre-submit RCS status=0x%08X GT_ERROR=0x%08X\n", statusBefore, gtErrorBefore);
     if (!haltedBefore && !wedgedBefore) {
         return true;
     }
 
-    IOLog("(FakeIrisXE) [V262] RCS looks halted/wedged; performing one focused reset attempt\n");
+    IOLog("(FakeIrisXE) [V265] RCS looks halted/wedged; performing one focused reset attempt\n");
     self->mmioWrite32(RCS0_RESET_CTRL, 0x00000001u);
     IOSleep(5);
     self->mmioWrite32(RCS0_RESET_CTRL, 0x00000000u);
@@ -729,7 +799,7 @@ static bool singleResetAttemptIfNeeded(FakeIrisXEExeclist* self)
 
     const uint32_t statusAfter = self->mmioRead32(kExecRcsStatusReg);
     const uint32_t gtErrorAfter = self->fOwner->safeMMIORead(kExecGtErrorReg);
-    IOLog("(FakeIrisXE) [V262] Post-reset RCS status=0x%08X GT_ERROR=0x%08X\n", statusAfter, gtErrorAfter);
+    IOLog("(FakeIrisXE) [V265] Post-reset RCS status=0x%08X GT_ERROR=0x%08X\n", statusAfter, gtErrorAfter);
     return ((statusAfter & 0xE000u) != 0xE000u) && ((gtErrorAfter & 0x80000000u) == 0);
 }
 
@@ -744,7 +814,7 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
     const uint32_t preStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
     const uint32_t preStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
 
-    IOLog("(FakeIrisXE) [V262] Pre-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X\n",
+    IOLog("(FakeIrisXE) [V265] Pre-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X\n",
           preLo, preHi, preStatusLo, preStatusHi);
 
     self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, 0x00020001u);
@@ -765,7 +835,7 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
         (postLo != preLo) || (postHi != preHi) ||
         (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
 
-    IOLog("(FakeIrisXE) [V262] Post-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X latched=%u\n",
+    IOLog("(FakeIrisXE) [V265] Post-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X latched=%u\n",
           postLo, postHi, postStatusLo, postStatusHi,
           res.submitAccepted ? 1u : 0u);
 
@@ -796,7 +866,7 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
     bool ringStateLoaded = false;
     bool ringConsumed = false;
 
-    IOLog("(FakeIrisXE) [V262] ========== EXECUTION POLL ==========" "\n");
+    IOLog("(FakeIrisXE) [V265] ========== EXECUTION POLL ==========" "\n");
 
     for (uint32_t poll = 0; poll < 100; ++poll) {
         IOSleep(10);
@@ -840,16 +910,16 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
         ringConsumed |= ((rcsHead & 0x001FFFFCu) != 0) || acthdLo || acthdHi || bbAddrLo || bbAddrHi;
 
         if ((poll % 5u) == 0u || scratchValue == res.expectedValue || halted || wedged) {
-            IOLog("(FakeIrisXE) [V262] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X RCS H/T/S=%08X/%08X/%08X\n",
+            IOLog("(FakeIrisXE) [V265] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X RCS H/T/S=%08X/%08X/%08X\n",
                   poll, elspLo, elspHi, execlistStatusLo, execlistStatusHi, rcsHead, rcsTail, rcsStatus);
-            IOLog("(FakeIrisXE) [V262]         CSB ctrl=%08X addr=%08X%08X rp=%08X wp_alias=%08X CCID=%08X CTXCTL=%08X\n",
+            IOLog("(FakeIrisXE) [V265]         CSB ctrl=%08X addr=%08X%08X rp=%08X wp_alias=%08X CCID=%08X CTXCTL=%08X\n",
                   csbCtrl, csbAddrHi, csbAddrLo, csbRead, csbWriteAlias, ccid, ctxCtrl);
-            IOLog("(FakeIrisXE) [V262]         ACTHD=%08X%08X BBADDR=%08X%08X GT_ERR=%08X SCRATCH=%08X\n",
+            IOLog("(FakeIrisXE) [V265]         ACTHD=%08X%08X BBADDR=%08X%08X GT_ERR=%08X SCRATCH=%08X\n",
                   acthdHi, acthdLo, bbAddrHi, bbAddrLo, gtError, scratchValue);
         }
 
         if (scratchValue == res.expectedValue) {
-            IOLog("(FakeIrisXE) [V262] ✅ SUCCESS: scratch changed from 0x%08X to 0x%08X\n",
+            IOLog("(FakeIrisXE) [V265] ✅ SUCCESS: scratch changed from 0x%08X to 0x%08X\n",
                   kProofScratchInitial, scratchValue);
             failure = None;
             return true;
@@ -886,9 +956,9 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     ProofFailureType failure = None;
     bool success = false;
 
-    IOLog("(FakeIrisXE) [V262] ============================================\n");
-    IOLog("(FakeIrisXE) [V262] DIRECT EXECLIST SCRATCH-WRITE PROOF (%s)\n", label ? label : "unknown");
-    IOLog("(FakeIrisXE) [V262] ============================================\n");
+    IOLog("(FakeIrisXE) [V265] ============================================\n");
+    IOLog("(FakeIrisXE) [V265] DIRECT EXECLIST SCRATCH-WRITE PROOF (%s)\n", label ? label : "unknown");
+    IOLog("(FakeIrisXE) [V265] ============================================\n");
 
     if (!allocateProofResources(self, res)) {
         failure = LrcLayoutWrong;
@@ -896,11 +966,11 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     }
 
     if (!singleResetAttemptIfNeeded(self)) {
-        IOLog("(FakeIrisXE) [V262] RCS remained halted after the focused recovery attempt; continuing with submission so the failure can be classified after ELSP/CSB polling\n");
+        IOLog("(FakeIrisXE) [V265] RCS remained halted after the focused recovery attempt; continuing with submission so the failure can be classified after ELSP/CSB polling\n");
     }
 
     if (!self->fOwner->forcewakeRenderHold(5000)) {
-        IOLog("(FakeIrisXE) [V262] ❌ Failed to acquire forcewake for proof preparation/submission\n");
+        IOLog("(FakeIrisXE) [V265] ❌ Failed to acquire forcewake for proof preparation/submission\n");
         failure = EngineHardHalted;
         goto done;
     }
@@ -916,6 +986,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     }
 
     buildProofDescriptor(res);
+    preprimeLegacyRingState(self, res);
 
     if (!submitProofDescriptor(self, res)) {
         failure = DescriptorWrong;
@@ -934,7 +1005,7 @@ done_release:
     self->fOwner->updateExecutionState(success, success ? "rcs-scratch-writeback" : proofFailureLabel(failure));
 
     if (!success) {
-        IOLog("(FakeIrisXE) [V262] ❌ FAILURE TYPE: %s\n", proofFailureLabel(failure));
+        IOLog("(FakeIrisXE) [V265] ❌ FAILURE TYPE: %s\n", proofFailureLabel(failure));
     }
 
     releaseProofResources(self, res);
