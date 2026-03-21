@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.251</string>
+     	<string>1.0.260</string>
      	<key>CFBundleShortVersionString</key>
-     	<string>1.0.251</string>
-     	<key>CFBundleGetInfoString</key>
-	     	<string>FakeIrisXe V251 - Correctness pass: reduced GuC stall time, merge-nub conflict fix, honest readiness gating</string>
+     	<string>1.0.260</string>
+	<key>CFBundleGetInfoString</key>
+	     	<string>FakeIrisXe V261 - 16-page render context image, Linux-sized WA page layout</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

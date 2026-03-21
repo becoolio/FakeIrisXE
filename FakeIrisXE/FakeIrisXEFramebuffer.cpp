@@ -403,7 +403,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V251 - Direct Execlist Proof Mode      ║\n");
+    IOLog("║    FAKEIRISXE V261 - Direct Execlist Proof Mode      ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -488,6 +488,11 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
    
 // Initialize other members
     vramMemory = nullptr;
+    cursorMemory = nullptr;
+    framebufferMemory = nullptr;
+    framebufferSurface = nullptr;
+    mmioMap = nullptr;
+    pciDevice = nullptr;
   //  mmioBase = nullptr;
    // mmioWrite32 = nullptr;
     currentMode = 1;  // V131: Start with mode 1 (1920x1080) instead of 0
@@ -944,7 +949,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V251 - Direct Execlist Proof Mode   ║\n");
+    IOLog("║     FAKEIRISXE V261 - Direct Execlist Proof Mode   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1986,7 +1991,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V251] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V261] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2009,16 +2014,11 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     
 
 
-    // Cursor
-    cursorMemory = IOBufferMemoryDescriptor::inTaskWithOptions(
-        kernel_task,
-        kIOMemoryPhysicallyContiguous | kIODirectionInOut,
-        64 * 1024,
-        page_size
-    );
+    // Cursor - publish the owned cursor buffer instead of swapping in a second descriptor.
+    // The old path released the member immediately after setProperty(), leaving a dangling
+    // pointer that later panicked during performSafeStop().
     if (cursorMemory) {
         setProperty("IOFBCursorMemory", cursorMemory);
-        cursorMemory->release();
     }
 
 
@@ -2128,7 +2128,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V251] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
+        IOLog("(FakeIrisXE) [V261] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2156,23 +2156,25 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V251] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V261] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V251] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V261] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
           skipGuCInit ? 1U : 0U,
           forceGuCInit ? 1U : 0U);
 
-    // V251: Skip GuC init if -fakeirisxe-noguc boot-arg is set
-    // This prevents IOKit stall during boot by avoiding long GuC timeouts
+    // In direct proof mode, keep GuC disabled by default unless -fakeirisxe-guc is set.
+    // This follows the current master plan and avoids boot-time stalls while we validate
+    // the direct Execlist scratch-write path.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V251] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        IOLog("(FakeIrisXE) [V261] ⚠️ Skipping GuC init (%s)\n",
+              directProofMode && !forceGuCInit ? "direct-proof default policy" : "-fakeirisxe-noguc set");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2326,7 +2328,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V251] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V261] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2694,7 +2696,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V251, execution still diagnostic)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V261, execution still diagnostic)\n");
     return true;
 
 }
@@ -2803,16 +2805,9 @@ void FakeIrisXEFramebuffer::performSafeStop()
     // Stop power management (PM) under gated thread
     PMstop();
 
-    // V153: Fix IOBufferMemoryDescriptor panic - complete() before release
-    // Complete any pending prepare() calls to avoid registry corruption
+    // Complete any pending framebuffer prepare() before release.
     if (framebufferMemory) {
         framebufferMemory->complete();
-    }
-    if (vramMemory) {
-        vramMemory->complete();
-    }
-    if (cursorMemory) {
-        cursorMemory->complete();
     }
 
     // Release GPU resources and memory descriptors (these touch IOGraphics/IOBuffer objects)
@@ -6243,19 +6238,19 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V251] ============================================\n");
-    IOLog("(FakeIrisXE)[V251] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V251] ============================================\n");
+    IOLog("(FakeIrisXE)[V261] ============================================\n");
+    IOLog("(FakeIrisXE)[V261] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V261] ============================================\n");
 
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V251] ❌ No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V261] ❌ No EXECLIST owner available\n");
         return false;
     }
 
-    IOLog("(FakeIrisXE)[V251] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V261] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V251] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V251] ============================================\n");
+    IOLog("(FakeIrisXE)[V261] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V261] ============================================\n");
     return success;
 }
 

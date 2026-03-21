@@ -1169,11 +1169,12 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 // -----------------------------
 #define TGL_RCS0_BASE                0x2000
 
-// Basic ring regs (RCS0 block relative)
-#define RCS0_RING_TAIL               (TGL_RCS0_BASE + 0x30)   // tail
-#define RCS0_RING_HEAD               (TGL_RCS0_BASE + 0x34)   // head
-#define RCS0_RING_START              (TGL_RCS0_BASE + 0x38)   // start/base
-#define RCS0_RING_CTL                (TGL_RCS0_BASE + 0x3C)   // ctl
+// Tiger Lake modern execlist ring regs (absolute offsets from RCS0 base)
+#define RCS0_RING_HEAD               (TGL_RCS0_BASE + 0x2510)   // head
+#define RCS0_RING_TAIL               (TGL_RCS0_BASE + 0x2514)   // tail
+#define RCS0_RING_START              (TGL_RCS0_BASE + 0x2518)   // start/base
+#define RCS0_RING_CTL                (TGL_RCS0_BASE + 0x251C)   // ctl
+#define RCS0_RING_STATUS             (TGL_RCS0_BASE + 0x2524)   // status
 #define RCS0_RING_MODE               (TGL_RCS0_BASE + 0x9C)   // ring mode
 #define RCS0_RESET_CTRL              (TGL_RCS0_BASE + 0xD0)  // reset/control
 
@@ -1182,36 +1183,36 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 
 
 // -----------------------------
-// Execlist registers (GEN12 TGL) - CORRECTED to 0x2000 base
-// These are relative to RCS0 base (0x2000): 0x2000 + 0x290 = 0x2290
+// Execlist registers (GEN12 TGL) - Tiger Lake absolute offsets
+// These are absolute addresses from RCS0 engine base (0x0000)
 // -----------------------------
-#define RCS0_EXECLIST_SUBMITPORT_LO  0x2290  // ELSP0 LO (submit port) - CORRECTED
-#define RCS0_EXECLIST_SUBMITPORT_HI  0x2294  // ELSP0 HI - CORRECTED
-#define RCS0_EXECLIST_SQ_CONTENTS    0x22A8  // optional - CORRECTED
+#define RCS0_EXECLIST_SUBMITPORT_LO  0x2290  // ELSP0 LO (submit port)
+#define RCS0_EXECLIST_SUBMITPORT_HI  0x2294  // ELSP0 HI
+#define RCS0_EXECLIST_SQ_CONTENTS    0x22A8  // optional
 
 // Legacy ELSP (different offset)
-#define RCS0_ELSP1_LO              0x2258  // 0x2000 + 0x258 - CORRECTED
-#define RCS0_ELSP1_HI              0x225C  // 0x2000 + 0x25C - CORRECTED
+#define RCS0_ELSP1_LO              0x2258  // Legacy ELSP LO
+#define RCS0_ELSP1_HI              0x225C  // Legacy ELSP HI
 
-// Execlist Status - CORRECTED
-#define RCS0_EXECLIST_STATUS_LO    0x220C  // 0x2000 + 0x20C - CORRECTED
-#define RCS0_EXECLIST_STATUS_HI    0x2210  // 0x2000 + 0x210 - CORRECTED
+// Execlist Status - Tiger Lake (absolute offsets)
+#define RCS0_EXECLIST_STATUS_LO    0x2230  // ELSP status low
+#define RCS0_EXECLIST_STATUS_HI    0x2234  // ELSP status high
 
 // ========================
 // GEN12 / Tiger Lake ELSP 
 // ========================
 
-#define RCS0_EXECLIST_CONTROL      0x2228  // 0x2000 + 0x228 - CORRECTED
-#define RCS0_EXECLIST_ARB_CTL      0x222C  // 0x2000 + 0x22C - CORRECTED
+#define RCS0_EXECLIST_CONTROL      0x2228  // ELSP control
+#define RCS0_EXECLIST_ARB_CTL      0x222C  // ELSP arb control
 #define RCS0_EXECLIST_PREEMPT        0x2510
 #define RCS0_EXECLIST_CONTEXT_CONTROL 0x244C
 
-// CSB (Command Streamer Buffer) registers
-#define RCS0_CSB_CTRL              0x20E0  // CSB control
-#define RCS0_CSB_ADDR_LO           0x20E4  // CSB address low
-#define RCS0_CSB_ADDR_HI           0x20E8  // CSB address high
-#define RCS0_CSB_READ_PTR          0x20EC  // CSB read pointer
-#define RCS0_CSB_WRITE_PTR         0x20F0  // CSB write pointer
+// CSB (Command Streamer Buffer) registers - Tiger Lake
+#define RCS0_CSB_CTRL              0x2288  // CSB control
+#define RCS0_CSB_ADDR_LO           0x2280  // CSB address low
+#define RCS0_CSB_ADDR_HI           0x2284  // CSB address high
+#define RCS0_CSB_READ_PTR          0x228C  // CSB read pointer
+#define RCS0_CSB_WRITE_PTR         0x2290  // CSB write pointer
 
 // Forcewake registers (needed by GuC)
 #define GEN11_FORCEWAKE_RENDER       0xA278
