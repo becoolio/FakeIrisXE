@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.266</string>
+     	<string>1.0.267</string>
      	<key>CFBundleShortVersionString</key>
-     	<string>1.0.266</string>
+     	<string>1.0.267</string>
 	<key>CFBundleGetInfoString</key>
-	     	<string>FakeIrisXe V267 - correct RCS AUX_INV reg and Linux semaphore wait completion</string>
+	     	<string>FakeIrisXe V268 - correct Gen12 CONTEXT_CONTROL restore-inhibit bit</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
