@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-     	<string>1.0.269</string>
-     	<key>CFBundleShortVersionString</key>
-     	<string>1.0.269</string>
- 	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V270 - raw mmioWrite32 + delays for ring recover, explicit ring seed in LRC</string>
+	<string>1.0.272</string>
+      	<key>CFBundleShortVersionString</key>
+     	<string>1.0.272</string>
+   	<key>CFBundleGetInfoString</key>
+     	     	<string>FakeIrisXe V272 - Linux i915 GuC boot path, no ME required, -fakeirisxe-noguc to skip GuC</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

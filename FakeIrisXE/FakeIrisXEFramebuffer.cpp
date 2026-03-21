@@ -128,22 +128,60 @@ using namespace libkern;
 
 OSDefineMetaClassAndStructors(FakeIrisXEFramebuffer, IOFramebuffer);
 
-// V73-V75: Display mode structures (defined early for use in timing functions)
+// ============================================================================
+// P0A: Single authoritative display mode table
+// All five IOFramebuffer display mode methods must agree on these entries.
+// Timing strategy: appleTimingID=0x7F (native timing fallback via EDID/display).
+// No detailed timing blocks are provided; the system derives timing from the
+// display's reported capabilities. This avoids CoreDisplay assertion failures
+// that occurred when detailed timing values conflicted with system expectations.
+// ============================================================================
+#ifndef kIOTimingID_TigerLake_Fallback
+#define kIOTimingID_TigerLake_Fallback 0x7F
+#endif
+#ifndef kIOTimingInfoValid_AppleTimingID
+#define kIOTimingInfoValid_AppleTimingID 0x00000001
+#endif
+
 static const uint32_t kNumDisplayModes = 1;
 
-// Mode ID 1: stable built-in timing (1920x1080)
+enum {
+    kProofModeDepthIndex = 0,          // one depth index (32bpp ARGB)
+    kProofModeRefreshFixed = (60 << 16), // 60 Hz in IOFixed format
+};
+
+enum ProofDisplayModeFlags {
+    kProofModeFlagDefault  = 0,
+    kProofModeFlagNative    = (1 << 0),
+};
 
 typedef struct {
+    uint32_t modeID;
     uint32_t width;
     uint32_t height;
-    uint32_t modeID;
+    uint32_t refreshFixed;     // IOFixed format (e.g. 60<<16)
+    uint32_t depthIndex;       // max depth index supported
+    uint32_t flags;           // ProofDisplayModeFlags
     const char* name;
-} DisplayModeInfo;
+} ProofDisplayMode;
 
-// Use different name to avoid conflict with header member variable
-static const DisplayModeInfo s_displayModes[kNumDisplayModes] = {
-    {1920, 1080, 1, "1920x1080"},
+static const ProofDisplayMode s_proofDisplayModes[kNumDisplayModes] = {
+    { 1, 1920, 1080, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagNative, "1920x1080@60" },
 };
+
+// Legacy alias for code that reads s_displayModes[]
+typedef ProofDisplayMode DisplayModeInfo;
+#define s_displayModes s_proofDisplayModes
+
+static inline const ProofDisplayMode* getProofModeByID(IODisplayModeID modeID)
+{
+    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
+        if (s_proofDisplayModes[i].modeID == modeID) {
+            return &s_proofDisplayModes[i];
+        }
+    }
+    return nullptr;
+}
 
 static void setNumberProperty(IORegistryEntry *entry, const char *key, uint64_t value, uint32_t bits)
 {
@@ -403,7 +441,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V270 - Direct Execlist Proof Mode      ║\n");
+    IOLog("║    FAKEIRISXE V272 - Linux GuC Boot Path   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -949,7 +987,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V270 - Direct Execlist Proof Mode   ║\n");
+    IOLog("║     FAKEIRISXE V272 - Linux GuC Boot Path ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1991,7 +2029,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V270] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V272] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2121,14 +2159,15 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     bool forceGuCInit = PE_parse_boot_argn("-fakeirisxe-guc", runtimeArgBuf, sizeof(runtimeArgBuf));
     bool directProofMode = !runBootDiagFull && !runBootDiagQuick;
 
-    if (directProofMode && !forceGuCInit) {
-        skipGuCInit = true;
-    }
+    // V272: Attempt GuC init using Linux i915 boot path. V271 showed Apple path fails at ME handshake.
+    // all failed with F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
+    // Skip GuC only when explicitly requested via -fakeirisxe-noguc.
+    // -fakeirisxe-guc now behaves the same as plain -fakeirisxe (both try GuC).
 
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V270] Stage 4 direct-proof mode: skipping legacy gpuPowerOn/createRcsRing preflight\n");
+        IOLog("(FakeIrisXE) [V272] Stage 4: GuC-enabled boot with direct-proof fallback\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2156,25 +2195,24 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V270] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V272] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V270] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V272] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
           skipGuCInit ? 1U : 0U,
           forceGuCInit ? 1U : 0U);
 
-    // In direct proof mode, keep GuC disabled by default unless -fakeirisxe-guc is set.
-    // This follows the current master plan and avoids boot-time stalls while we validate
-    // the direct Execlist scratch-write path.
+    // V272: Attempt GuC init using Linux i915 path. Only skip if -fakeirisxe-noguc is set.
+    // The previous 17 direct-Execlist iterations (V254-V270) all failed with
+    // F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V270] ⚠️ Skipping GuC init (%s)\n",
-              directProofMode && !forceGuCInit ? "direct-proof default policy" : "-fakeirisxe-noguc set");
+        IOLog("(FakeIrisXE) [V272] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2328,7 +2366,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V270] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V272] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2696,7 +2734,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V270, execution still diagnostic)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V272, Linux i915 GuC boot path)\n");
     return true;
 
 }
@@ -3800,55 +3838,34 @@ bool FakeIrisXEFramebuffer::getIsUsable() const {
 
 
 
-// V248: Timing constants - appleTimingID 0x7F signals macOS to use native timing
-// This matches the V275 working configuration where macOS derives timing from
-// EDID/display capabilities rather than trusting our provided values.
-// CoreDisplay's build_mode_list_if_needed crashes when it doesn't recognize
-// our timing data, so 0x7F acts as a "fallback to native" signal.
-#ifndef kIOTimingID_TigerLake_Fallback
-#define kIOTimingID_TigerLake_Fallback 0x7F
-#endif
-
 IOReturn FakeIrisXEFramebuffer::getTimingInfoForDisplayMode(
     IODisplayModeID displayMode,
     IOTimingInformation* infoOut)
 {
-    // V248: Fixed timing - use appleTimingID=0x7F like V275 working version.
-    // V275 had IOTimingInformation=all-zeros and returned 0x7F as the timing ID.
-    // The system then falls back to deriving timing from EDID/display capabilities.
-    // This approach avoids CoreDisplay crashes that occurred with V276-V282
-    // when detailed timing values were provided (causing build_mode_list_if_needed
-    // assertions in CoreDisplay::AssertTracer).
+    // P0A: Intentional timing strategy — appleTimingID=0x7F (native fallback).
+    // macOS derives timing from the display's reported capabilities when
+    // appleTimingID=0x7F is set. No detailed IOTimingDescription blocks are
+    // provided. This is the same strategy used in getInformationForDisplayMode()
+    // (both set appleTimingID=0x7F with kIOTimingInfoValid_AppleTimingID).
+    // Rationale: providing detailed timing values caused CoreDisplay assertions
+    // in earlier builds when timing values conflicted with system expectations.
     if (!infoOut) {
+        IOLog("[P0A] getTimingInfoForDisplayMode(mode=%u): ❌ NULL info\n", displayMode);
         return kIOReturnBadArgument;
     }
 
-    const DisplayModeInfo* modeInfo = nullptr;
-    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        if (displayMode == s_displayModes[i].modeID) {
-            modeInfo = &s_displayModes[i];
-            break;
-        }
-    }
-
-    if (!modeInfo) {
-        IOLog("[V248] getTimingInfoForDisplayMode(): unsupported mode %u\n", displayMode);
+    const ProofDisplayMode* m = getProofModeByID(displayMode);
+    if (!m) {
+        IOLog("[P0A] getTimingInfoForDisplayMode(mode=%u): ❌ not in table\n", displayMode);
         return kIOReturnUnsupportedMode;
     }
 
     bzero(infoOut, sizeof(IOTimingInformation));
-
-    // V248: Use 0x7F as appleTimingID - this is the key fix from V275.
-    // macOS interprets this as "use native timing from display" rather than
-    // trying to validate our detailed timing against its expectations.
-    // The IOTimingInformation structure remains all-zeros (no detailed timing
-    // blocks), which is the V275 pattern that avoided CoreDisplay assertions.
     infoOut->appleTimingID = kIOTimingID_TigerLake_Fallback;
     infoOut->flags         = kIOTimingInfoValid_AppleTimingID;
 
-    IOLog("[V248] getTimingInfoForDisplayMode(): mode=%u (appleTimingID=0x7F, native timing)\n",
-          displayMode);
-
+    IOLog("[P0A] getTimingInfoForDisplayMode(mode=%u): ✅ appleTimingID=0x%02X (native fallback) %dx%d\n",
+           displayMode, infoOut->appleTimingID, m->width, m->height);
     return kIOReturnSuccess;
 }
 
@@ -4291,37 +4308,33 @@ IOReturn FakeIrisXEFramebuffer::setPowerState(unsigned long state,
 // ============================================================================
 IOItemCount FakeIrisXEFramebuffer::getDisplayModeCount(void)
 {
-    // V248: Ensure we always return a valid, non-zero mode count.
-    // CoreDisplay will assert if this returns 0.
-    // We only support 1 mode (1920x1080).
-    static_assert(kNumDisplayModes == 1, "Expected exactly 1 display mode");
-    IOLog("[V248] getDisplayModeCount(): returning %u modes\n", kNumDisplayModes);
+    // P0A: Authoritative mode count from the single mode table.
+    // CoreDisplay asserts when this returns 0.
+    IOLog("[P0A] getDisplayModeCount(): count=%u\n", kNumDisplayModes);
     return kNumDisplayModes;
 }
 
 IOReturn FakeIrisXEFramebuffer::getDisplayModes(IODisplayModeID *allDisplayModes)
 {
-    // V248: Added comprehensive null-pointer and bounds validation.
+    // P0A: Write exactly kNumDisplayModes mode IDs from the authoritative table.
     if (!allDisplayModes) {
-        IOLog("[V248] getDisplayModes(): ❌ NULL output pointer\n");
+        IOLog("[P0A] getDisplayModes(): ❌ NULL output pointer\n");
         return kIOReturnBadArgument;
     }
-
-    // V248: Sanity check - kNumDisplayModes must be > 0
     if (kNumDisplayModes == 0 || kNumDisplayModes > 16) {
-        IOLog("[V248] getDisplayModes(): ❌ Invalid mode count %u\n", kNumDisplayModes);
+        IOLog("[P0A] getDisplayModes(): ❌ Invalid kNumDisplayModes=%u\n", kNumDisplayModes);
         return kIOReturnError;
     }
-
+    IOLog("[P0A] getDisplayModes(): exporting %u modes\n", kNumDisplayModes);
     for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        // V248: Validate mode ID is non-zero before reporting
-        if (s_displayModes[i].modeID == 0) {
-            IOLog("[V248] getDisplayModes(): ❌ Invalid mode ID 0 at index %u\n", i);
+        const ProofDisplayMode* m = &s_proofDisplayModes[i];
+        if (m->modeID == 0) {
+            IOLog("[P0A] getDisplayModes(): ❌ Invalid mode ID 0 at index %u\n", i);
             return kIOReturnError;
         }
-        allDisplayModes[i] = s_displayModes[i].modeID;
-        IOLog("[V248] getDisplayModes(): mode[%u] = ID=%u (%s)\n",
-               i, s_displayModes[i].modeID, s_displayModes[i].name);
+        allDisplayModes[i] = m->modeID;
+        IOLog("[P0A]   mode[%u] -> ID=%u %dx%d %s\n",
+               i, m->modeID, m->width, m->height, m->name);
     }
     return kIOReturnSuccess;
 }
@@ -4412,22 +4425,36 @@ IOReturn FakeIrisXEFramebuffer::getPixelInformation(
 
 IOReturn FakeIrisXEFramebuffer::getCurrentDisplayMode(IODisplayModeID* displayMode, IOIndex* depth)
 {
+    // P0A: Return currentMode/currentDepth. If currentMode was never set (0),
+    // default to the first entry in the authoritative table (mode ID 1).
+    // If currentMode is set but not in the table, return failure — callers
+    // must not receive a mode ID that does not appear in getDisplayModes().
     if (!displayMode || !depth) {
-        IOLog("[V79] getCurrentDisplayMode: null pointer\n");
+        IOLog("[P0A] getCurrentDisplayMode: ❌ NULL pointer\n");
         return kIOReturnBadArgument;
     }
-    
-    // If no mode has been set yet, default to mode 1 (1920x1080)
-    if (currentMode == 0) {
-        currentMode = 1;
-        currentDepth = 0;
-        IOLog("[V79] getCurrentDisplayMode: defaulting to mode 1\n");
+
+    IODisplayModeID modeToReturn = currentMode;
+    IOIndex depthToReturn = currentDepth;
+
+    if (modeToReturn == 0) {
+        modeToReturn = s_proofDisplayModes[0].modeID;
+        depthToReturn = 0;
+        currentMode = modeToReturn;
+        currentDepth = depthToReturn;
+        IOLog("[P0A] getCurrentDisplayMode: no prior mode set, defaulted to ID=%u\n", modeToReturn);
+    } else {
+        const ProofDisplayMode* m = getProofModeByID(modeToReturn);
+        if (!m) {
+            IOLog("[P0A] getCurrentDisplayMode: ❌ currentMode=%u not in authoritative table\n", modeToReturn);
+            return kIOReturnUnsupportedMode;
+        }
+        IOLog("[P0A] getCurrentDisplayMode: modeID=%u depth=%u (%dx%d %s)\n",
+               modeToReturn, depthToReturn, m->width, m->height, m->name);
     }
-    
-    *displayMode = currentMode;
-    *depth = currentDepth;
-    
-    IOLog("[V79] getCurrentDisplayMode: mode=%u depth=%u\n", currentMode, currentDepth);
+
+    *displayMode = modeToReturn;
+    *depth = depthToReturn;
     return kIOReturnSuccess;
 }
 
@@ -4541,50 +4568,37 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
     IODisplayModeID mode,
     IODisplayModeInformation* info)
 {
-    IOLog("[V131] getInformationForDisplayMode(mode=%d)\n", mode);
-
+    // P0A: Populate IODisplayModeInformation for a valid mode from the
+    // authoritative table. Struct layout (macOS 12 SDK):
+    //   nominalWidth(0), nominalHeight(4), refreshRate(8), maxDepthIndex(12),
+    //   flags(16), imageWidth(20), imageHeight(22), reserved[3](24).
+    // Timing strategy: appleTimingID=0x7F stored in reserved[0] signals native
+    // timing fallback to getTimingInfoForDisplayMode() (both must agree).
     if (!info) {
-        IOLog("[V131] ❌ Invalid info pointer\n");
+        IOLog("[P0A] getInformationForDisplayMode(mode=%u): ❌ NULL info\n", mode);
         return kIOReturnBadArgument;
     }
 
-    // Find the mode info
-    const DisplayModeInfo* modeInfo = nullptr;
-    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        if (mode == s_displayModes[i].modeID) {
-            modeInfo = &s_displayModes[i];
-            break;
-        }
-    }
-
-    if (!modeInfo) {
-        IOLog("[V131] ❌ Mode %d not found in supported modes\n", mode);
+    const ProofDisplayMode* m = getProofModeByID(mode);
+    if (!m) {
+        IOLog("[P0A] getInformationForDisplayMode(mode=%u): ❌ not in table\n", mode);
         return kIOReturnUnsupportedMode;
     }
 
     bzero(info, sizeof(IODisplayModeInformation));
+    info->nominalWidth   = m->width;
+    info->nominalHeight  = m->height;
+    info->refreshRate    = m->refreshFixed;
+    info->maxDepthIndex  = m->depthIndex;
+    info->flags          = kDisplayModeBuiltInFlag;
+    info->reserved[0]    = kIOTimingID_TigerLake_Fallback;
+    info->reserved[1]    = kIOTimingInfoValid_AppleTimingID;
 
-    info->maxDepthIndex = 0;           // one depth index
-    info->nominalWidth  = modeInfo->width;
-    info->nominalHeight = modeInfo->height;
-    info->refreshRate   = (60 << 16);  // 60 Hz fixed-point
-
-    // V248: Use 0x7F appleTimingID to match getTimingInfoForDisplayMode.
-    // Both methods must report the same timing ID or CoreDisplay will
-    // assert in build_mode_list_if_needed when comparing the two sources.
-    info->reserved[0] = kIOTimingID_TigerLake_Fallback;
-    info->reserved[1] = kIOTimingInfoValid_AppleTimingID;
-    
-    IOLog("[V131] ✅ Mode info: %dx%d @ 60Hz\n", modeInfo->width, modeInfo->height);
-
-    IOLog("Returning display mode info: 1920x1080 @ 60Hz\n");
+    IOLog("[P0A] getInformationForDisplayMode(mode=%u): ✅ %dx%d refresh=0x%08X flags=0x%08X reserved[0]=0x%02X reserved[1]=0x%08X\n",
+           mode, m->width, m->height, m->refreshFixed,
+           info->flags, info->reserved[0], info->reserved[1]);
     return kIOReturnSuccess;
 }
-
-
-
-
-
 
 
 
@@ -6238,19 +6252,19 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V270] ============================================\n");
-    IOLog("(FakeIrisXE)[V270] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V270] ============================================\n");
+    IOLog("(FakeIrisXE)[V272] ============================================\n");
+    IOLog("(FakeIrisXE)[V272] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V272] ============================================\n");
 
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V270] ❌ No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V272] ❌ No EXECLIST owner available\n");
         return false;
     }
 
-    IOLog("(FakeIrisXE)[V270] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V272] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V270] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V270] ============================================\n");
+    IOLog("(FakeIrisXE)[V272] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V272] ============================================\n");
     return success;
 }
 

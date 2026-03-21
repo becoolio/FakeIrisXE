@@ -2586,21 +2586,17 @@ bool FakeIrisXEGuC::bootGuCFirmware(const uint8_t* fwData, size_t fwSize, uint64
     fLastReportedStage = kGuCStageIdle;
     fFirmwareMode = selectFirmwareMode();
 
-    IOLog("(FakeIrisXE) [GuC][Boot] entry mode=%s linux_fallback=disabled parser=v139\n",
-          firmwareModeName(fFirmwareMode));
+    GuCFwLayout layout;
+    bool cssParseSuccess = parseGuCFirmwareV139(fwData, fwSize, layout);
 
-    switch (fFirmwareMode) {
-        case kGuCFirmwareModeAppleOnly:
-            return runAppleBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
-        case kGuCFirmwareModeLinuxReserved:
-            IOLog("(FakeIrisXE) [GuC][Boot] reserved mode=%s is compiled but disabled for this phase\n",
-                  firmwareModeName(fFirmwareMode));
-            logBootFailureSignature("mode-disabled", startNs, 0);
-            return false;
+    if (cssParseSuccess) {
+        IOLog("(FakeIrisXE) [GuC][Boot][V272] CSS parse succeeded (key_size_dw=%u) → using Linux i915 bring-up path\n",
+              layout.rsa_size / 4);
+        return runLinuxBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
+    } else {
+        IOLog("(FakeIrisXE) [GuC][Boot][V272] CSS parse failed → falling back to Apple bring-up path\n");
+        return runAppleBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
     }
-
-    logBootFailureSignature("mode-invalid", startNs, 0);
-    return false;
 }
 
 // ============================================================================
