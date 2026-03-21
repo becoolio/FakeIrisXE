@@ -2,15 +2,15 @@
 triple:          'x86_64-apple-darwin'
 binary-path:     '/Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/FakeIrisXE.kext/Contents/MacOS/FakeIrisXE'
 relocations:
-  - { offset: 0x33, size: 0x8, addend: 0x0, symName: _kmod_info, symObjAddr: 0x0, symBinAddr: 0x134660, symSize: 0x0 }
-  - { offset: 0x1DF, size: 0x8, addend: 0x0, symName: __realmain, symObjAddr: 0xC8, symBinAddr: 0x134728, symSize: 0x0 }
-  - { offset: 0x1F4, size: 0x8, addend: 0x0, symName: __antimain, symObjAddr: 0xD0, symBinAddr: 0x134730, symSize: 0x0 }
-  - { offset: 0x209, size: 0x8, addend: 0x0, symName: __kext_apple_cc, symObjAddr: 0xD8, symBinAddr: 0x134738, symSize: 0x0 }
+  - { offset: 0x33, size: 0x8, addend: 0x0, symName: _kmod_info, symObjAddr: 0x0, symBinAddr: 0x135660, symSize: 0x0 }
+  - { offset: 0x1DF, size: 0x8, addend: 0x0, symName: __realmain, symObjAddr: 0xC8, symBinAddr: 0x135728, symSize: 0x0 }
+  - { offset: 0x1F4, size: 0x8, addend: 0x0, symName: __antimain, symObjAddr: 0xD0, symBinAddr: 0x135730, symSize: 0x0 }
+  - { offset: 0x209, size: 0x8, addend: 0x0, symName: __kext_apple_cc, symObjAddr: 0xD8, symBinAddr: 0x135738, symSize: 0x0 }
   - { offset: 0x238, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xF24, symSize: 0x32 }
-  - { offset: 0x24B, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub10gMetaClassE, symObjAddr: 0x24700, symBinAddr: 0x134808, symSize: 0x0 }
-  - { offset: 0xB85E, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9metaClassE, symObjAddr: 0x7C8, symBinAddr: 0x130170, symSize: 0x0 }
-  - { offset: 0xB871, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub10superClassE, symObjAddr: 0x7D0, symBinAddr: 0x130178, symSize: 0x0 }
-  - { offset: 0xB88A, size: 0x8, addend: 0x0, symName: __ZL14haveCreatedRef, symObjAddr: 0x24728, symBinAddr: 0x134A00, symSize: 0x0 }
+  - { offset: 0x24B, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub10gMetaClassE, symObjAddr: 0x24700, symBinAddr: 0x135808, symSize: 0x0 }
+  - { offset: 0xB85E, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9metaClassE, symObjAddr: 0x7C8, symBinAddr: 0x131170, symSize: 0x0 }
+  - { offset: 0xB871, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub10superClassE, symObjAddr: 0x7D0, symBinAddr: 0x131178, symSize: 0x0 }
+  - { offset: 0xB88A, size: 0x8, addend: 0x0, symName: __ZL14haveCreatedRef, symObjAddr: 0x24728, symBinAddr: 0x135A00, symSize: 0x0 }
   - { offset: 0xBD0B, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xF24, symSize: 0x32 }
   - { offset: 0xBD62, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0xF56, symSize: 0xA }
   - { offset: 0xBD9D, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNubC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0xF60, symSize: 0x20 }
@@ -32,20 +32,20 @@ relocations:
   - { offset: 0xC793, size: 0x8, addend: 0x0, symName: __ZN25FakeIrisXEDisplayMergeNub9MetaClassD0Ev, symObjAddr: 0x776, symBinAddr: 0x169A, symSize: 0xA }
   - { offset: 0xC815, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_DisplayMergeNub.cpp, symObjAddr: 0x780, symBinAddr: 0x16A4, symSize: 0x33 }
   - { offset: 0xC87B, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x7B3, symBinAddr: 0x16D7, symSize: 0x11 }
-  - { offset: 0xCB1B, size: 0x8, addend: 0x0, symName: _tgl_guc_70_1_1_bin, symObjAddr: 0x0, symBinAddr: 0x4CB70, symSize: 0x0 }
-  - { offset: 0xCB55, size: 0x8, addend: 0x0, symName: _tgl_guc_70_1_1_bin_len, symObjAddr: 0x43BC0, symBinAddr: 0x90730, symSize: 0x0 }
-  - { offset: 0xCB78, size: 0x8, addend: 0x0, symName: _tgl_huc_7_9_3_bin, symObjAddr: 0x43BD0, symBinAddr: 0x90740, symSize: 0x0 }
-  - { offset: 0xCBA1, size: 0x8, addend: 0x0, symName: _tgl_huc_7_9_3_bin_len, symObjAddr: 0xD3C10, symBinAddr: 0x120780, symSize: 0x0 }
-  - { offset: 0xCBBA, size: 0x8, addend: 0x0, symName: _tgl_dmc_ver2_12_bin, symObjAddr: 0xD3C20, symBinAddr: 0x120790, symSize: 0x0 }
-  - { offset: 0xCBDF, size: 0x8, addend: 0x0, symName: _tgl_dmc_ver2_12_bin_len, symObjAddr: 0xD3C3C, symBinAddr: 0x1207AC, symSize: 0x0 }
-  - { offset: 0xCBF8, size: 0x8, addend: 0x0, symName: _apple_tgl_guc_bin, symObjAddr: 0xD3C40, symBinAddr: 0x1207B0, symSize: 0x0 }
-  - { offset: 0xCC1F, size: 0x8, addend: 0x0, symName: _apple_tgl_guc_bin_len, symObjAddr: 0xE2E00, symBinAddr: 0x12F970, symSize: 0x0 }
+  - { offset: 0xCB1B, size: 0x8, addend: 0x0, symName: _tgl_guc_70_1_1_bin, symObjAddr: 0x0, symBinAddr: 0x4DB60, symSize: 0x0 }
+  - { offset: 0xCB55, size: 0x8, addend: 0x0, symName: _tgl_guc_70_1_1_bin_len, symObjAddr: 0x43BC0, symBinAddr: 0x91720, symSize: 0x0 }
+  - { offset: 0xCB78, size: 0x8, addend: 0x0, symName: _tgl_huc_7_9_3_bin, symObjAddr: 0x43BD0, symBinAddr: 0x91730, symSize: 0x0 }
+  - { offset: 0xCBA1, size: 0x8, addend: 0x0, symName: _tgl_huc_7_9_3_bin_len, symObjAddr: 0xD3C10, symBinAddr: 0x121770, symSize: 0x0 }
+  - { offset: 0xCBBA, size: 0x8, addend: 0x0, symName: _tgl_dmc_ver2_12_bin, symObjAddr: 0xD3C20, symBinAddr: 0x121780, symSize: 0x0 }
+  - { offset: 0xCBDF, size: 0x8, addend: 0x0, symName: _tgl_dmc_ver2_12_bin_len, symObjAddr: 0xD3C3C, symBinAddr: 0x12179C, symSize: 0x0 }
+  - { offset: 0xCBF8, size: 0x8, addend: 0x0, symName: _apple_tgl_guc_bin, symObjAddr: 0xD3C40, symBinAddr: 0x1217A0, symSize: 0x0 }
+  - { offset: 0xCC1F, size: 0x8, addend: 0x0, symName: _apple_tgl_guc_bin_len, symObjAddr: 0xE2E00, symBinAddr: 0x130960, symSize: 0x0 }
   - { offset: 0xCC4E, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x16E8, symSize: 0x32 }
-  - { offset: 0xCC61, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator10gMetaClassE, symObjAddr: 0x516D8, symBinAddr: 0x134830, symSize: 0x0 }
-  - { offset: 0x21A25, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator9metaClassE, symObjAddr: 0x21B0, symBinAddr: 0x130AE0, symSize: 0x0 }
-  - { offset: 0x21A38, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator10superClassE, symObjAddr: 0x21B8, symBinAddr: 0x130AE8, symSize: 0x0 }
+  - { offset: 0xCC61, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator10gMetaClassE, symObjAddr: 0x516D8, symBinAddr: 0x135830, symSize: 0x0 }
+  - { offset: 0x21A25, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator9metaClassE, symObjAddr: 0x21B0, symBinAddr: 0x131AE0, symSize: 0x0 }
+  - { offset: 0x21A38, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator10superClassE, symObjAddr: 0x21B8, symBinAddr: 0x131AE8, symSize: 0x0 }
   - { offset: 0x21A64, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator20submitGpuBatchForCtxEjP13FakeIrisXEGEMj, symObjAddr: 0x2042, symBinAddr: 0x372A, symSize: 0xF4 }
-  - { offset: 0x21A8C, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEAccelerator20submitGpuBatchForCtxEjP13FakeIrisXEGEMjE11submitCount, symObjAddr: 0x51700, symBinAddr: 0x134A08, symSize: 0x0 }
+  - { offset: 0x21A8C, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEAccelerator20submitGpuBatchForCtxEjP13FakeIrisXEGEMjE11submitCount, symObjAddr: 0x51700, symBinAddr: 0x135A08, symSize: 0x0 }
   - { offset: 0x21B7A, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x16E8, symSize: 0x32 }
   - { offset: 0x21BD1, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x171A, symSize: 0xA }
   - { offset: 0x21C0C, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAcceleratorC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x1724, symSize: 0xC6 }
@@ -73,9 +73,9 @@ relocations:
   - { offset: 0x2284F, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator13createContextEyj, symObjAddr: 0xCDA, symBinAddr: 0x23C2, symSize: 0x9C }
   - { offset: 0x229A1, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource, symObjAddr: 0xD76, symBinAddr: 0x245E, symSize: 0x3B4 }
   - { offset: 0x22E8C, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator14processCommandERK5XECmdPKvj, symObjAddr: 0x112A, symBinAddr: 0x2812, symSize: 0x384 }
-  - { offset: 0x23248, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.1, symObjAddr: 0x2184, symBinAddr: 0x2A056, symSize: 0xE }
-  - { offset: 0x232C3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.2, symObjAddr: 0x2192, symBinAddr: 0x2A064, symSize: 0xE }
-  - { offset: 0x2333E, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.3, symObjAddr: 0x21A0, symBinAddr: 0x2A072, symSize: 0xE }
+  - { offset: 0x23248, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.1, symObjAddr: 0x2184, symBinAddr: 0x2A5DC, symSize: 0xE }
+  - { offset: 0x232C3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.2, symObjAddr: 0x2192, symBinAddr: 0x2A5EA, symSize: 0xE }
+  - { offset: 0x2333E, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8pollRingEP18IOTimerEventSource.cold.3, symObjAddr: 0x21A0, symBinAddr: 0x2A5F8, symSize: 0xE }
   - { offset: 0x233D3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator8cmdClearEj, symObjAddr: 0x14AE, symBinAddr: 0x2B96, symSize: 0x5C }
   - { offset: 0x23469, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator7cmdRectERK13XERectPayload, symObjAddr: 0x150A, symBinAddr: 0x2BF2, symSize: 0x9A }
   - { offset: 0x2357C, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEAccelerator7cmdCopyERK13XECopyPayload, symObjAddr: 0x15A4, symBinAddr: 0x2C8C, symSize: 0xCE }
@@ -95,16 +95,16 @@ relocations:
   - { offset: 0x24207, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEAccelerator.cpp, symObjAddr: 0x2140, symBinAddr: 0x3828, symSize: 0x33 }
   - { offset: 0x2426D, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x2173, symBinAddr: 0x385B, symSize: 0x11 }
   - { offset: 0x242FB, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x386C, symSize: 0x32 }
-  - { offset: 0x2430E, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable10gMetaClassE, symObjAddr: 0x4FBB8, symBinAddr: 0x134858, symSize: 0x0 }
-  - { offset: 0x267DD, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable9metaClassE, symObjAddr: 0x1BD0, symBinAddr: 0x131440, symSize: 0x0 }
-  - { offset: 0x267F0, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable10superClassE, symObjAddr: 0x1BD8, symBinAddr: 0x131448, symSize: 0x0 }
-  - { offset: 0x26803, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient10gMetaClassE, symObjAddr: 0x4FBE0, symBinAddr: 0x134880, symSize: 0x0 }
-  - { offset: 0x35247, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient9metaClassE, symObjAddr: 0x1DF8, symBinAddr: 0x131668, symSize: 0x0 }
-  - { offset: 0x3525A, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient10superClassE, symObjAddr: 0x1E00, symBinAddr: 0x131670, symSize: 0x0 }
+  - { offset: 0x2430E, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable10gMetaClassE, symObjAddr: 0x4FBB8, symBinAddr: 0x135858, symSize: 0x0 }
+  - { offset: 0x267DD, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable9metaClassE, symObjAddr: 0x1BD0, symBinAddr: 0x132440, symSize: 0x0 }
+  - { offset: 0x267F0, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable10superClassE, symObjAddr: 0x1BD8, symBinAddr: 0x132448, symSize: 0x0 }
+  - { offset: 0x26803, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient10gMetaClassE, symObjAddr: 0x4FBE0, symBinAddr: 0x135880, symSize: 0x0 }
+  - { offset: 0x35247, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient9metaClassE, symObjAddr: 0x1DF8, symBinAddr: 0x132668, symSize: 0x0 }
+  - { offset: 0x3525A, size: 0x8, addend: 0x0, symName: __ZN31FakeIrisXEAcceleratorUserClient10superClassE, symObjAddr: 0x1E00, symBinAddr: 0x132670, symSize: 0x0 }
   - { offset: 0x35268, size: 0x8, addend: 0x0, symName: __ZL5RLLogPKcz, symObjAddr: 0x59C, symBinAddr: 0x3E08, symSize: 0x126 }
-  - { offset: 0x3528E, size: 0x8, addend: 0x0, symName: __ZZL5RLLogPKczE4last, symObjAddr: 0x4FC08, symBinAddr: 0x134A10, symSize: 0x0 }
+  - { offset: 0x3528E, size: 0x8, addend: 0x0, symName: __ZZL5RLLogPKczE4last, symObjAddr: 0x4FC08, symBinAddr: 0x135A10, symSize: 0x0 }
   - { offset: 0x3532F, size: 0x8, addend: 0x0, symName: __ZL5RLLogjPKcz, symObjAddr: 0x1984, symBinAddr: 0x51F0, symSize: 0x14C }
-  - { offset: 0x35355, size: 0x8, addend: 0x0, symName: __ZZL5RLLogjPKczE4last, symObjAddr: 0x4FC10, symBinAddr: 0x134A18, symSize: 0x0 }
+  - { offset: 0x35355, size: 0x8, addend: 0x0, symName: __ZZL5RLLogjPKczE4last, symObjAddr: 0x4FC10, symBinAddr: 0x135A18, symSize: 0x0 }
   - { offset: 0x3543F, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x386C, symSize: 0x32 }
   - { offset: 0x35496, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTable9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x389E, symSize: 0xA }
   - { offset: 0x354D1, size: 0x8, addend: 0x0, symName: __ZN14GEMHandleTableC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x38A8, symSize: 0x20 }
@@ -159,9 +159,9 @@ relocations:
   - { offset: 0x37654, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEAcceleratorUserClient.cpp, symObjAddr: 0x1B52, symBinAddr: 0x53BE, symSize: 0x60 }
   - { offset: 0x3770B, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x1BB2, symBinAddr: 0x541E, symSize: 0x1D }
   - { offset: 0x37800, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x543C, symSize: 0x32 }
-  - { offset: 0x37813, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight10gMetaClassE, symObjAddr: 0x407E8, symBinAddr: 0x1348A8, symSize: 0x0 }
-  - { offset: 0x40492, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight9metaClassE, symObjAddr: 0x8D0, symBinAddr: 0x1320D8, symSize: 0x0 }
-  - { offset: 0x404A5, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight10superClassE, symObjAddr: 0x8D8, symBinAddr: 0x1320E0, symSize: 0x0 }
+  - { offset: 0x37813, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight10gMetaClassE, symObjAddr: 0x407E8, symBinAddr: 0x1358A8, symSize: 0x0 }
+  - { offset: 0x40492, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight9metaClassE, symObjAddr: 0x8D0, symBinAddr: 0x1330D8, symSize: 0x0 }
+  - { offset: 0x404A5, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight10superClassE, symObjAddr: 0x8D8, symBinAddr: 0x1330E0, symSize: 0x0 }
   - { offset: 0x46EAE, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x543C, symSize: 0x32 }
   - { offset: 0x46F05, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklight9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x546E, symSize: 0xA }
   - { offset: 0x46F40, size: 0x8, addend: 0x0, symName: __ZN19FakeIrisXEBacklightC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x5478, symSize: 0x20 }
@@ -219,21 +219,21 @@ relocations:
   - { offset: 0x48E3B, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEConnectorManager23enablePipeAndTranscoderEhh10TGLDDIPort, symObjAddr: 0xAF8, symBinAddr: 0x6800, symSize: 0x132 }
   - { offset: 0x4912F, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEConnectorManager26publishConnectorPropertiesEv, symObjAddr: 0xC2A, symBinAddr: 0x6932, symSize: 0x13 }
   - { offset: 0x49190, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x6946, symSize: 0x32 }
-  - { offset: 0x491A3, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist10gMetaClassE, symObjAddr: 0x5D0C8, symBinAddr: 0x1348D0, symSize: 0x0 }
-  - { offset: 0x587FF, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist9metaClassE, symObjAddr: 0x4070, symBinAddr: 0x132A38, symSize: 0x0 }
-  - { offset: 0x58812, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist10superClassE, symObjAddr: 0x4078, symBinAddr: 0x132A40, symSize: 0x0 }
-  - { offset: 0x58BDA, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri0RegsE, symObjAddr: 0x7800, symBinAddr: 0x12F990, symSize: 0x0 }
-  - { offset: 0x58BF3, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri1RegsE, symObjAddr: 0x7840, symBinAddr: 0x12F9D0, symSize: 0x0 }
-  - { offset: 0x58C0C, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri2RegsE, symObjAddr: 0x7864, symBinAddr: 0x12F9F4, symSize: 0x0 }
-  - { offset: 0x58C25, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri3RegsE, symObjAddr: 0x7870, symBinAddr: 0x12FA00, symSize: 0x0 }
+  - { offset: 0x491A3, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist10gMetaClassE, symObjAddr: 0x5D0C8, symBinAddr: 0x1358D0, symSize: 0x0 }
+  - { offset: 0x587FF, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist9metaClassE, symObjAddr: 0x4070, symBinAddr: 0x133A38, symSize: 0x0 }
+  - { offset: 0x58812, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist10superClassE, symObjAddr: 0x4078, symBinAddr: 0x133A40, symSize: 0x0 }
+  - { offset: 0x58BDA, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri0RegsE, symObjAddr: 0x7800, symBinAddr: 0x130980, symSize: 0x0 }
+  - { offset: 0x58BF3, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri1RegsE, symObjAddr: 0x7840, symBinAddr: 0x1309C0, symSize: 0x0 }
+  - { offset: 0x58C0C, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri2RegsE, symObjAddr: 0x7864, symBinAddr: 0x1309E4, symSize: 0x0 }
+  - { offset: 0x58C25, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_117kGen12RcsLri3RegsE, symObjAddr: 0x7870, symBinAddr: 0x1309F0, symSize: 0x0 }
   - { offset: 0x58DE7, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_123runRcsScratchWriteProofEP18FakeIrisXEExeclistPKc, symObjAddr: 0x10E1, symBinAddr: 0x7A27, symSize: 0x1537 }
   - { offset: 0x5B599, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_120allocateProofCpuPageERP13FakeIrisXEGEMRyPKc, symObjAddr: 0x3CC6, symBinAddr: 0xA60C, symSize: 0x118 }
   - { offset: 0x5B6BD, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_120buildProofPageTablesERNS_17RcsProofResourcesE, symObjAddr: 0x3DDE, symBinAddr: 0xA724, symSize: 0x1E2 }
   - { offset: 0x5B8F3, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_121releaseProofResourcesEP18FakeIrisXEExeclistRNS_17RcsProofResourcesE, symObjAddr: 0x3BCE, symBinAddr: 0xA514, symSize: 0xF8 }
   - { offset: 0x5BA9E, size: 0x8, addend: 0x0, symName: __ZN12_GLOBAL__N_115cleanupProofGemEP18FakeIrisXEExeclistRP13FakeIrisXEGEMRyj, symObjAddr: 0x3FC0, symBinAddr: 0xA906, symSize: 0x66 }
   - { offset: 0x5BB60, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist20dumpRingBufferStatusEPKc, symObjAddr: 0x3C6, symBinAddr: 0x6D0C, symSize: 0x170 }
-  - { offset: 0x5BB88, size: 0x8, addend: 0x0, symName: __ZZN18FakeIrisXEExeclist20dumpRingBufferStatusEPKcE9last_head, symObjAddr: 0x5D0F0, symBinAddr: 0x134A20, symSize: 0x0 }
-  - { offset: 0x5BB9F, size: 0x8, addend: 0x0, symName: __ZZN18FakeIrisXEExeclist20dumpRingBufferStatusEPKcE10last_check, symObjAddr: 0x5D0F8, symBinAddr: 0x134A28, symSize: 0x0 }
+  - { offset: 0x5BB88, size: 0x8, addend: 0x0, symName: __ZZN18FakeIrisXEExeclist20dumpRingBufferStatusEPKcE9last_head, symObjAddr: 0x5D0F0, symBinAddr: 0x135A20, symSize: 0x0 }
+  - { offset: 0x5BB9F, size: 0x8, addend: 0x0, symName: __ZZN18FakeIrisXEExeclist20dumpRingBufferStatusEPKcE10last_check, symObjAddr: 0x5D0F8, symBinAddr: 0x135A28, symSize: 0x0 }
   - { offset: 0x5BEE3, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x6946, symSize: 0x32 }
   - { offset: 0x5BF3A, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclist9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x6978, symSize: 0xA }
   - { offset: 0x5BF75, size: 0x8, addend: 0x0, symName: __ZN18FakeIrisXEExeclistC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x6982, symSize: 0x30 }
@@ -293,9 +293,9 @@ relocations:
   - { offset: 0x5FDC2, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEExeclist.cpp, symObjAddr: 0x4026, symBinAddr: 0xA96C, symSize: 0x33 }
   - { offset: 0x5FE28, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x4059, symBinAddr: 0xA99F, symSize: 0x11 }
   - { offset: 0x5FEDB, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xA9B0, symSize: 0x32 }
-  - { offset: 0x5FEEE, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager10gMetaClassE, symObjAddr: 0xC7E0, symBinAddr: 0x1348F8, symSize: 0x0 }
-  - { offset: 0x61465, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager9metaClassE, symObjAddr: 0x5B8, symBinAddr: 0x132C90, symSize: 0x0 }
-  - { offset: 0x61478, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager10superClassE, symObjAddr: 0x5C0, symBinAddr: 0x132C98, symSize: 0x0 }
+  - { offset: 0x5FEEE, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager10gMetaClassE, symObjAddr: 0xC7E0, symBinAddr: 0x1358F8, symSize: 0x0 }
+  - { offset: 0x61465, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager9metaClassE, symObjAddr: 0x5B8, symBinAddr: 0x133C90, symSize: 0x0 }
+  - { offset: 0x61478, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager10superClassE, symObjAddr: 0x5C0, symBinAddr: 0x133C98, symSize: 0x0 }
   - { offset: 0x61AF8, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xA9B0, symSize: 0x32 }
   - { offset: 0x61B4F, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManager9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0xA9E2, symSize: 0xA }
   - { offset: 0x61B8A, size: 0x8, addend: 0x0, symName: __ZN22FakeIrisXEFenceManagerC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0xA9EC, symSize: 0x20 }
@@ -320,30 +320,30 @@ relocations:
   - { offset: 0x624BE, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEFenceRetirement.cpp, symObjAddr: 0x572, symBinAddr: 0xAF22, symSize: 0x33 }
   - { offset: 0x62524, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x5A5, symBinAddr: 0xAF55, symSize: 0x11 }
   - { offset: 0x625A4, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xAF68, symSize: 0x32 }
-  - { offset: 0x625B7, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer10gMetaClassE, symObjAddr: 0xA3090, symBinAddr: 0x134920, symSize: 0x0 }
-  - { offset: 0x73CC1, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer9metaClassE, symObjAddr: 0xE840, symBinAddr: 0x132EC0, symSize: 0x0 }
-  - { offset: 0x73CD4, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer10superClassE, symObjAddr: 0xE848, symBinAddr: 0x132EC8, symSize: 0x0 }
-  - { offset: 0x73CF3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer11powerStatesE, symObjAddr: 0x1B210, symBinAddr: 0x134740, symSize: 0x0 }
-  - { offset: 0x73D0E, size: 0x8, addend: 0x0, symName: _pciDevice, symObjAddr: 0xA30B8, symBinAddr: 0x134948, symSize: 0x0 }
-  - { offset: 0x73D25, size: 0x8, addend: 0x0, symName: _mmioMap, symObjAddr: 0xA30C0, symBinAddr: 0x134950, symSize: 0x0 }
-  - { offset: 0x73D3C, size: 0x8, addend: 0x0, symName: _mmioBase, symObjAddr: 0xA30C8, symBinAddr: 0x134958, symSize: 0x0 }
+  - { offset: 0x625B7, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer10gMetaClassE, symObjAddr: 0xA30A0, symBinAddr: 0x135920, symSize: 0x0 }
+  - { offset: 0x73CC1, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer9metaClassE, symObjAddr: 0xE840, symBinAddr: 0x133EC0, symSize: 0x0 }
+  - { offset: 0x73CD4, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer10superClassE, symObjAddr: 0xE848, symBinAddr: 0x133EC8, symSize: 0x0 }
+  - { offset: 0x73CF3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer11powerStatesE, symObjAddr: 0x1B220, symBinAddr: 0x135740, symSize: 0x0 }
+  - { offset: 0x73D0E, size: 0x8, addend: 0x0, symName: _pciDevice, symObjAddr: 0xA30C8, symBinAddr: 0x135948, symSize: 0x0 }
+  - { offset: 0x73D25, size: 0x8, addend: 0x0, symName: _mmioMap, symObjAddr: 0xA30D0, symBinAddr: 0x135950, symSize: 0x0 }
+  - { offset: 0x73D3C, size: 0x8, addend: 0x0, symName: _mmioBase, symObjAddr: 0xA30D8, symBinAddr: 0x135958, symSize: 0x0 }
   - { offset: 0x73D46, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer5startEP9IOService, symObjAddr: 0x1430, symBinAddr: 0xC398, symSize: 0x335E }
-  - { offset: 0x73D6E, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE8con0_edp, symObjAddr: 0x1B2F0, symBinAddr: 0x12FAE0, symSize: 0x0 }
-  - { offset: 0x73D85, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE9con1_hdmi, symObjAddr: 0x1B310, symBinAddr: 0x12FB00, symSize: 0x0 }
-  - { offset: 0x73D9C, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE7con2_dp, symObjAddr: 0x1B330, symBinAddr: 0x12FB20, symSize: 0x0 }
-  - { offset: 0x73DB3, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE20aapl01_cmn_overrides, symObjAddr: 0x1B350, symBinAddr: 0x12FB40, symSize: 0x0 }
-  - { offset: 0x73DCA, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE19fallbackDisplayEDID, symObjAddr: 0x1B390, symBinAddr: 0x12FB80, symSize: 0x0 }
+  - { offset: 0x73D6E, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE8con0_edp, symObjAddr: 0x1B300, symBinAddr: 0x130AD0, symSize: 0x0 }
+  - { offset: 0x73D85, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE9con1_hdmi, symObjAddr: 0x1B320, symBinAddr: 0x130AF0, symSize: 0x0 }
+  - { offset: 0x73D9C, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE7con2_dp, symObjAddr: 0x1B340, symBinAddr: 0x130B10, symSize: 0x0 }
+  - { offset: 0x73DB3, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE20aapl01_cmn_overrides, symObjAddr: 0x1B360, symBinAddr: 0x130B30, symSize: 0x0 }
+  - { offset: 0x73DCA, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer5startEP9IOServiceE19fallbackDisplayEDID, symObjAddr: 0x1B3A0, symBinAddr: 0x130B70, symSize: 0x0 }
   - { offset: 0x770D1, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer15getPixelFormatsEv, symObjAddr: 0x8FF4, symBinAddr: 0x13F5C, symSize: 0xE }
-  - { offset: 0x770F9, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer15getPixelFormatsEvE12pixelFormats, symObjAddr: 0x1B460, symBinAddr: 0x12FC50, symSize: 0x0 }
+  - { offset: 0x770F9, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer15getPixelFormatsEvE12pixelFormats, symObjAddr: 0x1B470, symBinAddr: 0x130C40, symSize: 0x0 }
   - { offset: 0x7712D, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer31applyBacklightPresetForIdentityEjj, symObjAddr: 0x4C04, symBinAddr: 0xFB6C, symSize: 0x259 }
-  - { offset: 0x77155, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer31applyBacklightPresetForIdentityEjjE10kAnchorPct, symObjAddr: 0x1B470, symBinAddr: 0x12FC60, symSize: 0x0 }
+  - { offset: 0x77155, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer31applyBacklightPresetForIdentityEjjE10kAnchorPct, symObjAddr: 0x1B480, symBinAddr: 0x130C50, symSize: 0x0 }
   - { offset: 0x7749D, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer20appendFenceAndSubmitEP13FakeIrisXEGEMmm, symObjAddr: 0xB570, symBinAddr: 0x164D8, symSize: 0x4DE }
-  - { offset: 0x774C5, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer20appendFenceAndSubmitEP13FakeIrisXEGEMmmE10global_seq, symObjAddr: 0x1B2D0, symBinAddr: 0x134800, symSize: 0x0 }
-  - { offset: 0x77B4B, size: 0x8, addend: 0x0, symName: __ZL17kBacklightPresets, symObjAddr: 0xF4B0, symBinAddr: 0x133B30, symSize: 0x0 }
-  - { offset: 0x77BCE, size: 0x8, addend: 0x0, symName: __ZL22kBacklightCurveDefault, symObjAddr: 0x1B514, symBinAddr: 0x12FD04, symSize: 0x0 }
-  - { offset: 0x77BF5, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF14Ta02e, symObjAddr: 0x1B520, symBinAddr: 0x12FD10, symSize: 0x0 }
-  - { offset: 0x77C1C, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF15Ta044, symObjAddr: 0x1B550, symBinAddr: 0x12FD40, symSize: 0x0 }
-  - { offset: 0x77C37, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF16Ta030, symObjAddr: 0x1B580, symBinAddr: 0x12FD70, symSize: 0x0 }
+  - { offset: 0x774C5, size: 0x8, addend: 0x0, symName: __ZZN21FakeIrisXEFramebuffer20appendFenceAndSubmitEP13FakeIrisXEGEMmmE10global_seq, symObjAddr: 0x1B2E0, symBinAddr: 0x135800, symSize: 0x0 }
+  - { offset: 0x77B4B, size: 0x8, addend: 0x0, symName: __ZL17kBacklightPresets, symObjAddr: 0xF4B0, symBinAddr: 0x134B30, symSize: 0x0 }
+  - { offset: 0x77BCE, size: 0x8, addend: 0x0, symName: __ZL22kBacklightCurveDefault, symObjAddr: 0x1B524, symBinAddr: 0x130CF4, symSize: 0x0 }
+  - { offset: 0x77BF5, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF14Ta02e, symObjAddr: 0x1B530, symBinAddr: 0x130D00, symSize: 0x0 }
+  - { offset: 0x77C1C, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF15Ta044, symObjAddr: 0x1B560, symBinAddr: 0x130D30, symSize: 0x0 }
+  - { offset: 0x77C37, size: 0x8, addend: 0x0, symName: __ZL23kBacklightCurveF16Ta030, symObjAddr: 0x1B590, symBinAddr: 0x130D60, symSize: 0x0 }
   - { offset: 0x77C45, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer19clientMemoryForTypeEjPjPP18IOMemoryDescriptor, symObjAddr: 0x9354, symBinAddr: 0x142BC, symSize: 0x114 }
   - { offset: 0x7883E, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0xAF68, symSize: 0x32 }
   - { offset: 0x78895, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0xAF9A, symSize: 0xA }
@@ -511,9 +511,9 @@ relocations:
   - { offset: 0x88224, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEFramebuffer.cpp, symObjAddr: 0xE7EF, symBinAddr: 0x19757, symSize: 0x33 }
   - { offset: 0x8828A, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0xE822, symBinAddr: 0x1978A, symSize: 0x11 }
   - { offset: 0x884B3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x1979C, symSize: 0x32 }
-  - { offset: 0x884C6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM10gMetaClassE, symObjAddr: 0x12AA0, symBinAddr: 0x134960, symSize: 0x0 }
-  - { offset: 0x88D77, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM9metaClassE, symObjAddr: 0x3D8, symBinAddr: 0x133CB8, symSize: 0x0 }
-  - { offset: 0x88D8A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM10superClassE, symObjAddr: 0x3E0, symBinAddr: 0x133CC0, symSize: 0x0 }
+  - { offset: 0x884C6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM10gMetaClassE, symObjAddr: 0x12AA0, symBinAddr: 0x135960, symSize: 0x0 }
+  - { offset: 0x88D77, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM9metaClassE, symObjAddr: 0x3D8, symBinAddr: 0x134CB8, symSize: 0x0 }
+  - { offset: 0x88D8A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM10superClassE, symObjAddr: 0x3E0, symBinAddr: 0x134CC0, symSize: 0x0 }
   - { offset: 0x88DB6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x1979C, symSize: 0x32 }
   - { offset: 0x88E0D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEM9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x197CE, symSize: 0xA }
   - { offset: 0x88E48, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGEMC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x197D8, symSize: 0x28 }
@@ -539,16 +539,16 @@ relocations:
   - { offset: 0x894B2, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEGEM.cpp, symObjAddr: 0x390, symBinAddr: 0x19B2C, symSize: 0x33 }
   - { offset: 0x89518, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x3C3, symBinAddr: 0x19B5F, symSize: 0x11 }
   - { offset: 0x89598, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x19B70, symSize: 0x32 }
-  - { offset: 0x895AB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC10gMetaClassE, symObjAddr: 0xA1988, symBinAddr: 0x134988, symSize: 0x0 }
-  - { offset: 0x98C57, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9metaClassE, symObjAddr: 0xF290, symBinAddr: 0x133EE0, symSize: 0x0 }
-  - { offset: 0x98C6A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC10superClassE, symObjAddr: 0xF298, symBinAddr: 0x133EE8, symSize: 0x0 }
-  - { offset: 0x98C83, size: 0x8, addend: 0x0, symName: __ZL21kTglAppleGuCPublicKey, symObjAddr: 0x20B70, symBinAddr: 0x12FE10, symSize: 0x0 }
-  - { offset: 0x98D01, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15loadHuCFirmwareEPKhm, symObjAddr: 0x915C, symBinAddr: 0x22CCC, symSize: 0xE4 }
-  - { offset: 0x98EF1, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22loadHuCFirmwareWithDMAEPKhm, symObjAddr: 0x9240, symBinAddr: 0x22DB0, symSize: 0x19E }
-  - { offset: 0x9918F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19extractRSASignatureEPKhmPh, symObjAddr: 0xA470, symBinAddr: 0x23FE0, symSize: 0x108 }
-  - { offset: 0x9942D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initGuCForAppleDMAEPKhmy, symObjAddr: 0xA8D4, symBinAddr: 0x24444, symSize: 0x422 }
-  - { offset: 0x99A89, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19deriveLayoutFromCSSEPKhmPmS2_, symObjAddr: 0xE27A, symBinAddr: 0x27DEA, symSize: 0xAA }
-  - { offset: 0x99C2E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15writeRsaScratchEPKhm, symObjAddr: 0xE414, symBinAddr: 0x27F84, symSize: 0xC8 }
+  - { offset: 0x895AB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC10gMetaClassE, symObjAddr: 0xA4270, symBinAddr: 0x135988, symSize: 0x0 }
+  - { offset: 0x98C57, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9metaClassE, symObjAddr: 0xF810, symBinAddr: 0x134EE0, symSize: 0x0 }
+  - { offset: 0x98C6A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC10superClassE, symObjAddr: 0xF818, symBinAddr: 0x134EE8, symSize: 0x0 }
+  - { offset: 0x98C83, size: 0x8, addend: 0x0, symName: __ZL21kTglAppleGuCPublicKey, symObjAddr: 0x21B50, symBinAddr: 0x130E10, symSize: 0x0 }
+  - { offset: 0x98D01, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15loadHuCFirmwareEPKhm, symObjAddr: 0x96E2, symBinAddr: 0x23252, symSize: 0xE4 }
+  - { offset: 0x98EF1, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22loadHuCFirmwareWithDMAEPKhm, symObjAddr: 0x97C6, symBinAddr: 0x23336, symSize: 0x19E }
+  - { offset: 0x9918F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19extractRSASignatureEPKhmPh, symObjAddr: 0xA9F6, symBinAddr: 0x24566, symSize: 0x108 }
+  - { offset: 0x9942D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initGuCForAppleDMAEPKhmy, symObjAddr: 0xAE5A, symBinAddr: 0x249CA, symSize: 0x422 }
+  - { offset: 0x99A89, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19deriveLayoutFromCSSEPKhmPmS2_, symObjAddr: 0xE800, symBinAddr: 0x28370, symSize: 0xAA }
+  - { offset: 0x99C2E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15writeRsaScratchEPKhm, symObjAddr: 0xE99A, symBinAddr: 0x2850A, symSize: 0xC8 }
   - { offset: 0x99EAE, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x19B70, symSize: 0x32 }
   - { offset: 0x99F07, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x19BA2, symSize: 0xA }
   - { offset: 0x99F42, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuCC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x19BAC, symSize: 0x20 }
@@ -584,182 +584,182 @@ relocations:
   - { offset: 0xA07F3, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer12safeMMIOReadEj, symObjAddr: 0x444A, symBinAddr: 0x1DFBA, symSize: 0x7E }
   - { offset: 0xA0853, size: 0x8, addend: 0x0, symName: __ZN21FakeIrisXEFramebuffer13safeMMIOWriteEjj, symObjAddr: 0x4844, symBinAddr: 0x1E3B4, symSize: 0x80 }
   - { offset: 0xA08C9, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16acquireForceWakeEv, symObjAddr: 0x6974, symBinAddr: 0x204E4, symSize: 0x140 }
-  - { offset: 0xA0ACA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV233MOCSEv, symObjAddr: 0xACF6, symBinAddr: 0x24866, symSize: 0xCE }
-  - { offset: 0xA0C0D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19initV233ClockGatingEv, symObjAddr: 0xADC4, symBinAddr: 0x24934, symSize: 0xE0 }
-  - { offset: 0xA0D5B, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV233VDENPowerEv, symObjAddr: 0xAEA4, symBinAddr: 0x24A14, symSize: 0xC4 }
-  - { offset: 0xA0E9D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23initV233DMCVerificationEv, symObjAddr: 0xAF68, symBinAddr: 0x24AD8, symSize: 0xE4 }
-  - { offset: 0xA0FA5, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV233GTInterruptsEv, symObjAddr: 0xB04C, symBinAddr: 0x24BBC, symSize: 0x11C }
-  - { offset: 0xA1164, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV233SAGVEv, symObjAddr: 0xB168, symBinAddr: 0x24CD8, symSize: 0xFA }
-  - { offset: 0xA12DB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initV233PPGTTEv, symObjAddr: 0xB262, symBinAddr: 0x24DD2, symSize: 0xAA }
-  - { offset: 0xA13D4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV233DisplayPowerEv, symObjAddr: 0xB30C, symBinAddr: 0x24E7C, symSize: 0xC0 }
-  - { offset: 0xA14F8, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21initV233GuCAuthVerifyEv, symObjAddr: 0xB3CC, symBinAddr: 0x24F3C, symSize: 0xE4 }
-  - { offset: 0xA1602, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initV233RC6ControlEv, symObjAddr: 0xB4B0, symBinAddr: 0x25020, symSize: 0xB8 }
-  - { offset: 0xA1748, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV235GMCHEv, symObjAddr: 0xB568, symBinAddr: 0x250D8, symSize: 0xAE }
-  - { offset: 0xA182D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15initV235L3CacheEv, symObjAddr: 0xB616, symBinAddr: 0x25186, symSize: 0x9C }
-  - { offset: 0xA1906, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initV235CDCLKEv, symObjAddr: 0xB6B2, symBinAddr: 0x25222, symSize: 0x76 }
-  - { offset: 0xA19C2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initV235PCIeASPMEv, symObjAddr: 0xB728, symBinAddr: 0x25298, symSize: 0x76 }
-  - { offset: 0xA1A7C, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235DDBEv, symObjAddr: 0xB79E, symBinAddr: 0x2530E, symSize: 0x76 }
-  - { offset: 0xA1B38, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235GSCEv, symObjAddr: 0xB814, symBinAddr: 0x25384, symSize: 0x76 }
-  - { offset: 0xA1BF4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV235TimerFreqEv, symObjAddr: 0xB88A, symBinAddr: 0x253FA, symSize: 0x76 }
-  - { offset: 0xA1CAE, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initV235MediaClockEv, symObjAddr: 0xB900, symBinAddr: 0x25470, symSize: 0x76 }
-  - { offset: 0xA1D6A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV235PCIeDebugEv, symObjAddr: 0xB976, symBinAddr: 0x254E6, symSize: 0xA8 }
-  - { offset: 0xA1E62, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235RPSEv, symObjAddr: 0xBA1E, symBinAddr: 0x2558E, symSize: 0xC0 }
-  - { offset: 0xA1F77, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV236PMCEv, symObjAddr: 0xBADE, symBinAddr: 0x2564E, symSize: 0xEC }
-  - { offset: 0xA20B6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24initV236ForceWakeDomainsEv, symObjAddr: 0xBBCA, symBinAddr: 0x2573A, symSize: 0x174 }
-  - { offset: 0xA22EA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV236GTInterruptsEv, symObjAddr: 0xBD3E, symBinAddr: 0x258AE, symSize: 0xEE }
-  - { offset: 0xA2450, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initV236GEMFaultEv, symObjAddr: 0xBE2C, symBinAddr: 0x2599C, symSize: 0x102 }
-  - { offset: 0xA25B2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV236DMIEv, symObjAddr: 0xBF2E, symBinAddr: 0x25A9E, symSize: 0xC8 }
-  - { offset: 0xA27B6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15bootGuCFirmwareEPKhmy, symObjAddr: 0x8DDE, symBinAddr: 0x2294E, symSize: 0xC0 }
-  - { offset: 0xA28B4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initGuCSubsystemEv, symObjAddr: 0x90EE, symBinAddr: 0x22C5E, symSize: 0x6E }
-  - { offset: 0xA293B, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12configureRPSEv, symObjAddr: 0x8E9E, symBinAddr: 0x22A0E, symSize: 0x19C }
-  - { offset: 0xA2BCC, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC14authStatusNameEh, symObjAddr: 0x432A, symBinAddr: 0x1DE9A, symSize: 0x24 }
-  - { offset: 0xA2C42, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23logBootFailureSignatureEPKcyjj, symObjAddr: 0x434E, symBinAddr: 0x1DEBE, symSize: 0xFC }
-  - { offset: 0xA2D67, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC12decodeStatusEj, symObjAddr: 0x44C8, symBinAddr: 0x1E038, symSize: 0xB0 }
-  - { offset: 0xA2DAD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15emitStageReportENS_8GuCStageEyjj, symObjAddr: 0x4578, symBinAddr: 0x1E0E8, symSize: 0xFE }
-  - { offset: 0xA2EBC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17prepareAppleWopcmENS_8GuCStageEjj, symObjAddr: 0x4676, symBinAddr: 0x1E1E6, symSize: 0x154 }
-  - { offset: 0xA304A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeRegWithReadbackENS_8GuCStageEPKcjjPj, symObjAddr: 0x47CA, symBinAddr: 0x1E33A, symSize: 0x7A }
-  - { offset: 0xA3138, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC24isImpossibleStatusDecodeEjRKNS_16GuCStatusDecodedE, symObjAddr: 0x48C4, symBinAddr: 0x1E434, symSize: 0x22 }
-  - { offset: 0xA3166, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC27ownerBooleanPropertyEnabledEPKc, symObjAddr: 0x48E6, symBinAddr: 0x1E456, symSize: 0x44 }
-  - { offset: 0xA31FD, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC19selectGtPmConfigRegEv, symObjAddr: 0x492A, symBinAddr: 0x1E49A, symSize: 0x40 }
-  - { offset: 0xA3277, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC23logForceWakeDiagnosticsEPKc, symObjAddr: 0x496A, symBinAddr: 0x1E4DA, symSize: 0x444 }
-  - { offset: 0xA38C2, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC17logAppleBootAuditEPKc, symObjAddr: 0x4DAE, symBinAddr: 0x1E91E, symSize: 0x40A }
-  - { offset: 0xA3C02, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC22logAppleRegisterWindowEPKc, symObjAddr: 0x51B8, symBinAddr: 0x1ED28, symSize: 0x90C }
-  - { offset: 0xA4814, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24ensureApplePublicKeyBlobEPyb, symObjAddr: 0x5AC4, symBinAddr: 0x1F634, symSize: 0x1B4 }
-  - { offset: 0xA4A42, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24producerCoherencyBarrierEPKc, symObjAddr: 0x5C78, symBinAddr: 0x1F7E8, symSize: 0x24 }
-  - { offset: 0xA4A7B, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeAppleBootParamsENS_8GuCStageE, symObjAddr: 0x5C9C, symBinAddr: 0x1F80C, symSize: 0x19C }
-  - { offset: 0xA4BAE, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeAndPollAppleRegENS_8GuCStageEPKcjjjjjjPj, symObjAddr: 0x5E38, symBinAddr: 0x1F9A8, symSize: 0x108 }
-  - { offset: 0xA4D3D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18pollAppleRegEqualsENS_8GuCStageEPKcjjjPj, symObjAddr: 0x5F40, symBinAddr: 0x1FAB0, symSize: 0xE6 }
-  - { offset: 0xA4E53, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19safeForceWakeDomainENS_8GuCStageEPKcjjjjj, symObjAddr: 0x6026, symBinAddr: 0x1FB96, symSize: 0x130 }
-  - { offset: 0xA5067, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23acquireAppleWakeDomainsENS_8GuCStageE, symObjAddr: 0x6156, symBinAddr: 0x1FCC6, symSize: 0x14E }
-  - { offset: 0xA51E7, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24runApplePreAuthHandshakeENS_8GuCStageEj, symObjAddr: 0x62A4, symBinAddr: 0x1FE14, symSize: 0x5E0 }
-  - { offset: 0xA5936, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16releaseForceWakeEv, symObjAddr: 0x6884, symBinAddr: 0x203F4, symSize: 0xF0 }
-  - { offset: 0xA5AD3, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC21issueGuCTlbInvalidateEv, symObjAddr: 0x6AB4, symBinAddr: 0x20624, symSize: 0xC4 }
-  - { offset: 0xA5BDB, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC19logDoorbellSnapshotEPKc, symObjAddr: 0x6B78, symBinAddr: 0x206E8, symSize: 0x136 }
-  - { offset: 0xA5DFD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21programDoorbellEnableENS_8GuCStageE, symObjAddr: 0x6CAE, symBinAddr: 0x2081E, symSize: 0x416 }
-  - { offset: 0xA62D0, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24consumerCoherencyBarrierEPKc, symObjAddr: 0x70C4, symBinAddr: 0x20C34, symSize: 0x24 }
-  - { offset: 0xA6309, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27logLinuxBaselineCorrelationEb, symObjAddr: 0x70E8, symBinAddr: 0x20C58, symSize: 0xFE }
-  - { offset: 0xA64B9, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19pollForBootFastFailEjyj, symObjAddr: 0x71E6, symBinAddr: 0x20D56, symSize: 0x348 }
-  - { offset: 0xA67A3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19runLinuxBringUpPathEPKhmyjy, symObjAddr: 0x752E, symBinAddr: 0x2109E, symSize: 0x9CE }
-  - { offset: 0xA7760, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20parseGuCFirmwareV139EPKhmRNS_11GuCFwLayoutE, symObjAddr: 0x7EFC, symBinAddr: 0x21A6C, symSize: 0x1A6 }
-  - { offset: 0xA78FA, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC13dumpWopcmRegsEPKc, symObjAddr: 0x80A2, symBinAddr: 0x21C12, symSize: 0x5A }
-  - { offset: 0xA7993, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19writeRsaScratchV139EPKhRKNS_11GuCFwLayoutE, symObjAddr: 0x80FC, symBinAddr: 0x21C6C, symSize: 0x1A6 }
-  - { offset: 0xA7BBF, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC14writeGuCParamsEv, symObjAddr: 0x82A2, symBinAddr: 0x21E12, symSize: 0xA8 }
-  - { offset: 0xA7D37, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC11dumpDmaRegsEPKc, symObjAddr: 0x834A, symBinAddr: 0x21EBA, symSize: 0xD2 }
-  - { offset: 0xA7E60, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC15dumpGuCStatusExEPKc, symObjAddr: 0x841C, symBinAddr: 0x21F8C, symSize: 0x102 }
-  - { offset: 0xA7FB3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjy, symObjAddr: 0x851E, symBinAddr: 0x2208E, symSize: 0x6D8 }
-  - { offset: 0xA89C9, size: 0x8, addend: 0x0, symName: '__ZZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjyENK3$_0clEPKcj', symObjAddr: 0x8D4C, symBinAddr: 0x228BC, symSize: 0x92 }
-  - { offset: 0xA8AA3, size: 0x8, addend: 0x0, symName: '__ZZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjyENK3$_1clEPKc', symObjAddr: 0x8BF6, symBinAddr: 0x22766, symSize: 0x156 }
-  - { offset: 0xA8C26, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19loadFirmwareViaMMIOEyjm, symObjAddr: 0x903A, symBinAddr: 0x22BAA, symSize: 0xB4 }
-  - { offset: 0xA8D2C, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initDoorbellsEv, symObjAddr: 0x9786, symBinAddr: 0x232F6, symSize: 0x72 }
-  - { offset: 0xA8E03, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27initCommandTransportBuffersEv, symObjAddr: 0x97F8, symBinAddr: 0x23368, symSize: 0x32C }
-  - { offset: 0xA90C9, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20uploadFirmwareViaDMAEyjmj, symObjAddr: 0x93DE, symBinAddr: 0x22F4E, symSize: 0x3A8 }
-  - { offset: 0xA96CC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC26uploadFirmwareViaDMA_AppleEyjm, symObjAddr: 0x9B24, symBinAddr: 0x23694, symSize: 0x24E }
-  - { offset: 0xA9AB7, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC26uploadFirmwareWithFallbackEyjm, symObjAddr: 0x9D72, symBinAddr: 0x238E2, symSize: 0x156 }
-  - { offset: 0xA9C53, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19enableGuCSubmissionEv, symObjAddr: 0x9EC8, symBinAddr: 0x23A38, symSize: 0x1EA }
-  - { offset: 0xA9F6D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12waitGuCReadyEj, symObjAddr: 0xA0B2, symBinAddr: 0x23C22, symSize: 0x162 }
-  - { offset: 0xAA0D9, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13dumpGuCStatusEv, symObjAddr: 0xA214, symBinAddr: 0x23D84, symSize: 0xFE }
-  - { offset: 0xAA221, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21testCommandSubmissionEv, symObjAddr: 0xA312, symBinAddr: 0x23E82, symSize: 0x15E }
-  - { offset: 0xAA44D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18programShimControlEv, symObjAddr: 0xA578, symBinAddr: 0x240E8, symSize: 0x35C }
-  - { offset: 0xAA94B, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC29buildRcsContextDescriptorV246Eyj, symObjAddr: 0xBFF6, symBinAddr: 0x25B66, symSize: 0xEA }
-  - { offset: 0xAAAA0, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20buildGen12RcsLrcV246ERNS_20RcsExeclistResourcesEj, symObjAddr: 0xC0E0, symBinAddr: 0x25C50, symSize: 0x224 }
-  - { offset: 0xAACF2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27verifyMiStoreDwordImmPacketERNS_20RcsExeclistResourcesE, symObjAddr: 0xC304, symBinAddr: 0x25E74, symSize: 0x24C }
-  - { offset: 0xAAF58, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19initV221RCSExeclistEv, symObjAddr: 0xC550, symBinAddr: 0x260C0, symSize: 0x14 }
-  - { offset: 0xAAF8F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22dumpRcsStateBeforeInitEPKc, symObjAddr: 0xC564, symBinAddr: 0x260D4, symSize: 0x378 }
-  - { offset: 0xAB613, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC25dumpRcsStateAfterRecoveryEPKc, symObjAddr: 0xC8DC, symBinAddr: 0x2644C, symSize: 0xA }
-  - { offset: 0xAB688, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18tryRcsRecoveryPathEv, symObjAddr: 0xC8E6, symBinAddr: 0x26456, symSize: 0x476 }
-  - { offset: 0xABC80, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC28allocateRcsExeclistResourcesERNS_20RcsExeclistResourcesE, symObjAddr: 0xCD5C, symBinAddr: 0x268CC, symSize: 0x200 }
-  - { offset: 0xABD81, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16buildGen12RcsLrcERNS_20RcsExeclistResourcesEj, symObjAddr: 0xCF5C, symBinAddr: 0x26ACC, symSize: 0x162 }
-  - { offset: 0xABEDA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC25buildRcsContextDescriptorEyj, symObjAddr: 0xD0BE, symBinAddr: 0x26C2E, symSize: 0x86 }
-  - { offset: 0xABF97, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24submitRcsExeclistContextEyy, symObjAddr: 0xD144, symBinAddr: 0x26CB4, symSize: 0xF4 }
-  - { offset: 0xAC12E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23pollRcsExeclistProgressEjRNS_20RcsExeclistResourcesEj, symObjAddr: 0xD238, symBinAddr: 0x26DA8, symSize: 0x72A }
-  - { offset: 0xACA19, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19executeRcsTestBatchERNS_20RcsExeclistResourcesE, symObjAddr: 0xD962, symBinAddr: 0x274D2, symSize: 0x114 }
-  - { offset: 0xACAFC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initBCS0PipelineEv, symObjAddr: 0xDA76, symBinAddr: 0x275E6, symSize: 0x804 }
-  - { offset: 0xAD4D0, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18programWopcmForTglEjj, symObjAddr: 0xE324, symBinAddr: 0x27E94, symSize: 0xF0 }
-  - { offset: 0xAD687, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17dmaCopyGttToWopcmEyjm, symObjAddr: 0xE4DC, symBinAddr: 0x2804C, symSize: 0x198 }
-  - { offset: 0xAD978, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC14waitForGucBootEj, symObjAddr: 0xE674, symBinAddr: 0x281E4, symSize: 0x176 }
-  - { offset: 0xADAF3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV137MethodEPKhmy, symObjAddr: 0xE7EA, symBinAddr: 0x2835A, symSize: 0x128 }
-  - { offset: 0xADCDD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21guclResetForWopcmV138Ev, symObjAddr: 0xE912, symBinAddr: 0x28482, symSize: 0x9C }
-  - { offset: 0xADDDD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22programWopcmForTglV138Ejj, symObjAddr: 0xE9AE, symBinAddr: 0x2851E, symSize: 0xFE }
-  - { offset: 0xADF93, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV138MethodEPKhmy, symObjAddr: 0xEAAC, symBinAddr: 0x2861C, symSize: 0x134 }
-  - { offset: 0xAE1A4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC29dmaCopyHeaderUcodeToWopcmV139EyRKNS_11GuCFwLayoutE, symObjAddr: 0xEBE0, symBinAddr: 0x28750, symSize: 0x172 }
-  - { offset: 0xAE40E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV139MethodEPKhmy, symObjAddr: 0xED52, symBinAddr: 0x288C2, symSize: 0x252 }
-  - { offset: 0xAE74E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15queueRcsContextEyyP13FakeIrisXEGEM, symObjAddr: 0xEFA4, symBinAddr: 0x28B14, symSize: 0x7C }
-  - { offset: 0xAE7DC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17submitNextContextEv, symObjAddr: 0xF020, symBinAddr: 0x28B90, symSize: 0xAC }
-  - { offset: 0xAE89F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17submitContextPairEyy, symObjAddr: 0xF0CC, symBinAddr: 0x28C3C, symSize: 0xC2 }
-  - { offset: 0xAE9F2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16dumpContextQueueEv, symObjAddr: 0xF18E, symBinAddr: 0x28CFE, symSize: 0xAC }
-  - { offset: 0xAEA81, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9MetaClassD0Ev, symObjAddr: 0xF23A, symBinAddr: 0x28DAA, symSize: 0xA }
-  - { offset: 0xAEB05, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEGuC.cpp, symObjAddr: 0xF244, symBinAddr: 0x28DB4, symSize: 0x33 }
-  - { offset: 0xAEB6F, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0xF277, symBinAddr: 0x28DE7, symSize: 0x11 }
-  - { offset: 0xAEC71, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x28DF8, symSize: 0x32 }
-  - { offset: 0xAEC84, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager10gMetaClassE, symObjAddr: 0x16060, symBinAddr: 0x1349B0, symSize: 0x0 }
-  - { offset: 0xB062B, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9metaClassE, symObjAddr: 0x8C8, symBinAddr: 0x134208, symSize: 0x0 }
-  - { offset: 0xB063E, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager10superClassE, symObjAddr: 0x8D0, symBinAddr: 0x134210, symSize: 0x0 }
-  - { offset: 0xB0893, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x28DF8, symSize: 0x32 }
-  - { offset: 0xB08EA, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x28E2A, symSize: 0xA }
-  - { offset: 0xB0925, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x28E34, symSize: 0x20 }
-  - { offset: 0xB0974, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC1EPK11OSMetaClass, symObjAddr: 0x5C, symBinAddr: 0x28E54, symSize: 0x20 }
-  - { offset: 0xB09D3, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD2Ev, symObjAddr: 0x7C, symBinAddr: 0x28E74, symSize: 0xA }
-  - { offset: 0xB0A0C, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD1Ev, symObjAddr: 0x86, symBinAddr: 0x28E7E, symSize: 0xA }
-  - { offset: 0xB0A80, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD0Ev, symObjAddr: 0x90, symBinAddr: 0x28E88, symSize: 0x22 }
-  - { offset: 0xB0B07, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerdlEPvm, symObjAddr: 0xB2, symBinAddr: 0x28EAA, symSize: 0xA }
-  - { offset: 0xB0B29, size: 0x8, addend: 0x0, symName: __ZNK26FakeIrisXEIOSurfaceManager12getMetaClassEv, symObjAddr: 0xBC, symBinAddr: 0x28EB4, symSize: 0xE }
-  - { offset: 0xB0B4C, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC2Ev, symObjAddr: 0xCA, symBinAddr: 0x28EC2, symSize: 0x32 }
-  - { offset: 0xB0BB5, size: 0x8, addend: 0x0, symName: __ZNK26FakeIrisXEIOSurfaceManager9MetaClass5allocEv, symObjAddr: 0xFC, symBinAddr: 0x28EF4, symSize: 0x40 }
-  - { offset: 0xB0C2B, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagernwEm, symObjAddr: 0x13C, symBinAddr: 0x28F34, symSize: 0xA }
-  - { offset: 0xB0C46, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC1Ev, symObjAddr: 0x146, symBinAddr: 0x28F3E, symSize: 0x30 }
-  - { offset: 0xB0C85, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC2Ev, symObjAddr: 0x176, symBinAddr: 0x28F6E, symSize: 0x30 }
-  - { offset: 0xB0CA7, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager6createEv, symObjAddr: 0x1A6, symBinAddr: 0x28F9E, symSize: 0x48 }
-  - { offset: 0xB0CFB, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager4initEv, symObjAddr: 0x1EE, symBinAddr: 0x28FE6, symSize: 0x4C }
-  - { offset: 0xB0D4E, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager4freeEv, symObjAddr: 0x23A, symBinAddr: 0x29032, symSize: 0x5A }
-  - { offset: 0xB0DE6, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager13createSurfaceEjP13FakeIrisXEGEMRK21FakeIrisXESurfaceInfo, symObjAddr: 0x294, symBinAddr: 0x2908C, symSize: 0x122 }
-  - { offset: 0xB0F53, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager13retainSurfaceEj, symObjAddr: 0x3B6, symBinAddr: 0x291AE, symSize: 0xD6 }
-  - { offset: 0xB105F, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager14releaseSurfaceEj, symObjAddr: 0x48C, symBinAddr: 0x29284, symSize: 0xD6 }
-  - { offset: 0xB1156, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager14destroySurfaceEjb, symObjAddr: 0x562, symBinAddr: 0x2935A, symSize: 0xF4 }
-  - { offset: 0xB126E, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager16mapSurfaceToTaskEjP4taskPP18IOMemoryDescriptorPy, symObjAddr: 0x656, symBinAddr: 0x2944E, symSize: 0x120 }
-  - { offset: 0xB13B7, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager20unmapSurfaceFromTaskEjP11IOMemoryMap, symObjAddr: 0x776, symBinAddr: 0x2956E, symSize: 0x102 }
-  - { offset: 0xB14FC, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassD0Ev, symObjAddr: 0x878, symBinAddr: 0x29670, symSize: 0xA }
-  - { offset: 0xB157E, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEIOSurfaceManager.cpp, symObjAddr: 0x882, symBinAddr: 0x2967A, symSize: 0x33 }
-  - { offset: 0xB15E4, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x8B5, symBinAddr: 0x296AD, symSize: 0x11 }
-  - { offset: 0xB1664, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXELRC15buildLRCContextEP21FakeIrisXEFramebufferP13FakeIrisXEGEMmyjjPi, symObjAddr: 0x0, symBinAddr: 0x296BE, symSize: 0x171 }
-  - { offset: 0xBFC09, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXELRC15buildLRCContextEP21FakeIrisXEFramebufferP13FakeIrisXEGEMmyjjPi, symObjAddr: 0x0, symBinAddr: 0x296BE, symSize: 0x171 }
-  - { offset: 0xBFF61, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC2EPVjj, symObjAddr: 0x0, symBinAddr: 0x29830, symSize: 0x32 }
-  - { offset: 0xBFFE9, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC2EPVjj, symObjAddr: 0x0, symBinAddr: 0x29830, symSize: 0x32 }
-  - { offset: 0xC0079, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC1EPVjj, symObjAddr: 0x32, symBinAddr: 0x29862, symSize: 0x32 }
-  - { offset: 0xC0105, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingD2Ev, symObjAddr: 0x64, symBinAddr: 0x29894, symSize: 0x22 }
-  - { offset: 0xC0160, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingD1Ev, symObjAddr: 0x86, symBinAddr: 0x298B6, symSize: 0x22 }
-  - { offset: 0xC01E8, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing12allocateRingEm, symObjAddr: 0xA8, symBinAddr: 0x298D8, symSize: 0x64 }
-  - { offset: 0xC0299, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing20attachRingGPUAddressEy, symObjAddr: 0x10C, symBinAddr: 0x2993C, symSize: 0xA }
-  - { offset: 0xC02CC, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing20attachRingCPUAddressEPv, symObjAddr: 0x116, symBinAddr: 0x29946, symSize: 0x16 }
-  - { offset: 0xC037F, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing19programRingBaseToHWEv, symObjAddr: 0x12C, symBinAddr: 0x2995C, symSize: 0xAC }
-  - { offset: 0xC0590, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing10enableRingEv, symObjAddr: 0x1D8, symBinAddr: 0x29A08, symSize: 0x100 }
-  - { offset: 0xC0881, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing9pushDwordEj, symObjAddr: 0x2D8, symBinAddr: 0x29B08, symSize: 0x40 }
-  - { offset: 0xC08B1, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing17flushRingCpuCacheEv, symObjAddr: 0x318, symBinAddr: 0x29B48, symSize: 0xA }
-  - { offset: 0xC08D0, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing12updateHWTailEv, symObjAddr: 0x322, symBinAddr: 0x29B52, symSize: 0x2E }
-  - { offset: 0xC099C, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing10readHWHeadEv, symObjAddr: 0x350, symBinAddr: 0x29B80, symSize: 0x1E }
-  - { offset: 0xC0AB6, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing13submitBatch64Ey, symObjAddr: 0x36E, symBinAddr: 0x29B9E, symSize: 0xCD }
-  - { offset: 0xC0CD0, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x29C6C, symSize: 0x32 }
-  - { offset: 0xC0CE3, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface10gMetaClassE, symObjAddr: 0x12C40, symBinAddr: 0x1349D8, symSize: 0x0 }
-  - { offset: 0xC266A, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9metaClassE, symObjAddr: 0x388, symBinAddr: 0x134430, symSize: 0x0 }
-  - { offset: 0xC267D, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface10superClassE, symObjAddr: 0x390, symBinAddr: 0x134438, symSize: 0x0 }
-  - { offset: 0xC26A9, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x29C6C, symSize: 0x32 }
-  - { offset: 0xC2700, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x29C9E, symSize: 0xA }
-  - { offset: 0xC273B, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x29CA8, symSize: 0x20 }
-  - { offset: 0xC278A, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC1EPK11OSMetaClass, symObjAddr: 0x5C, symBinAddr: 0x29CC8, symSize: 0x20 }
-  - { offset: 0xC27E9, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD2Ev, symObjAddr: 0x7C, symBinAddr: 0x29CE8, symSize: 0xA }
-  - { offset: 0xC2822, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD1Ev, symObjAddr: 0x86, symBinAddr: 0x29CF2, symSize: 0xA }
-  - { offset: 0xC2896, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD0Ev, symObjAddr: 0x90, symBinAddr: 0x29CFC, symSize: 0x22 }
-  - { offset: 0xC291D, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfacedlEPvm, symObjAddr: 0xB2, symBinAddr: 0x29D1E, symSize: 0xA }
-  - { offset: 0xC293F, size: 0x8, addend: 0x0, symName: __ZNK17FakeIrisXESurface12getMetaClassEv, symObjAddr: 0xBC, symBinAddr: 0x29D28, symSize: 0xE }
-  - { offset: 0xC2962, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC2Ev, symObjAddr: 0xCA, symBinAddr: 0x29D36, symSize: 0x32 }
-  - { offset: 0xC29CB, size: 0x8, addend: 0x0, symName: __ZNK17FakeIrisXESurface9MetaClass5allocEv, symObjAddr: 0xFC, symBinAddr: 0x29D68, symSize: 0x40 }
-  - { offset: 0xC2A41, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfacenwEm, symObjAddr: 0x13C, symBinAddr: 0x29DA8, symSize: 0xA }
-  - { offset: 0xC2A5C, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC1Ev, symObjAddr: 0x146, symBinAddr: 0x29DB2, symSize: 0x30 }
-  - { offset: 0xC2A9B, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC2Ev, symObjAddr: 0x176, symBinAddr: 0x29DE2, symSize: 0x30 }
-  - { offset: 0xC2AD7, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface6createEjP13FakeIrisXEGEMRK21FakeIrisXESurfaceInfo, symObjAddr: 0x1A6, symBinAddr: 0x29E12, symSize: 0xB2 }
-  - { offset: 0xC2B91, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface4freeEv, symObjAddr: 0x258, symBinAddr: 0x29EC4, symSize: 0x4E }
-  - { offset: 0xC2BDA, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9mapToTaskEP4taskPP18IOMemoryDescriptorPy, symObjAddr: 0x2A6, symBinAddr: 0x29F12, symSize: 0x6C }
-  - { offset: 0xC2C59, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface13unmapFromTaskEP11IOMemoryMap, symObjAddr: 0x312, symBinAddr: 0x29F7E, symSize: 0x24 }
-  - { offset: 0xC2CBA, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassD0Ev, symObjAddr: 0x336, symBinAddr: 0x29FA2, symSize: 0xA }
-  - { offset: 0xC2D3C, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXESurface.cpp, symObjAddr: 0x340, symBinAddr: 0x29FAC, symSize: 0x33 }
-  - { offset: 0xC2DA2, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x373, symBinAddr: 0x29FDF, symSize: 0x11 }
+  - { offset: 0xA0ACA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV233MOCSEv, symObjAddr: 0xB27C, symBinAddr: 0x24DEC, symSize: 0xCE }
+  - { offset: 0xA0C0D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19initV233ClockGatingEv, symObjAddr: 0xB34A, symBinAddr: 0x24EBA, symSize: 0xE0 }
+  - { offset: 0xA0D5B, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV233VDENPowerEv, symObjAddr: 0xB42A, symBinAddr: 0x24F9A, symSize: 0xC4 }
+  - { offset: 0xA0E9D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23initV233DMCVerificationEv, symObjAddr: 0xB4EE, symBinAddr: 0x2505E, symSize: 0xE4 }
+  - { offset: 0xA0FA5, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV233GTInterruptsEv, symObjAddr: 0xB5D2, symBinAddr: 0x25142, symSize: 0x11C }
+  - { offset: 0xA1164, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV233SAGVEv, symObjAddr: 0xB6EE, symBinAddr: 0x2525E, symSize: 0xFA }
+  - { offset: 0xA12DB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initV233PPGTTEv, symObjAddr: 0xB7E8, symBinAddr: 0x25358, symSize: 0xAA }
+  - { offset: 0xA13D4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV233DisplayPowerEv, symObjAddr: 0xB892, symBinAddr: 0x25402, symSize: 0xC0 }
+  - { offset: 0xA14F8, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21initV233GuCAuthVerifyEv, symObjAddr: 0xB952, symBinAddr: 0x254C2, symSize: 0xE4 }
+  - { offset: 0xA1602, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initV233RC6ControlEv, symObjAddr: 0xBA36, symBinAddr: 0x255A6, symSize: 0xB8 }
+  - { offset: 0xA1748, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12initV235GMCHEv, symObjAddr: 0xBAEE, symBinAddr: 0x2565E, symSize: 0xAE }
+  - { offset: 0xA182D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15initV235L3CacheEv, symObjAddr: 0xBB9C, symBinAddr: 0x2570C, symSize: 0x9C }
+  - { offset: 0xA1906, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initV235CDCLKEv, symObjAddr: 0xBC38, symBinAddr: 0x257A8, symSize: 0x76 }
+  - { offset: 0xA19C2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initV235PCIeASPMEv, symObjAddr: 0xBCAE, symBinAddr: 0x2581E, symSize: 0x76 }
+  - { offset: 0xA1A7C, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235DDBEv, symObjAddr: 0xBD24, symBinAddr: 0x25894, symSize: 0x76 }
+  - { offset: 0xA1B38, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235GSCEv, symObjAddr: 0xBD9A, symBinAddr: 0x2590A, symSize: 0x76 }
+  - { offset: 0xA1BF4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV235TimerFreqEv, symObjAddr: 0xBE10, symBinAddr: 0x25980, symSize: 0x76 }
+  - { offset: 0xA1CAE, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18initV235MediaClockEv, symObjAddr: 0xBE86, symBinAddr: 0x259F6, symSize: 0x76 }
+  - { offset: 0xA1D6A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17initV235PCIeDebugEv, symObjAddr: 0xBEFC, symBinAddr: 0x25A6C, symSize: 0xA8 }
+  - { offset: 0xA1E62, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV235RPSEv, symObjAddr: 0xBFA4, symBinAddr: 0x25B14, symSize: 0xC0 }
+  - { offset: 0xA1F77, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV236PMCEv, symObjAddr: 0xC064, symBinAddr: 0x25BD4, symSize: 0xEC }
+  - { offset: 0xA20B6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24initV236ForceWakeDomainsEv, symObjAddr: 0xC150, symBinAddr: 0x25CC0, symSize: 0x174 }
+  - { offset: 0xA22EA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20initV236GTInterruptsEv, symObjAddr: 0xC2C4, symBinAddr: 0x25E34, symSize: 0xEE }
+  - { offset: 0xA2450, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initV236GEMFaultEv, symObjAddr: 0xC3B2, symBinAddr: 0x25F22, symSize: 0x102 }
+  - { offset: 0xA25B2, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC11initV236DMIEv, symObjAddr: 0xC4B4, symBinAddr: 0x26024, symSize: 0xC8 }
+  - { offset: 0xA27B6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15bootGuCFirmwareEPKhmy, symObjAddr: 0x9356, symBinAddr: 0x22EC6, symSize: 0xCE }
+  - { offset: 0xA28C1, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initGuCSubsystemEv, symObjAddr: 0x9674, symBinAddr: 0x231E4, symSize: 0x6E }
+  - { offset: 0xA2948, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12configureRPSEv, symObjAddr: 0x9424, symBinAddr: 0x22F94, symSize: 0x19C }
+  - { offset: 0xA2BD9, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC14authStatusNameEh, symObjAddr: 0x432A, symBinAddr: 0x1DE9A, symSize: 0x24 }
+  - { offset: 0xA2C4F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23logBootFailureSignatureEPKcyjj, symObjAddr: 0x434E, symBinAddr: 0x1DEBE, symSize: 0xFC }
+  - { offset: 0xA2D74, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC12decodeStatusEj, symObjAddr: 0x44C8, symBinAddr: 0x1E038, symSize: 0xB0 }
+  - { offset: 0xA2DBA, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15emitStageReportENS_8GuCStageEyjj, symObjAddr: 0x4578, symBinAddr: 0x1E0E8, symSize: 0xFE }
+  - { offset: 0xA2EC9, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17prepareAppleWopcmENS_8GuCStageEjj, symObjAddr: 0x4676, symBinAddr: 0x1E1E6, symSize: 0x154 }
+  - { offset: 0xA3057, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeRegWithReadbackENS_8GuCStageEPKcjjPj, symObjAddr: 0x47CA, symBinAddr: 0x1E33A, symSize: 0x7A }
+  - { offset: 0xA3145, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC24isImpossibleStatusDecodeEjRKNS_16GuCStatusDecodedE, symObjAddr: 0x48C4, symBinAddr: 0x1E434, symSize: 0x22 }
+  - { offset: 0xA3173, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC27ownerBooleanPropertyEnabledEPKc, symObjAddr: 0x48E6, symBinAddr: 0x1E456, symSize: 0x44 }
+  - { offset: 0xA320A, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC19selectGtPmConfigRegEv, symObjAddr: 0x492A, symBinAddr: 0x1E49A, symSize: 0x40 }
+  - { offset: 0xA3284, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC23logForceWakeDiagnosticsEPKc, symObjAddr: 0x496A, symBinAddr: 0x1E4DA, symSize: 0x444 }
+  - { offset: 0xA38CF, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC17logAppleBootAuditEPKc, symObjAddr: 0x4DAE, symBinAddr: 0x1E91E, symSize: 0x40A }
+  - { offset: 0xA3C0F, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC22logAppleRegisterWindowEPKc, symObjAddr: 0x51B8, symBinAddr: 0x1ED28, symSize: 0x90C }
+  - { offset: 0xA4821, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24ensureApplePublicKeyBlobEPyb, symObjAddr: 0x5AC4, symBinAddr: 0x1F634, symSize: 0x1B4 }
+  - { offset: 0xA4A4F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24producerCoherencyBarrierEPKc, symObjAddr: 0x5C78, symBinAddr: 0x1F7E8, symSize: 0x24 }
+  - { offset: 0xA4A88, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeAppleBootParamsENS_8GuCStageE, symObjAddr: 0x5C9C, symBinAddr: 0x1F80C, symSize: 0x19C }
+  - { offset: 0xA4BBB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20writeAndPollAppleRegENS_8GuCStageEPKcjjjjjjPj, symObjAddr: 0x5E38, symBinAddr: 0x1F9A8, symSize: 0x108 }
+  - { offset: 0xA4D4A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18pollAppleRegEqualsENS_8GuCStageEPKcjjjPj, symObjAddr: 0x5F40, symBinAddr: 0x1FAB0, symSize: 0xE6 }
+  - { offset: 0xA4E60, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19safeForceWakeDomainENS_8GuCStageEPKcjjjjj, symObjAddr: 0x6026, symBinAddr: 0x1FB96, symSize: 0x130 }
+  - { offset: 0xA5074, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23acquireAppleWakeDomainsENS_8GuCStageE, symObjAddr: 0x6156, symBinAddr: 0x1FCC6, symSize: 0x14E }
+  - { offset: 0xA51F4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24runApplePreAuthHandshakeENS_8GuCStageEj, symObjAddr: 0x62A4, symBinAddr: 0x1FE14, symSize: 0x5E0 }
+  - { offset: 0xA5943, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16releaseForceWakeEv, symObjAddr: 0x6884, symBinAddr: 0x203F4, symSize: 0xF0 }
+  - { offset: 0xA5AE0, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC21issueGuCTlbInvalidateEv, symObjAddr: 0x6AB4, symBinAddr: 0x20624, symSize: 0xC4 }
+  - { offset: 0xA5BE8, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC19logDoorbellSnapshotEPKc, symObjAddr: 0x6B78, symBinAddr: 0x206E8, symSize: 0x136 }
+  - { offset: 0xA5E0A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21programDoorbellEnableENS_8GuCStageE, symObjAddr: 0x6CAE, symBinAddr: 0x2081E, symSize: 0x416 }
+  - { offset: 0xA62DD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24consumerCoherencyBarrierEPKc, symObjAddr: 0x70C4, symBinAddr: 0x20C34, symSize: 0x24 }
+  - { offset: 0xA6316, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27logLinuxBaselineCorrelationEb, symObjAddr: 0x70E8, symBinAddr: 0x20C58, symSize: 0xFE }
+  - { offset: 0xA64C6, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19pollForBootFastFailEjyj, symObjAddr: 0x71E6, symBinAddr: 0x20D56, symSize: 0x348 }
+  - { offset: 0xA67B0, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19runLinuxBringUpPathEPKhmyjy, symObjAddr: 0x752E, symBinAddr: 0x2109E, symSize: 0xF40 }
+  - { offset: 0xA7F94, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20parseGuCFirmwareV139EPKhmRNS_11GuCFwLayoutE, symObjAddr: 0x846E, symBinAddr: 0x21FDE, symSize: 0x1A6 }
+  - { offset: 0xA812E, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC13dumpWopcmRegsEPKc, symObjAddr: 0x8614, symBinAddr: 0x22184, symSize: 0x5A }
+  - { offset: 0xA81C7, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19writeRsaScratchV139EPKhRKNS_11GuCFwLayoutE, symObjAddr: 0x866E, symBinAddr: 0x221DE, symSize: 0x1A6 }
+  - { offset: 0xA83F3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC14writeGuCParamsEv, symObjAddr: 0x8814, symBinAddr: 0x22384, symSize: 0xAE }
+  - { offset: 0xA856B, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC11dumpDmaRegsEPKc, symObjAddr: 0x88C2, symBinAddr: 0x22432, symSize: 0xD2 }
+  - { offset: 0xA8694, size: 0x8, addend: 0x0, symName: __ZNK13FakeIrisXEGuC15dumpGuCStatusExEPKc, symObjAddr: 0x8994, symBinAddr: 0x22504, symSize: 0x102 }
+  - { offset: 0xA87E7, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjy, symObjAddr: 0x8A96, symBinAddr: 0x22606, symSize: 0x6D8 }
+  - { offset: 0xA91FD, size: 0x8, addend: 0x0, symName: '__ZZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjyENK3$_0clEPKcj', symObjAddr: 0x92C4, symBinAddr: 0x22E34, symSize: 0x92 }
+  - { offset: 0xA92D7, size: 0x8, addend: 0x0, symName: '__ZZN13FakeIrisXEGuC19runAppleBringUpPathEPKhmyjyENK3$_1clEPKc', symObjAddr: 0x916E, symBinAddr: 0x22CDE, symSize: 0x156 }
+  - { offset: 0xA945A, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19loadFirmwareViaMMIOEyjm, symObjAddr: 0x95C0, symBinAddr: 0x23130, symSize: 0xB4 }
+  - { offset: 0xA9560, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13initDoorbellsEv, symObjAddr: 0x9D0C, symBinAddr: 0x2387C, symSize: 0x72 }
+  - { offset: 0xA9637, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27initCommandTransportBuffersEv, symObjAddr: 0x9D7E, symBinAddr: 0x238EE, symSize: 0x32C }
+  - { offset: 0xA98FD, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20uploadFirmwareViaDMAEyjmj, symObjAddr: 0x9964, symBinAddr: 0x234D4, symSize: 0x3A8 }
+  - { offset: 0xA9F00, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC26uploadFirmwareViaDMA_AppleEyjm, symObjAddr: 0xA0AA, symBinAddr: 0x23C1A, symSize: 0x24E }
+  - { offset: 0xAA2EB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC26uploadFirmwareWithFallbackEyjm, symObjAddr: 0xA2F8, symBinAddr: 0x23E68, symSize: 0x156 }
+  - { offset: 0xAA487, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19enableGuCSubmissionEv, symObjAddr: 0xA44E, symBinAddr: 0x23FBE, symSize: 0x1EA }
+  - { offset: 0xAA7A1, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC12waitGuCReadyEj, symObjAddr: 0xA638, symBinAddr: 0x241A8, symSize: 0x162 }
+  - { offset: 0xAA90D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC13dumpGuCStatusEv, symObjAddr: 0xA79A, symBinAddr: 0x2430A, symSize: 0xFE }
+  - { offset: 0xAAA55, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21testCommandSubmissionEv, symObjAddr: 0xA898, symBinAddr: 0x24408, symSize: 0x15E }
+  - { offset: 0xAAC81, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18programShimControlEv, symObjAddr: 0xAAFE, symBinAddr: 0x2466E, symSize: 0x35C }
+  - { offset: 0xAB17F, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC29buildRcsContextDescriptorV246Eyj, symObjAddr: 0xC57C, symBinAddr: 0x260EC, symSize: 0xEA }
+  - { offset: 0xAB2D4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC20buildGen12RcsLrcV246ERNS_20RcsExeclistResourcesEj, symObjAddr: 0xC666, symBinAddr: 0x261D6, symSize: 0x224 }
+  - { offset: 0xAB526, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC27verifyMiStoreDwordImmPacketERNS_20RcsExeclistResourcesE, symObjAddr: 0xC88A, symBinAddr: 0x263FA, symSize: 0x24C }
+  - { offset: 0xAB78C, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19initV221RCSExeclistEv, symObjAddr: 0xCAD6, symBinAddr: 0x26646, symSize: 0x14 }
+  - { offset: 0xAB7C3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22dumpRcsStateBeforeInitEPKc, symObjAddr: 0xCAEA, symBinAddr: 0x2665A, symSize: 0x378 }
+  - { offset: 0xABE47, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC25dumpRcsStateAfterRecoveryEPKc, symObjAddr: 0xCE62, symBinAddr: 0x269D2, symSize: 0xA }
+  - { offset: 0xABEBC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18tryRcsRecoveryPathEv, symObjAddr: 0xCE6C, symBinAddr: 0x269DC, symSize: 0x476 }
+  - { offset: 0xAC4B4, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC28allocateRcsExeclistResourcesERNS_20RcsExeclistResourcesE, symObjAddr: 0xD2E2, symBinAddr: 0x26E52, symSize: 0x200 }
+  - { offset: 0xAC5B5, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16buildGen12RcsLrcERNS_20RcsExeclistResourcesEj, symObjAddr: 0xD4E2, symBinAddr: 0x27052, symSize: 0x162 }
+  - { offset: 0xAC70E, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC25buildRcsContextDescriptorEyj, symObjAddr: 0xD644, symBinAddr: 0x271B4, symSize: 0x86 }
+  - { offset: 0xAC7CB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC24submitRcsExeclistContextEyy, symObjAddr: 0xD6CA, symBinAddr: 0x2723A, symSize: 0xF4 }
+  - { offset: 0xAC962, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC23pollRcsExeclistProgressEjRNS_20RcsExeclistResourcesEj, symObjAddr: 0xD7BE, symBinAddr: 0x2732E, symSize: 0x72A }
+  - { offset: 0xAD24D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC19executeRcsTestBatchERNS_20RcsExeclistResourcesE, symObjAddr: 0xDEE8, symBinAddr: 0x27A58, symSize: 0x114 }
+  - { offset: 0xAD330, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16initBCS0PipelineEv, symObjAddr: 0xDFFC, symBinAddr: 0x27B6C, symSize: 0x804 }
+  - { offset: 0xADD04, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC18programWopcmForTglEjj, symObjAddr: 0xE8AA, symBinAddr: 0x2841A, symSize: 0xF0 }
+  - { offset: 0xADEBB, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17dmaCopyGttToWopcmEyjm, symObjAddr: 0xEA62, symBinAddr: 0x285D2, symSize: 0x198 }
+  - { offset: 0xAE1AC, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC14waitForGucBootEj, symObjAddr: 0xEBFA, symBinAddr: 0x2876A, symSize: 0x176 }
+  - { offset: 0xAE327, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV137MethodEPKhmy, symObjAddr: 0xED70, symBinAddr: 0x288E0, symSize: 0x128 }
+  - { offset: 0xAE511, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21guclResetForWopcmV138Ev, symObjAddr: 0xEE98, symBinAddr: 0x28A08, symSize: 0x9C }
+  - { offset: 0xAE611, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC22programWopcmForTglV138Ejj, symObjAddr: 0xEF34, symBinAddr: 0x28AA4, symSize: 0xFE }
+  - { offset: 0xAE7C7, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV138MethodEPKhmy, symObjAddr: 0xF032, symBinAddr: 0x28BA2, symSize: 0x134 }
+  - { offset: 0xAE9D8, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC29dmaCopyHeaderUcodeToWopcmV139EyRKNS_11GuCFwLayoutE, symObjAddr: 0xF166, symBinAddr: 0x28CD6, symSize: 0x172 }
+  - { offset: 0xAEC42, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC21loadGuCWithV139MethodEPKhmy, symObjAddr: 0xF2D8, symBinAddr: 0x28E48, symSize: 0x252 }
+  - { offset: 0xAEF82, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC15queueRcsContextEyyP13FakeIrisXEGEM, symObjAddr: 0xF52A, symBinAddr: 0x2909A, symSize: 0x7C }
+  - { offset: 0xAF010, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17submitNextContextEv, symObjAddr: 0xF5A6, symBinAddr: 0x29116, symSize: 0xAC }
+  - { offset: 0xAF0D3, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC17submitContextPairEyy, symObjAddr: 0xF652, symBinAddr: 0x291C2, symSize: 0xC2 }
+  - { offset: 0xAF226, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC16dumpContextQueueEv, symObjAddr: 0xF714, symBinAddr: 0x29284, symSize: 0xAC }
+  - { offset: 0xAF2B5, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXEGuC9MetaClassD0Ev, symObjAddr: 0xF7C0, symBinAddr: 0x29330, symSize: 0xA }
+  - { offset: 0xAF339, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEGuC.cpp, symObjAddr: 0xF7CA, symBinAddr: 0x2933A, symSize: 0x33 }
+  - { offset: 0xAF3A3, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0xF7FD, symBinAddr: 0x2936D, symSize: 0x11 }
+  - { offset: 0xAF4A5, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x2937E, symSize: 0x32 }
+  - { offset: 0xAF4B8, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager10gMetaClassE, symObjAddr: 0x16060, symBinAddr: 0x1359B0, symSize: 0x0 }
+  - { offset: 0xB0E5F, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9metaClassE, symObjAddr: 0x8C8, symBinAddr: 0x135208, symSize: 0x0 }
+  - { offset: 0xB0E72, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager10superClassE, symObjAddr: 0x8D0, symBinAddr: 0x135210, symSize: 0x0 }
+  - { offset: 0xB10C7, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x2937E, symSize: 0x32 }
+  - { offset: 0xB111E, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x293B0, symSize: 0xA }
+  - { offset: 0xB1159, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x293BA, symSize: 0x20 }
+  - { offset: 0xB11A8, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC1EPK11OSMetaClass, symObjAddr: 0x5C, symBinAddr: 0x293DA, symSize: 0x20 }
+  - { offset: 0xB1207, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD2Ev, symObjAddr: 0x7C, symBinAddr: 0x293FA, symSize: 0xA }
+  - { offset: 0xB1240, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD1Ev, symObjAddr: 0x86, symBinAddr: 0x29404, symSize: 0xA }
+  - { offset: 0xB12B4, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerD0Ev, symObjAddr: 0x90, symBinAddr: 0x2940E, symSize: 0x22 }
+  - { offset: 0xB133B, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerdlEPvm, symObjAddr: 0xB2, symBinAddr: 0x29430, symSize: 0xA }
+  - { offset: 0xB135D, size: 0x8, addend: 0x0, symName: __ZNK26FakeIrisXEIOSurfaceManager12getMetaClassEv, symObjAddr: 0xBC, symBinAddr: 0x2943A, symSize: 0xE }
+  - { offset: 0xB1380, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassC2Ev, symObjAddr: 0xCA, symBinAddr: 0x29448, symSize: 0x32 }
+  - { offset: 0xB13E9, size: 0x8, addend: 0x0, symName: __ZNK26FakeIrisXEIOSurfaceManager9MetaClass5allocEv, symObjAddr: 0xFC, symBinAddr: 0x2947A, symSize: 0x40 }
+  - { offset: 0xB145F, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagernwEm, symObjAddr: 0x13C, symBinAddr: 0x294BA, symSize: 0xA }
+  - { offset: 0xB147A, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC1Ev, symObjAddr: 0x146, symBinAddr: 0x294C4, symSize: 0x30 }
+  - { offset: 0xB14B9, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManagerC2Ev, symObjAddr: 0x176, symBinAddr: 0x294F4, symSize: 0x30 }
+  - { offset: 0xB14DB, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager6createEv, symObjAddr: 0x1A6, symBinAddr: 0x29524, symSize: 0x48 }
+  - { offset: 0xB152F, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager4initEv, symObjAddr: 0x1EE, symBinAddr: 0x2956C, symSize: 0x4C }
+  - { offset: 0xB1582, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager4freeEv, symObjAddr: 0x23A, symBinAddr: 0x295B8, symSize: 0x5A }
+  - { offset: 0xB161A, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager13createSurfaceEjP13FakeIrisXEGEMRK21FakeIrisXESurfaceInfo, symObjAddr: 0x294, symBinAddr: 0x29612, symSize: 0x122 }
+  - { offset: 0xB1787, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager13retainSurfaceEj, symObjAddr: 0x3B6, symBinAddr: 0x29734, symSize: 0xD6 }
+  - { offset: 0xB1893, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager14releaseSurfaceEj, symObjAddr: 0x48C, symBinAddr: 0x2980A, symSize: 0xD6 }
+  - { offset: 0xB198A, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager14destroySurfaceEjb, symObjAddr: 0x562, symBinAddr: 0x298E0, symSize: 0xF4 }
+  - { offset: 0xB1AA2, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager16mapSurfaceToTaskEjP4taskPP18IOMemoryDescriptorPy, symObjAddr: 0x656, symBinAddr: 0x299D4, symSize: 0x120 }
+  - { offset: 0xB1BEB, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager20unmapSurfaceFromTaskEjP11IOMemoryMap, symObjAddr: 0x776, symBinAddr: 0x29AF4, symSize: 0x102 }
+  - { offset: 0xB1D30, size: 0x8, addend: 0x0, symName: __ZN26FakeIrisXEIOSurfaceManager9MetaClassD0Ev, symObjAddr: 0x878, symBinAddr: 0x29BF6, symSize: 0xA }
+  - { offset: 0xB1DB2, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXEIOSurfaceManager.cpp, symObjAddr: 0x882, symBinAddr: 0x29C00, symSize: 0x33 }
+  - { offset: 0xB1E18, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x8B5, symBinAddr: 0x29C33, symSize: 0x11 }
+  - { offset: 0xB1E98, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXELRC15buildLRCContextEP21FakeIrisXEFramebufferP13FakeIrisXEGEMmyjjPi, symObjAddr: 0x0, symBinAddr: 0x29C44, symSize: 0x171 }
+  - { offset: 0xC043D, size: 0x8, addend: 0x0, symName: __ZN13FakeIrisXELRC15buildLRCContextEP21FakeIrisXEFramebufferP13FakeIrisXEGEMmyjjPi, symObjAddr: 0x0, symBinAddr: 0x29C44, symSize: 0x171 }
+  - { offset: 0xC0795, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC2EPVjj, symObjAddr: 0x0, symBinAddr: 0x29DB6, symSize: 0x32 }
+  - { offset: 0xC081D, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC2EPVjj, symObjAddr: 0x0, symBinAddr: 0x29DB6, symSize: 0x32 }
+  - { offset: 0xC08AD, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingC1EPVjj, symObjAddr: 0x32, symBinAddr: 0x29DE8, symSize: 0x32 }
+  - { offset: 0xC0939, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingD2Ev, symObjAddr: 0x64, symBinAddr: 0x29E1A, symSize: 0x22 }
+  - { offset: 0xC0994, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERingD1Ev, symObjAddr: 0x86, symBinAddr: 0x29E3C, symSize: 0x22 }
+  - { offset: 0xC0A1C, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing12allocateRingEm, symObjAddr: 0xA8, symBinAddr: 0x29E5E, symSize: 0x64 }
+  - { offset: 0xC0ACD, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing20attachRingGPUAddressEy, symObjAddr: 0x10C, symBinAddr: 0x29EC2, symSize: 0xA }
+  - { offset: 0xC0B00, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing20attachRingCPUAddressEPv, symObjAddr: 0x116, symBinAddr: 0x29ECC, symSize: 0x16 }
+  - { offset: 0xC0BB3, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing19programRingBaseToHWEv, symObjAddr: 0x12C, symBinAddr: 0x29EE2, symSize: 0xAC }
+  - { offset: 0xC0DC4, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing10enableRingEv, symObjAddr: 0x1D8, symBinAddr: 0x29F8E, symSize: 0x100 }
+  - { offset: 0xC10B5, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing9pushDwordEj, symObjAddr: 0x2D8, symBinAddr: 0x2A08E, symSize: 0x40 }
+  - { offset: 0xC10E5, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing17flushRingCpuCacheEv, symObjAddr: 0x318, symBinAddr: 0x2A0CE, symSize: 0xA }
+  - { offset: 0xC1104, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing12updateHWTailEv, symObjAddr: 0x322, symBinAddr: 0x2A0D8, symSize: 0x2E }
+  - { offset: 0xC11D0, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing10readHWHeadEv, symObjAddr: 0x350, symBinAddr: 0x2A106, symSize: 0x1E }
+  - { offset: 0xC12EA, size: 0x8, addend: 0x0, symName: __ZN14FakeIrisXERing13submitBatch64Ey, symObjAddr: 0x36E, symBinAddr: 0x2A124, symSize: 0xCD }
+  - { offset: 0xC1504, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x2A1F2, symSize: 0x32 }
+  - { offset: 0xC1517, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface10gMetaClassE, symObjAddr: 0x12C40, symBinAddr: 0x1359D8, symSize: 0x0 }
+  - { offset: 0xC2E9E, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9metaClassE, symObjAddr: 0x388, symBinAddr: 0x135430, symSize: 0x0 }
+  - { offset: 0xC2EB1, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface10superClassE, symObjAddr: 0x390, symBinAddr: 0x135438, symSize: 0x0 }
+  - { offset: 0xC2EDD, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC1Ev, symObjAddr: 0x0, symBinAddr: 0x2A1F2, symSize: 0x32 }
+  - { offset: 0xC2F34, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassD1Ev, symObjAddr: 0x32, symBinAddr: 0x2A224, symSize: 0xA }
+  - { offset: 0xC2F6F, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC2EPK11OSMetaClass, symObjAddr: 0x3C, symBinAddr: 0x2A22E, symSize: 0x20 }
+  - { offset: 0xC2FBE, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC1EPK11OSMetaClass, symObjAddr: 0x5C, symBinAddr: 0x2A24E, symSize: 0x20 }
+  - { offset: 0xC301D, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD2Ev, symObjAddr: 0x7C, symBinAddr: 0x2A26E, symSize: 0xA }
+  - { offset: 0xC3056, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD1Ev, symObjAddr: 0x86, symBinAddr: 0x2A278, symSize: 0xA }
+  - { offset: 0xC30CA, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceD0Ev, symObjAddr: 0x90, symBinAddr: 0x2A282, symSize: 0x22 }
+  - { offset: 0xC3151, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfacedlEPvm, symObjAddr: 0xB2, symBinAddr: 0x2A2A4, symSize: 0xA }
+  - { offset: 0xC3173, size: 0x8, addend: 0x0, symName: __ZNK17FakeIrisXESurface12getMetaClassEv, symObjAddr: 0xBC, symBinAddr: 0x2A2AE, symSize: 0xE }
+  - { offset: 0xC3196, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassC2Ev, symObjAddr: 0xCA, symBinAddr: 0x2A2BC, symSize: 0x32 }
+  - { offset: 0xC31FF, size: 0x8, addend: 0x0, symName: __ZNK17FakeIrisXESurface9MetaClass5allocEv, symObjAddr: 0xFC, symBinAddr: 0x2A2EE, symSize: 0x40 }
+  - { offset: 0xC3275, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfacenwEm, symObjAddr: 0x13C, symBinAddr: 0x2A32E, symSize: 0xA }
+  - { offset: 0xC3290, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC1Ev, symObjAddr: 0x146, symBinAddr: 0x2A338, symSize: 0x30 }
+  - { offset: 0xC32CF, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurfaceC2Ev, symObjAddr: 0x176, symBinAddr: 0x2A368, symSize: 0x30 }
+  - { offset: 0xC330B, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface6createEjP13FakeIrisXEGEMRK21FakeIrisXESurfaceInfo, symObjAddr: 0x1A6, symBinAddr: 0x2A398, symSize: 0xB2 }
+  - { offset: 0xC33C5, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface4freeEv, symObjAddr: 0x258, symBinAddr: 0x2A44A, symSize: 0x4E }
+  - { offset: 0xC340E, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9mapToTaskEP4taskPP18IOMemoryDescriptorPy, symObjAddr: 0x2A6, symBinAddr: 0x2A498, symSize: 0x6C }
+  - { offset: 0xC348D, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface13unmapFromTaskEP11IOMemoryMap, symObjAddr: 0x312, symBinAddr: 0x2A504, symSize: 0x24 }
+  - { offset: 0xC34EE, size: 0x8, addend: 0x0, symName: __ZN17FakeIrisXESurface9MetaClassD0Ev, symObjAddr: 0x336, symBinAddr: 0x2A528, symSize: 0xA }
+  - { offset: 0xC3570, size: 0x8, addend: 0x0, symName: __GLOBAL__sub_I_FakeIrisXESurface.cpp, symObjAddr: 0x340, symBinAddr: 0x2A532, symSize: 0x33 }
+  - { offset: 0xC35D6, size: 0x8, addend: 0x0, symName: __GLOBAL__D_a, symObjAddr: 0x373, symBinAddr: 0x2A565, symSize: 0x11 }
 ...
