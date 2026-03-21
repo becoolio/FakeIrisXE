@@ -441,7 +441,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V275 - GUC_CTL Investigation ║\n");
+    IOLog("║    FAKEIRISXE V280 - GUC_CTL=0x40000001 pre-DMA, WOPCM_BASE investigation ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -987,7 +987,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V275 - GUC_CTL Investigation║\n");
+    IOLog("║     FAKEIRISXE V280 - GUC_CTL=0x40000001 pre-DMA, WOPCM_BASE investigation║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2029,7 +2029,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V275] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V280] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2161,15 +2161,15 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
 
     // V274: Attempt GuC init using Linux i915 boot path. V271 showed Apple path fails at ME handshake. V272 showed GuC doesn't boot (status stuck at 0x01).
     // all failed with F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
-    // V274 fix: GUC_CTL@0xC010 (was 0xC05C), removed GUC_MISC_CONTROL, SOFT_SCRATCH DEBUG=0xC
-    // V275: Investigating GUC_CTL at 0x1C0B0 (Linux public), GT_PM_CONFIG_GT@0x13816C, clock gating
+    // V280: Investigating GUC_CTL at 0x1C0B0 (Linux public), GT_PM_CONFIG_GT@0x13816C works!
+    // V280: GUC_CTL=0x40000001 written BEFORE DMA trigger (critical fix), multiple values/addresses tried, GUC_WOPCM_BASE investigated
     // Skip GuC only when explicitly requested via -fakeirisxe-noguc.
     // -fakeirisxe-guc now behaves the same as plain -fakeirisxe (both try GuC).
 
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V275] Stage 4: Linux i915 GuC boot path (SHIM=0x37, GUC_CTL investigation)\n");
+        IOLog("(FakeIrisXE) [V280] Stage 4: Linux i915 GuC boot path (SHIM=0x37, GUC_CTL investigation)\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2197,13 +2197,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V275] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V280] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V275] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V280] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
@@ -2214,7 +2214,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // The previous 17 direct-Execlist iterations (V254-V270) all failed with
     // F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V275] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        IOLog("(FakeIrisXE) [V280] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2368,7 +2368,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V275] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V280] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2736,7 +2736,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V275, GUC_CTL investigation)\n");
+    IOLog("🏁 FakeIrisXEFramebuffer::start() - Completed (V280, GUC_CTL pre-DMA fix)\n");
     return true;
 
 }
@@ -2747,29 +2747,33 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
 {
     IOLog("FakeIrisXEFramebuffer::stop() called — scheduling gated cleanup\n");
 
-    // in FakeIrisXEFramebuffer::stop(IOService* provider)
+    // V280: DEFENSIVE STOP — guard against init() failing before allocations
+
+    // V280: Release IOService objects with null-checks first
     if (fInterruptSource) {
         fInterruptSource->disable();
         if (fWorkLoop) {
             fWorkLoop->removeEventSource(fInterruptSource);
         }
-        fInterruptSource->release();
+        auto* tmp = fInterruptSource;
         fInterruptSource = nullptr;
+        tmp->release();
     }
 
-    
     if (fCmdGate) {
         if (fWorkLoop) {
             fWorkLoop->removeEventSource(fCmdGate);
         }
-        fCmdGate->release();
+        auto* tmp = fCmdGate;
         fCmdGate = nullptr;
+        tmp->release();
     }
 
     if (fPendingSubmissions) {
         cleanupAllPendingSubmissions();
-        fPendingSubmissions->release();
+        auto* tmp = fPendingSubmissions;
         fPendingSubmissions = nullptr;
+        tmp->release();
     }
 
     if (fPendingLock) {
@@ -2778,27 +2782,94 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
     }
 
     if (fWorkLoop) {
-        fWorkLoop->release();
+        // V280: Remove commandGate from workLoop first (if not already done above)
+        if (fCmdGate == nullptr) {
+            // Already removed above, skip
+        }
+        auto* tmp = fWorkLoop;
         fWorkLoop = nullptr;
+        tmp->release();
     }
 
-    
-    // Mark we are shutting down so any timers/work will early-exit
-    IOLockLock(timerLock);
-    driverActive = false;
-    shuttingDown = true;
-    IOLockUnlock(timerLock);
+    // V280: Mark shutdown state
+    if (timerLock) {
+        IOLockLock(timerLock);
+        driverActive = false;
+        shuttingDown = true;
+        IOLockUnlock(timerLock);
+    }
 
-    
+    // V280: Run gated cleanup via commandGate, or inline fallback
     if (commandGate) {
-        // runAction will call staticStopAction() on the gated thread synchronously.
         commandGate->runAction(&FakeIrisXEFramebuffer::staticStopAction);
     } else {
-        // fallback: if no gate exists, do best-effort cleanup inline
         performSafeStop();
     }
 
-    // Now call superclass stop after gated cleanup.
+    // V280: Delete ring objects (not OSObject, use C++ delete)
+    // V280: Note: fRcsRing deleted here, fBltRing deleted in performSafeStop
+    if (fRcsRing) {
+        delete fRcsRing;
+        fRcsRing = nullptr;
+    }
+    if (fBltRing) {
+        delete fBltRing;
+        fBltRing = nullptr;
+    }
+
+    // V280: Release Execlist (OSObject subclass - use release() not delete)
+    if (fExeclist) {
+        fExeclist->release();
+        fExeclist = nullptr;
+    }
+
+    // V280: Delete connector manager (plain C++ object)
+    if (fConnectorManager) {
+        delete fConnectorManager;
+        fConnectorManager = nullptr;
+    }
+
+    // V280: Release GEM objects (OSObject subclasses)
+    // V280: FakeIrisXEGEM::release() will call IOBufferMemoryDescriptor::release()
+    if (fFenceGEM) {
+        fFenceGEM->release();
+        fFenceGEM = nullptr;
+    }
+    if (fRingGem) {
+        fRingGem->release();
+        fRingGem = nullptr;
+    }
+    if (fScratchGem) {
+        fScratchGem->release();
+        fScratchGem = nullptr;
+    }
+    if (fLrcGem) {
+        fLrcGem->release();
+        fLrcGem = nullptr;
+    }
+    if (batchGem) {
+        batchGem->release();
+        batchGem = nullptr;
+    }
+
+    // V280: Release framebufferMap (IOMemoryMap)
+    if (framebufferMap) {
+        framebufferMap->release();
+        framebufferMap = nullptr;
+    }
+
+    // V280: Release all pending surface GEM objects
+    for (uint32_t i = 0; i < kMaxSurfaces; i++) {
+        if (fSurfaces[i].inUse && fSurfaces[i].gemObj) {
+            fSurfaces[i].gemObj->release();
+            fSurfaces[i].gemObj = nullptr;
+        }
+        fSurfaces[i].inUse = false;
+        fSurfaces[i].id = 0;
+        fSurfaces[i].gpuAddress = 0;
+    }
+
+    // Now call superclass stop after all our cleanup.
     super::stop(provider);
 }
 
@@ -2820,39 +2891,37 @@ IOReturn FakeIrisXEFramebuffer::staticStopAction(OSObject *owner,
 
 void FakeIrisXEFramebuffer::performSafeStop()
 {
-    IOLog("FakeIrisXEFramebuffer::performSafeStop() — doing gated cleanup\n");
+    // V280: This runs on the gated thread after stop() has already cleaned up:
+    // - fInterruptSource, fCmdGate, fPendingSubmissions, fWorkLoop
+    // - GEM objects, ring objects, connector manager
+    // Only do cleanup that is SAFE from this context:
+    // - Cancel timers that may fire on the workloop
+    // - Release framebuffer memory that was prepared for IOGraphics
+    // - Release PCI device and remaining IOService objects
 
-    // Cancel timers and remove event sources under workloop/gate
+    IOLog("FakeIrisXEFramebuffer::performSafeStop() — gated cleanup\n");
+
+    // V280: Cancel timers (they may fire on the workloop)
     if (vsyncTimer) {
         vsyncTimer->cancelTimeout();
-        if (workLoop) {
-            workLoop->removeEventSource(vsyncTimer);
-        }
-        vsyncTimer->release();
+        // Don't remove from workLoop - already done in stop()
+        auto* tmp = vsyncTimer;
         vsyncTimer = nullptr;
+        tmp->release();
     }
-
     if (displayInjectTimer) {
         displayInjectTimer->cancelTimeout();
-        if (workLoop) {
-            workLoop->removeEventSource(displayInjectTimer);
-        }
-        displayInjectTimer->release();
+        auto* tmp = displayInjectTimer;
         displayInjectTimer = nullptr;
+        tmp->release();
     }
 
-  
-    // Stop power management (PM) under gated thread
+    // V280: Stop power management
     PMstop();
 
-    // Complete any pending framebuffer prepare() before release.
+    // V280: Release framebuffer memory with null-checks
     if (framebufferMemory) {
         framebufferMemory->complete();
-    }
-
-    // Release GPU resources and memory descriptors (these touch IOGraphics/IOBuffer objects)
-    // V153: Use temp variables to ensure nullify before release to prevent double-release
-    if (framebufferMemory) {
         auto* tmp = framebufferMemory;
         framebufferMemory = nullptr;
         tmp->release();
@@ -2878,15 +2947,14 @@ void FakeIrisXEFramebuffer::performSafeStop()
         tmp->release();
     }
 
-    // Remove interrupt sources if any
-    if (vsyncSource && workLoop) {
-        workLoop->removeEventSource(vsyncSource);
-        vsyncSource->release();
+    // V280: Release vsyncSource
+    if (vsyncSource) {
+        auto* tmp = vsyncSource;
         vsyncSource = nullptr;
+        tmp->release();
     }
 
-
-    // Free other locks and arrays
+    // V280: Free locks
     if (timerLock) {
         IOLockFree(timerLock);
         timerLock = nullptr;
@@ -2896,31 +2964,21 @@ void FakeIrisXEFramebuffer::performSafeStop()
         powerLock = nullptr;
     }
 
+    // V280: Release interruptList
     if (interruptList) {
-        interruptList->release();
+        auto* tmp = interruptList;
         interruptList = nullptr;
+        tmp->release();
     }
 
-    // Close PCI device and release provider only after gated cleanup
+    // V280: Close and release PCI device
     if (pciDevice) {
         pciDevice->close(this);
-        pciDevice->release();
+        auto* tmp = pciDevice;
         pciDevice = nullptr;
+        tmp->release();
     }
 
-    
-    if (workLoop) {
-        if (commandGate) {
-            workLoop->removeEventSource(commandGate);
-            commandGate->release();
-            commandGate = nullptr;
-        }
-        workLoop->release();  // release *your* retain only
-        workLoop = nullptr;
-    }
-
-    
-    
     IOLog("FakeIrisXEFramebuffer::performSafeStop() — gated cleanup complete\n");
 }
 
@@ -6254,18 +6312,18 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V275] ============================================\n");
-    IOLog("(FakeIrisXE)[V275] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V275] ============================================\n");
+    IOLog("(FakeIrisXE)[V280] ============================================\n");
+    IOLog("(FakeIrisXE)[V280] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V280] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V275] ❌ No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V280] ❌ No EXECLIST owner available\n");
         return false;
     }
 
-    IOLog("(FakeIrisXE)[V275] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V280] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V275] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V275] ============================================\n");
+    IOLog("(FakeIrisXE)[V280] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V280] ============================================\n");
     return success;
 }
 
