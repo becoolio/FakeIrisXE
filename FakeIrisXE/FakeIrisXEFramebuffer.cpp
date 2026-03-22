@@ -183,6 +183,25 @@ static inline const ProofDisplayMode* getProofModeByID(IODisplayModeID modeID)
     return nullptr;
 }
 
+static inline const ProofDisplayMode* getDefaultProofMode()
+{
+    return (kNumDisplayModes > 0) ? &s_proofDisplayModes[0] : nullptr;
+}
+
+static inline const ProofDisplayMode* getCurrentProofMode(IODisplayModeID currentMode)
+{
+    if (currentMode != 0) {
+        if (const ProofDisplayMode* m = getProofModeByID(currentMode))
+            return m;
+    }
+    return getDefaultProofMode();
+}
+
+static inline bool isSupportedProofDepth(IOIndex depth)
+{
+    return depth == kProofModeDepthIndex;
+}
+
 static void setNumberProperty(IORegistryEntry *entry, const char *key, uint64_t value, uint32_t bits)
 {
     if (!entry || !key) {
@@ -441,7 +460,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║    FAKEIRISXE V286 - Minimal bare-DMA boot (pre-arm!)      ║\n");
+    IOLog("║    FAKEIRISXE V287 - Minimal bare-DMA boot (pre-arm!)      ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -533,9 +552,16 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     pciDevice = nullptr;
   //  mmioBase = nullptr;
    // mmioWrite32 = nullptr;
-    currentMode = 1;  // V131: Start with mode 1 (1920x1080) instead of 0
-    currentDepth = 0;
-    vramSize = 1920 * 1080 * 4;
+     // P0A: Derive startup mode from the authoritative table.
+     if (const ProofDisplayMode* m = getDefaultProofMode()) {
+         currentMode = m->modeID;
+         currentDepth = m->depthIndex;
+         vramSize = m->width * m->height * 4;
+     } else {
+         currentMode = 1;
+         currentDepth = 0;
+         vramSize = 1920 * 1080 * 4;
+     }
     controllerEnabled = false;
     displayOnline = false;
     displayPublished = false;
@@ -987,7 +1013,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║     FAKEIRISXE V286 - Minimal bare-DMA boot (pre-arm!)   ║\n");
+    IOLog("║     FAKEIRISXE V287 - Minimal bare-DMA boot (pre-arm!)   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2029,7 +2055,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V286] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V287] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2164,14 +2190,14 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V281: Apple path first with Intel firmware (KEY STRATEGY - no GUC_CTL dependency!)
     // V281: Apple path uses GUC_MISC_CONTROL+auth-kick instead of GUC_CTL (never tried with Intel fw)
     // V281: Linux fallback uses Apple SHIM=0x00208617, extended GUC register investigation
-    // V286: Minimal bare-DMA FIRST → Apple path → Linux path
+    // V287: Minimal bare-DMA FIRST → Apple path → Linux path
     // Skip GuC only when explicitly requested via -fakeirisxe-noguc.
     // -fakeirisxe-guc now behaves the same as plain -fakeirisxe (both try GuC).
 
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V286] Stage 4: Minimal bare-DMA FIRST → Apple path → Linux fallback\n");
+        IOLog("(FakeIrisXE) [V287] Stage 4: Minimal bare-DMA FIRST → Apple path → Linux fallback\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2199,13 +2225,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V286] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V287] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V286] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V287] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
@@ -2216,7 +2242,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // The previous 17 direct-Execlist iterations (V254-V270) all failed with
     // F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V286] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        IOLog("(FakeIrisXE) [V287] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2370,7 +2396,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V286] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V287] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2738,7 +2764,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V286, Minimal bare-DMA boot)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V287, Minimal bare-DMA boot)\n");
     return true;
 
 }
@@ -4057,29 +4083,24 @@ IOReturn FakeIrisXEFramebuffer::unregisterInterrupt(void* interruptRef) {
 
 
 
-IOReturn FakeIrisXEFramebuffer::setDisplayMode(IODisplayModeID mode,
-                                               IOIndex depth)
+IOReturn FakeIrisXEFramebuffer::setDisplayMode(IODisplayModeID mode, IOIndex depth)
 {
-    IOLog("[V79] setDisplayMode(mode=%u, depth=%u)\n", mode, depth);
-
-    // Validate mode
-    bool validMode = false;
-    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        if (mode == s_displayModes[i].modeID) {
-            validMode = true;
-            break;
-        }
-    }
-    
-    if (!validMode || depth != 0) {
-        IOLog("[V79] setDisplayMode: unsupported mode=%u depth=%u\n", mode, depth);
+    if (!isSupportedProofDepth(depth)) {
+        IOLog("[P0A] setDisplayMode(mode=%u, depth=%u): ❌ unsupported depth\n", mode, depth);
         return kIOReturnUnsupportedMode;
     }
 
-    currentMode  = mode;
+    const ProofDisplayMode* m = getProofModeByID(mode);
+    if (!m) {
+        IOLog("[P0A] setDisplayMode(mode=%u, depth=%u): ❌ mode not in table\n", mode, depth);
+        return kIOReturnUnsupportedMode;
+    }
+
+    currentMode = m->modeID;
     currentDepth = depth;
-    
-    IOLog("[V79] setDisplayMode: SUCCESS - mode set to %u\n", mode);
+
+    IOLog("[P0A] setDisplayMode(mode=%u, depth=%u): ✅ %dx%d %s\n",
+          mode, depth, m->width, m->height, m->name);
     return kIOReturnSuccess;
 }
 
@@ -4115,8 +4136,19 @@ IOReturn FakeIrisXEFramebuffer::createSharedCursor(IOIndex index, int version) {
 
 
 IOReturn FakeIrisXEFramebuffer::setBounds(IOIndex index, IOGBounds *bounds) {
-    IOLog("setBounds() called\n");
-    if (bounds) {
+    if (!bounds) {
+        IOLog("[P0A] setBounds(): ❌ NULL bounds\n");
+        return kIOReturnBadArgument;
+    }
+
+    if (const ProofDisplayMode* m = getCurrentProofMode(currentMode)) {
+        bounds->minx = 0;
+        bounds->miny = 0;
+        bounds->maxx = m->width;
+        bounds->maxy = m->height;
+        IOLog("[P0A] setBounds(): ✅ %dx%d\n", m->width, m->height);
+    } else {
+        IOLog("[P0A] setBounds(): ❌ no current mode, using fallback 1920x1080\n");
         bounds->minx = 0;
         bounds->miny = 0;
         bounds->maxx = 1920;
@@ -4407,23 +4439,19 @@ IOReturn FakeIrisXEFramebuffer::getDisplayModes(IODisplayModeID *allDisplayModes
 UInt64 FakeIrisXEFramebuffer::getPixelFormatsForDisplayMode(
     IODisplayModeID mode, IOIndex depth)
 {
-    // V248: Enhanced validation - ensure mode is in our supported list
-    IOLog("[V248] getPixelFormatsForDisplayMode(mode=%u depth=%u)\n", mode, depth);
-
-    // V248: Validate mode is one of our supported modes
-    bool validMode = false;
-    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        if (mode == s_displayModes[i].modeID) {
-            validMode = true;
-            break;
-        }
+    if (!isSupportedProofDepth(depth)) {
+        IOLog("[P0A] getPixelFormatsForDisplayMode(mode=%u, depth=%u): ❌ unsupported depth\n", mode, depth);
+        return 0;
     }
 
-    // V248: Only support depth 0 (32bpp ARGB) on aperture 0 (system aperture)
-    if (!validMode || depth != 0)
+    const ProofDisplayMode* m = getProofModeByID(mode);
+    if (!m) {
+        IOLog("[P0A] getPixelFormatsForDisplayMode(mode=%u, depth=%u): ❌ mode not in table\n", mode, depth);
         return 0;
+    }
 
-    // Return ARGB8888 format (bit 0 set in the format mask)
+    IOLog("[P0A] getPixelFormatsForDisplayMode(mode=%u, depth=%u): ✅ %dx%d %s\n",
+          mode, depth, m->width, m->height, m->name);
     return (1ULL << 0);
 }
 
@@ -4433,55 +4461,47 @@ IOReturn FakeIrisXEFramebuffer::getPixelInformation(
     IOPixelAperture aperture,
     IOPixelInformation *info)
 {
-    // V248: Enhanced validation
     if (!info) {
-        IOLog("[V248] getPixelInformation(): ❌ NULL info pointer\n");
+        IOLog("[P0A] getPixelInformation(): ❌ NULL info pointer\n");
         return kIOReturnBadArgument;
     }
 
-    // Find the mode info
-    const DisplayModeInfo* modeInfo = nullptr;
-    for (uint32_t i = 0; i < kNumDisplayModes; i++) {
-        if (mode == s_displayModes[i].modeID) {
-            modeInfo = &s_displayModes[i];
-            break;
-        }
-    }
-
-    // V248: Reject invalid modes, depths, or apertures
-    if (!modeInfo || depth != 0 || aperture != kIOFBSystemAperture) {
-        IOLog("[V248] getPixelInformation(): ❌ Invalid args (mode=%u depth=%u ap=%u)\n",
+    if (!isSupportedProofDepth(depth)) {
+        IOLog("[P0A] getPixelInformation(mode=%u, depth=%u, ap=%u): ❌ unsupported depth\n",
               (unsigned)mode, (int)depth, (unsigned)aperture);
-        return kIOReturnBadArgument;
+        return kIOReturnUnsupportedMode;
     }
 
-    // V248: Validate dimensions are within reasonable bounds
-    if (modeInfo->width == 0 || modeInfo->width > 8192 ||
-        modeInfo->height == 0 || modeInfo->height > 8192) {
-        IOLog("[V248] getPixelInformation(): ❌ Invalid dimensions %ux%u\n",
-               modeInfo->width, modeInfo->height);
-        return kIOReturnError;
+    const ProofDisplayMode* m = getProofModeByID(mode);
+    if (!m) {
+        IOLog("[P0A] getPixelInformation(mode=%u, depth=%u, ap=%u): ❌ mode not in table\n",
+              (unsigned)mode, (int)depth, (unsigned)aperture);
+        return kIOReturnUnsupportedMode;
     }
 
-    IOLog("[V248] getPixelInformation(): %ux%u\n", modeInfo->width, modeInfo->height);
+    if (aperture != kIOFBSystemAperture) {
+        IOLog("[P0A] getPixelInformation(mode=%u, depth=%u, ap=%u): ❌ unsupported aperture\n",
+              (unsigned)mode, (int)depth, (unsigned)aperture);
+        return kIOReturnUnsupportedMode;
+    }
 
     bzero(info, sizeof(IOPixelInformation));
 
     info->pixelType = kIO32ARGBPixelFormat;
     strlcpy(info->pixelFormat, "ARGB8888", sizeof(info->pixelFormat));
-
     info->bitsPerComponent = 8;
     info->bitsPerPixel     = 32;
     info->componentCount   = 4;
-    info->bytesPerRow      = modeInfo->width * 4;
-    info->activeWidth      = modeInfo->width;
-    info->activeHeight     = modeInfo->height;
+    info->bytesPerRow      = m->width * 4;
+    info->activeWidth      = m->width;
+    info->activeHeight     = m->height;
+    info->componentMasks[0] = 0xFF000000;
+    info->componentMasks[1] = 0x00FF0000;
+    info->componentMasks[2] = 0x0000FF00;
+    info->componentMasks[3] = 0x000000FF;
 
-    info->componentMasks[0] = 0xFF000000;  // A
-    info->componentMasks[1] = 0x00FF0000;  // R
-    info->componentMasks[2] = 0x0000FF00;  // G
-    info->componentMasks[3] = 0x000000FF;  // B
-
+    IOLog("[P0A] getPixelInformation(mode=%u, depth=%u): ✅ %dx%d %s\n",
+          mode, depth, m->width, m->height, m->name);
     return kIOReturnSuccess;
 }
 
@@ -4603,22 +4623,24 @@ IOReturn FakeIrisXEFramebuffer::getFramebufferOffsetForX_Y(IOPixelAperture apert
                                                            SInt32 y,
                                                            UInt32 *offset)
 {
-    if (!offset)
-        return kIOReturnBadArgument;
-
-    IOLog("getFramebufferOffsetForX_Y(aperture=%d, x=%d, y=%d)\n",
-          (int)aperture, (int)x, (int)y);
-
-    const UInt32 bytesPerPixel = 4;
-    const UInt32 width         = 1920;
-    const UInt32 height        = 1080;
-
-    if (x < 0 || y < 0 || x >= (SInt32)width || y >= (SInt32)height) {
-        IOLog("getFramebufferOffsetForX_Y: out of range\n");
+    if (!offset) {
+        IOLog("[P0A] getFramebufferOffsetForX_Y(): ❌ NULL offset\n");
         return kIOReturnBadArgument;
     }
 
-    *offset = (y * width + x) * bytesPerPixel;
+    const ProofDisplayMode* m = getCurrentProofMode(currentMode);
+    if (!m) {
+        IOLog("[P0A] getFramebufferOffsetForX_Y(): ❌ no current mode\n");
+        return kIOReturnError;
+    }
+
+    if (x < 0 || y < 0 || x >= (SInt32)m->width || y >= (SInt32)m->height) {
+        IOLog("[P0A] getFramebufferOffsetForX_Y(ap=%d,x=%d,y=%d): ❌ out of range (%dx%d)\n",
+              (int)aperture, (int)x, (int)y, m->width, m->height);
+        return kIOReturnBadArgument;
+    }
+
+    *offset = (y * m->width + x) * 4;
     return kIOReturnSuccess;
 }
 
@@ -4668,9 +4690,15 @@ IOReturn FakeIrisXEFramebuffer::getInformationForDisplayMode(
 IOReturn FakeIrisXEFramebuffer::getStartupDisplayMode(IODisplayModeID *modeID,
                                                       IOIndex *depth)
 {
-    IOLog("getStartupDisplayMode() called\n");
-    if (modeID) *modeID = 1;   // MUST match getDisplayModes()
-    if (depth)  *depth  = 0;   // depth index 0 (we’ll treat as 32-bpp)
+    const ProofDisplayMode* m = getDefaultProofMode();
+    if (!m) {
+        IOLog("[P0A] getStartupDisplayMode: ❌ no default mode in table\n");
+        return kIOReturnBadArgument;
+    }
+    if (modeID) *modeID = m->modeID;
+    if (depth)  *depth  = m->depthIndex;
+    IOLog("[P0A] getStartupDisplayMode: modeID=%u depth=%u (%dx%d %s)\n",
+          m->modeID, m->depthIndex, m->width, m->height, m->name);
     return kIOReturnSuccess;
 }
 
@@ -6314,17 +6342,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V286] ============================================\n");
-    IOLog("(FakeIrisXE)[V286] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V286] ============================================\n");
+    IOLog("(FakeIrisXE)[V287] ============================================\n");
+    IOLog("(FakeIrisXE)[V287] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V287] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V286] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V287] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V286] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V287] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V286] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V286] ============================================\n");
+    IOLog("(FakeIrisXE)[V287] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V287] ============================================\n");
     return success;
 }
 

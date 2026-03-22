@@ -124,6 +124,7 @@ private:
     bool runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                               uint32_t retryIndex, uint64_t startNs);
     bool pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, uint32_t retryIndex);
+    void dumpGucMapProbe(const char* tag);
 
     bool writeRegWithReadback(GuCStage stage, const char* regName,
                               uint32_t reg, uint32_t value, uint32_t* outReadback = nullptr);

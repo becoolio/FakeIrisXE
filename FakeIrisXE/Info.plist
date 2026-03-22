@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.286</string>
+	<string>1.0.287</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.286</string>
+	<string>1.0.287</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V286 - Investigate &amp; Bypass: WOPCM fingerprint, 5000ms poll, 12x GUC_CTL, SHIM.bit2 probe</string>
+	<string>FakeIrisXe V287 - Register-map truth pass: dumpGucMapProbe at 6 checkpoints, removed status write</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
