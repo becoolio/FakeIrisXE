@@ -121,6 +121,8 @@ private:
                              uint32_t retryIndex, uint64_t startNs);
     bool runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                              uint32_t retryIndex, uint64_t startNs);
+    bool runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
+                              uint32_t retryIndex, uint64_t startNs);
     bool pollForBootFastFail(uint32_t timeoutMs, uint64_t startNs, uint32_t retryIndex);
 
     bool writeRegWithReadback(GuCStage stage, const char* regName,

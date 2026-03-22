@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V281 - Apple path with Intel firmware (KEY STRATEGY), Apple SHIM=0x00208617, extended GUC register investigation</string>
+	<string>FakeIrisXe V282 - Minimal bare-DMA boot (no pre-auth, no GUC_CTL), ME probing via PCODE, auth-kick sweep</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.281</string>
+	<string>1.0.282</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.281</string>
+	<string>1.0.282</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>
