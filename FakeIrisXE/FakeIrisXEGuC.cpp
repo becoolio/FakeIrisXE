@@ -36,7 +36,7 @@ extern "C" void OSSynchronizeIO(void);
 #define APPLE_TGL_PREAUTH_RETRY_DELAY_MS_V177 20U
 #endif
 #ifndef APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179
-#define APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179 500U  // V183: Reduced from 1500ms to 500ms for faster boot
+#define APPLE_TGL_ME_WAKE_TIMEOUT_MS_V179 100U  // V283: Reduced from 500ms to 100ms (ME not responding)
 #endif
 #ifndef APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179
 #define APPLE_TGL_ME_HASH_READY_TIMEOUT_MS_V179 500U  // V183: Reduced from 1500ms to 500ms for faster boot
@@ -291,7 +291,7 @@ extern "C" void OSSynchronizeIO(void);
 #endif
 
 #ifndef APPLE_TGL_PREAUTH_MAX_ATTEMPTS_V177
-#define APPLE_TGL_PREAUTH_MAX_ATTEMPTS_V177 5U
+#define APPLE_TGL_PREAUTH_MAX_ATTEMPTS_V177 2U  // V283: Reduced from 5 to 2 (save ~9s of wasted boot time)
 #endif
 #ifndef APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177
 #define APPLE_TGL_PREAUTH_STEP_TIMEOUT_MS_V177 250U
@@ -2386,7 +2386,7 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     fOwner->safeMMIOWrite(0xC048, 0xFFFF0001);
     IOSleep(5);
     uint32_t gucHaltRead = fOwner->safeMMIORead(0xC048);
-    IOLog("(FakeIrisXE) [GuC][V282] GUC_HALT(0xC048): wrote 0xFFFF0001, read 0x%08X\n", gucHaltRead);
+        IOLog("(FakeIrisXE) [GuC][V283] GUC_HALT(0xC048): wrote 0xFFFF0001, read 0x%08X\n", gucHaltRead);
 
     if (!writeRsaScratchV139(fwData, layout)) {
         IOLog("(FakeIrisXE) [GuC] Linux path RSA programming failed\n");
@@ -2438,7 +2438,7 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         
         uint32_t triggerVal = dmaTriggers[attempt];
         uint32_t thisOffset = wopcmOffsets[attempt];
-        IOLog("(FakeIrisXE) [GuC][V282] DMA trigger attempt %d: %s offset=0x%08X\n",
+        IOLog("(FakeIrisXE) [GuC][V283] DMA trigger attempt %d: %s offset=0x%08X\n",
               attempt + 1, dmaNames[attempt], thisOffset);
         
         // V139/V273: Dump pre-DMA state and program WOPCM destination
@@ -2453,8 +2453,8 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         fOwner->safeMMIOWrite(DMA_CTRL_V137, 0);
         IOSleep(5);
         
-        // V282: NO GUC_CTL writes (hardware-locked). Bare DMA trigger only.
-        IOLog("(FakeIrisXE) [GuC][V282] DMA trigger attempt %d: %s (bare, no GUC_CTL)\n",
+        // V283: NO GUC_CTL writes (hardware-locked). Bare DMA trigger only.
+        IOLog("(FakeIrisXE) [GuC][V283] DMA trigger attempt %d: %s (bare, no GUC_CTL)\n",
               attempt + 1, dmaNames[attempt]);
         
         writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
@@ -2520,9 +2520,8 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     return true;
 }
 
-// V282: Minimal bare-DMA boot without pre-auth handshake or GUC_CTL writes
-// Rationale: Apple path fails at ME_WAKE (ME not responding). Linux path fails at GUC_CTL (hardware-locked).
-// This path tries the absolute minimum: forcewake, WOPCM, RSA, SHIM, DMA, auth-kick, no pre-auth.
+// V283: Minimal bare-DMA boot — no pre-auth, no GUC_CTL, no ME_WAKE, no GUC_RESET_CTL writes
+// Changes: GUC_RESET@0xA440 cleared, auth-kick before DMA, reduced poll 1000ms→300ms, boot order swapped
 bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                                            uint32_t retryIndex, uint64_t startNs)
 {
@@ -2532,16 +2531,16 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         return false;
     }
 
-    IOLog("(FakeIrisXE) [GuC][V282][Minimal] Starting minimal bare-DMA boot...\n");
+    IOLog("(FakeIrisXE) [GuC][V283][Minimal] Starting minimal bare-DMA boot...\n");
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
-        IOLog("(FakeIrisXE) [GuC][V282][Minimal] ForceWake failed\n");
+        IOLog("(FakeIrisXE) [GuC][V283][Minimal] ForceWake failed\n");
         return false;
     }
     logForceWakeDiagnostics("minimal-forcewake");
 
-    // V282: Comprehensive GT reset
+    // V283: Comprehensive GT reset + clear GUC_RESET@0xA440 (V282 showed GuC held in reset: 0x00000001)
     fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x1001);
     IOSleep(20);
     fOwner->safeMMIOWrite(GEN11_GUC_RESET, 0x0001);
@@ -2554,38 +2553,46 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         IOSleep(5);
     }
     
+    // V283: Try clearing GUC_RESET@0xA440 (Gen12 GuC reset control)
+    uint32_t gucResetA440 = fOwner->safeMMIORead(0xA440);
+    IOLog("(FakeIrisXE) [GuC][V283][Minimal] GUC_RESET@0xA440: read 0x%08X\n", gucResetA440);
+    fOwner->safeMMIOWrite(0xA440, 0x00000000);
+    IOSleep(5);
+    uint32_t gucResetA440After = fOwner->safeMMIORead(0xA440);
+    IOLog("(FakeIrisXE) [GuC][V283][Minimal] GUC_RESET@0xA440=0x00000000: read 0x%08X\n", gucResetA440After);
+    
     fOwner->safeMMIOWrite(GUC_STATUS_V137, 0);
     for (int i = 0; i < 16; i++) {
         fOwner->safeMMIOWrite(GEN11_GUC_SOFT_SCRATCH(i), 0);
     }
     IOSleep(5);
 
-    // V282: WOPCM setup (pre-locked, use existing values)
+    // V283: WOPCM setup (pre-locked, use existing values)
     uint32_t preWopcmSize = fOwner->safeMMIORead(GUC_WOPCM_SIZE_V137);
     uint32_t preWopcmOffset = fOwner->safeMMIORead(DMA_GUC_WOPCM_OFFSET_V137);
-    IOLog("(FakeIrisXE) [GuC][V282][Minimal] WOPCM: SIZE=0x%08X OFFSET=0x%08X\n",
+    IOLog("(FakeIrisXE) [GuC][V283][Minimal] WOPCM: SIZE=0x%08X OFFSET=0x%08X\n",
           preWopcmSize, preWopcmOffset);
 
-    // V282: GT_PM_CONFIG_GT - enable doorbell
+    // V283: GT_PM_CONFIG_GT - enable doorbell
     writeRegWithReadback(kGuCStageWopcm, "GT_PM_CONFIG_GT", TGL_GT_PM_CONFIG_GT,
                          GT_DOORBELL_ENABLE, nullptr);
 
-    // V282: GUC_SHIM_CONTROL (Apple value - verified working in V281)
+    // V283: GUC_SHIM_CONTROL (Apple value - verified working in V281)
     writeRegWithReadback(kGuCStageShim, "GUC_SHIM_CONTROL", GUC_SHIM_CONTROL_V137,
                          0x00208617U, nullptr);
 
-    // V282: GUC_HALT before DMA
+    // V283: GUC_HALT before DMA
     fOwner->safeMMIOWrite(0xC048, 0xFFFF0001);
     IOSleep(5);
 
-    // V282: RSA scratch
+    // V283: RSA scratch
     if (!writeRsaScratchV139(fwData, layout)) {
         IOLog("(FakeIrisXE) [GuC][V282][Minimal] RSA scratch failed\n");
         releaseForceWake();
         return false;
     }
 
-    // V282: DMA program
+    // V283: DMA program
     emitStageReport(kGuCStageDmaProgram, startNs, retryIndex);
     uint64_t srcAddr = gpuAddr + layout.header_offset;
     uint32_t srcLow = (uint32_t)(srcAddr & 0xFFFFFFFFULL);
@@ -2598,17 +2605,28 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_COPY_SIZE", DMA_COPY_SIZE_V137,
                          layout.dma_copy_size, 0);
 
-    // V282: Write GUC params to SOFT_SCRATCH
+    // V283: Write GUC params to SOFT_SCRATCH
     writeGuCParams();
 
-    // V282: Try multiple WOPCM offsets FIRST, then auth-kick
-    // Priority: offset 0x0 (bare bootrom entry) → 0x2000 → auth-kick values
+    // V283: Define arrays before use
     const uint32_t kWopcmOffsets[] = {0x0, 0x2000};
     const char* kOffsetNames[] = {"0x0000", "0x2000"};
-    // V282: Try multiple auth-kick values: 0x1, 0x3, 0x7 (no pre-auth)
     const uint32_t kAuthValues[] = {0x00000001U, 0x00000003U, 0x00000007U};
     const char* kAuthNames[] = {"0x1", "0x3", "0x7"};
-    
+
+    // V283: EXPERIMENT - auth-kick BEFORE DMA (some platforms need GuC "armed" before firmware delivery)
+    IOLog("(FakeIrisXE) [GuC][V283][Minimal] EXPERIMENT: Auth-kick BEFORE DMA (pre-arm GuC)\n");
+    for (int preAuth = 0; preAuth < 3; preAuth++) {
+        fOwner->safeMMIOWrite(0xC048, 0xFFFF0001);
+        IOSleep(5);
+        fOwner->safeMMIOWrite(GUC_SOFT_SCRATCH_V170(0), kAuthValues[preAuth]);
+        IOSleep(10);
+        fOwner->safeMMIOWrite(0xC048, 0x00000000);
+        IOSleep(5);
+        IOLog("(FakeIrisXE) [GuC][V283][Minimal] Pre-arm auth-kick=%s latched=0x%08X\n",
+              kAuthNames[preAuth], fOwner->safeMMIORead(GUC_SOFT_SCRATCH_V170(0)));
+    }
+
     bool bootSuccess = false;
     for (int o = 0; o < 2 && !bootSuccess; o++) {
         uint32_t thisOffset = kWopcmOffsets[o];
@@ -2637,53 +2655,49 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         }
         
         if (!dmaDone) {
-            IOLog("(FakeIrisXE) [GuC][V282][Minimal] DMA failed at offset %s\n", kOffsetNames[o]);
+            IOLog("(FakeIrisXE) [GuC][V283][Minimal] DMA failed at offset %s\n", kOffsetNames[o]);
             continue;
         }
         
         writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137, 0, 0);
         
-        // Clear GUC_HALT
-        fOwner->safeMMIOWrite(0xC048, 0x00000000);
+        // Halt before auth-kick
+        fOwner->safeMMIOWrite(0xC048, 0xFFFF0001);
         IOSleep(5);
         
         uint32_t gucStatusNow = fOwner->safeMMIORead(GUC_STATUS_V137);
-        IOLog("(FakeIrisXE) [GuC][V282][Minimal] DMA done at offset %s, STATUS=0x%08X\n",
+        IOLog("(FakeIrisXE) [GuC][V283][Minimal] DMA done at offset %s, STATUS=0x%08X\n",
               kOffsetNames[o], gucStatusNow);
         
-        // V282: Try auth-kick values WITHOUT pre-auth handshake
+        // V283: Try auth-kick values (V282 verified: latches without pre-auth)
         for (int a = 0; a < 3 && !bootSuccess; a++) {
             uint32_t authVal = kAuthValues[a];
             
-            // Re-halt before auth-kick
-            fOwner->safeMMIOWrite(0xC048, 0xFFFF0001);
-            IOSleep(5);
-            
-            // Write SOFT_SCRATCH0 auth-kick (the key Apple boot trigger)
             fOwner->safeMMIOWrite(GUC_SOFT_SCRATCH_V170(0), authVal);
             IOSleep(10);
             uint32_t authReadback = fOwner->safeMMIORead(GUC_SOFT_SCRATCH_V170(0));
-            IOLog("(FakeIrisXE) [GuC][V282][Minimal] Auth-kick SOFT_SCRATCH0=%s: wrote 0x%08X, read 0x%08X\n",
+            IOLog("(FakeIrisXE) [GuC][V283][Minimal] Auth-kick SOFT_SCRATCH0=%s: wrote 0x%08X, read 0x%08X\n",
                   kAuthNames[a], authVal, authReadback);
             
             // Clear halt to let GuC run
             fOwner->safeMMIOWrite(0xC048, 0x00000000);
             IOSleep(5);
             
-            if (pollForBootFastFail(1000, startNs, retryIndex)) {
-                IOLog("(FakeIrisXE) [GuC][V282][Minimal] ✅ SUCCESS! offset=%s auth=%s\n",
+            // V283: Reduced poll from 1000ms to 300ms (GuC bootrom never responds fast)
+            if (pollForBootFastFail(300, startNs, retryIndex)) {
+                IOLog("(FakeIrisXE) [GuC][V283][Minimal] ✅ SUCCESS! offset=%s auth=%s\n",
                       kOffsetNames[o], kAuthNames[a]);
                 bootSuccess = true;
                 break;
             }
             
-            IOLog("(FakeIrisXE) [GuC][V282][Minimal] Boot failed offset=%s auth=%s, STATUS=0x%08X\n",
+            IOLog("(FakeIrisXE) [GuC][V283][Minimal] Boot failed offset=%s auth=%s, STATUS=0x%08X\n",
                   kOffsetNames[o], kAuthNames[a], fOwner->safeMMIORead(GUC_STATUS_V137));
         }
     }
 
     if (!bootSuccess) {
-        IOLog("(FakeIrisXE) [GuC][V282][Minimal] All attempts failed\n");
+        IOLog("(FakeIrisXE) [GuC][V283][Minimal] All attempts failed\n");
         releaseForceWake();
         return false;
     }
@@ -2902,26 +2916,27 @@ bool FakeIrisXEGuC::bootGuCFirmware(const uint8_t* fwData, size_t fwSize, uint64
     bool cssParseSuccess = parseGuCFirmwareV139(fwData, fwSize, layout);
 
     if (cssParseSuccess) {
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] CSS parse succeeded (key_size_dw=%u)\n", layout.rsa_size / 4);
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] V282 STRATEGY: Apple pre-auth (ME wake) → Minimal bare-DMA → Linux path\n");
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] Rationale: GUC_CTL hardware-locked (all reads 0), ME may need explicit wake\n");
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] CSS parse succeeded (key_size_dw=%u)\n", layout.rsa_size / 4);
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] V283 STRATEGY: Minimal bare-DMA FIRST → Apple path → Linux path\n");
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] Changes: ME timeout 500ms→100ms, attempts 5→2, poll 1000ms→300ms, GUC_RESET@0xA440 clear\n");
         
-        if (runAppleBringUpPath(fwData, fwSize, gpuAddr, 0, startNs)) {
-            IOLog("(FakeIrisXE) [GuC][Boot][V282] ✅ Apple path succeeded!\n");
-            return true;
-        }
-        
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] ❌ Apple path failed → trying minimal bare-DMA (no pre-auth)\n");
+        // V283: Minimal path FIRST (saves ~9s if it fails fast; no pre-auth, no ME_WAKE)
         if (runMinimalBringUpPath(fwData, fwSize, gpuAddr, 0, startNs)) {
-            IOLog("(FakeIrisXE) [GuC][Boot][V282] ✅ Minimal path succeeded!\n");
+            IOLog("(FakeIrisXE) [GuC][Boot][V283] ✅ Minimal path succeeded!\n");
             return true;
         }
         
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] ❌ Minimal path failed → trying Linux path\n");
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] ❌ Minimal path failed → trying Apple path\n");
+        if (runAppleBringUpPath(fwData, fwSize, gpuAddr, 0, startNs)) {
+            IOLog("(FakeIrisXE) [GuC][Boot][V283] ✅ Apple path succeeded!\n");
+            return true;
+        }
+        
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] ❌ Apple path failed → trying Linux path\n");
         return runLinuxBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
     } else {
-        IOLog("(FakeIrisXE) [GuC][Boot][V282] CSS parse failed → using Apple bring-up path\n");
-        return runAppleBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
+        IOLog("(FakeIrisXE) [GuC][Boot][V283] CSS parse failed → using Minimal bring-up path\n");
+        return runMinimalBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
     }
 }
 

@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.282</string>
+	<string>1.0.283</string>
        	<key>CFBundleShortVersionString</key>
-     	<string>1.0.282</string>
+     	<string>1.0.283</string>
      	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V282 - Minimal bare-DMA boot (no pre-auth, no GUC_CTL), ME probing via PCODE, auth-kick sweep</string>
+     	     	<string>FakeIrisXe V283 - Minimal bare-DMA boot FIRST, GUC_RESET@0xA440 clear, auth-kick pre-DMA, reduced timeouts</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
