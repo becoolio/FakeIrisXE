@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.284</string>
+	<string>1.0.285</string>
        	<key>CFBundleShortVersionString</key>
-     	<string>1.0.284</string>
+     	<string>1.0.285</string>
      	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V284 - Params AFTER DMA, GUC_MISC=0x03, Linux boot path first</string>
+     	     	<string>FakeIrisXe V285 - Brute force bootrom: GUC_CTL probe, GUC_MISC variations, 2000ms poll, SIMPLE DMA</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
