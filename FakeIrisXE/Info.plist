@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.280</string>
+	<string>1.0.281</string>
        	<key>CFBundleShortVersionString</key>
-     	<string>1.0.280</string>
+     	<string>1.0.281</string>
      	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V280 - STOP path fixes, GEM/ring leaks, fBltRing cleanup, V276 GuC changes</string>
+     	     	<string>FakeIrisXe V281 - Apple path with Intel firmware (KEY STRATEGY), Apple SHIM=0x00208617, extended GUC register investigation</string>
  	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
