@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V285 - Brute force bootrom: GUC_CTL probe, GUC_MISC variations, 2000ms poll, SIMPLE DMA</string>
+	<string>FakeIrisXe V286 - Investigate &amp; Bypass: WOPCM fingerprint, 5000ms poll, 12x GUC_CTL, SHIM.bit2 probe</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.285</string>
+	<string>1.0.286</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.285</string>
+	<string>1.0.286</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>

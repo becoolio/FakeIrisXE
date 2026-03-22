@@ -13,12 +13,12 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.285</string>
-       	<key>CFBundleShortVersionString</key>
-     	<string>1.0.285</string>
-     	<key>CFBundleGetInfoString</key>
-     	     	<string>FakeIrisXe V285 - Brute force bootrom: GUC_CTL probe, GUC_MISC variations, 2000ms poll, SIMPLE DMA</string>
- 	<key>OSBundleRequired</key>
+	<string>1.0.286</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.286</string>
+	<key>CFBundleGetInfoString</key>
+	<string>FakeIrisXe V286 - Investigate &amp; Bypass: WOPCM fingerprint, 5000ms poll, 12x GUC_CTL, SHIM.bit2 probe</string>
+	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
 	<dict>
