@@ -846,13 +846,13 @@ bool FakeIrisXEGuC::initGuC()
     //   2. Authenticated using RSA signature from the CSS header
     //   3. Started via GUC_CTL register (at 0xC05C - CORRECTED in V291!)
     // =========================================================================
-    IOLog("(FakeIrisXE) [GuC][V291] Attempting Linux TGL GuC firmware v70.1.1 load...\n");
+    IOLog("(FakeIrisXE) [GuC][V293] Attempting Linux TGL GuC firmware v70.1.1 load...\n");
 
     extern const unsigned char tgl_guc_70_1_1_bin[];
     extern const unsigned int tgl_guc_70_1_1_bin_len;
     const uint8_t* guCfwData = tgl_guc_70_1_1_bin;
     size_t guCfwSize = tgl_guc_70_1_1_bin_len;
-    IOLog("(FakeIrisXE) [GuC][V291] Linux TGL GuC firmware v70.1.1: %zu bytes\n", guCfwSize);
+    IOLog("(FakeIrisXE) [GuC][V293] Linux TGL GuC firmware v70.1.1: %zu bytes\n", guCfwSize);
 
     // V248: Try V137 Linux-style GuC load sequence
     // This follows the Linux i915 approach which is more reliable:
@@ -915,6 +915,110 @@ const char* FakeIrisXEGuC::authStatusName(uint8_t authStatus) const
         default:
             return "other";
     }
+}
+
+bool FakeIrisXEGuC::writeRegWithReadback(GuCStage stage, const char* regName,
+                                         uint32_t reg, uint32_t value,
+                                         uint32_t* outReadback)
+{
+    fOwner->safeMMIOWrite(reg, value);
+    uint32_t readback = fOwner->safeMMIORead(reg);
+
+    if (outReadback) {
+        *outReadback = readback;
+    }
+
+    IOLog("(FakeIrisXE) [GuC][RW] stage=%u %s(0x%04X) write=0x%08X read=0x%08X\n",
+          (uint32_t)stage, regName, reg, value, readback);
+
+    return readback == value;
+}
+
+FakeIrisXEGuC::GuCStatusDecoded FakeIrisXEGuC::decodeStatus(uint32_t rawStatus) const
+{
+    GuCStatusDecoded decoded;
+    decoded.bootrom = (uint8_t)FIELD_GET_V137(GUC_BOOTROM_STATUS_MASK_V137, rawStatus);
+    decoded.ukernel = (uint8_t)FIELD_GET_V137(GUC_UKERNEL_STATUS_MASK_V137, rawStatus);
+    decoded.mia = (uint8_t)FIELD_GET_V137(GUC_MIA_CORE_STATUS_MASK_V137, rawStatus);
+    decoded.authStatus = (uint8_t)FIELD_GET_V137(GUC_AUTH_STATUS_MASK_V170, rawStatus);
+    decoded.valid = (rawStatus != 0xFFFFFFFFU);
+    decoded.success = ((decoded.bootrom == 0x7FU && decoded.ukernel == 0xFFU) ||
+                       (decoded.ukernel == GUC_LOAD_SUCCESS_STATUS));
+    decoded.failure = (((rawStatus & 0xFEU) == GUC_LOAD_FAIL_STATUS_1) ||
+                       (decoded.ukernel == GUC_LOAD_FAIL_STATUS_2) ||
+                       (decoded.authStatus == GUC_AUTH_STATUS_BAD_V170) ||
+                       decoded.bootrom == 0x06U);
+    return decoded;
+}
+
+bool FakeIrisXEGuC::isImpossibleStatusDecode(uint32_t rawStatus,
+                                             const GuCStatusDecoded& decoded) const
+{
+    if (!decoded.valid) {
+        return true;
+    }
+
+    if (decoded.bootrom == 0 && (decoded.ukernel != 0 || decoded.mia != 0)) {
+        return true;
+    }
+
+    if (rawStatus == 0xFFFFFFFFU) {
+        return true;
+    }
+
+    return false;
+}
+
+bool FakeIrisXEGuC::ownerBooleanPropertyEnabled(const char* key) const
+{
+    if (!fOwner || !key) {
+        return false;
+    }
+
+    OSBoolean* value = OSDynamicCast(OSBoolean, fOwner->getProperty(key));
+    return value && value->isTrue();
+}
+
+uint32_t FakeIrisXEGuC::selectGtPmConfigReg() const
+{
+    if (!fOwner) {
+        return TGL_GT_PM_CONFIG;
+    }
+
+    switch (fOwner->getPCIDeviceID()) {
+        case 0x9A49:
+            return TGL_GT_PM_CONFIG;
+        case 0x46A3:
+            return TGL_GT_PM_CONFIG_GT;
+        default:
+            return TGL_GT_PM_CONFIG;
+    }
+}
+
+void FakeIrisXEGuC::logForceWakeDiagnostics(const char* label) const
+{
+    if (!fOwner) {
+        return;
+    }
+
+    auto readAudit = [&](uint32_t reg) -> uint32_t {
+        return fOwner->isMMIOOffsetValid(reg) ? fOwner->safeMMIORead(reg) : 0xFFFFFFFFU;
+    };
+
+    const uint32_t gtPmReg = selectGtPmConfigReg();
+    IOLog("(FakeIrisXE) [GuC][ForceWake] %s mt_req=0x%08X mt_ack=0x%08X render_req=0x%08X render_ack=0x%08X render_ack_alt=0x%08X media_vdbox_req=0x%08X media_vdbox_ack=0x%08X media_vebox_req=0x%08X media_vebox_ack=0x%08X gt_pm[%05X]=0x%08X\n",
+          label ? label : "snapshot",
+          readAudit(FORCEWAKE_REQ),
+          readAudit(FORCEWAKE_ACK),
+          readAudit(GEN11_FORCEWAKE_RENDER),
+          readAudit(GEN11_FORCEWAKE_RENDER_ACK),
+          readAudit(APPLE_TGL_FORCEWAKE_RENDER_ACK_V176),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VDBOX0),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VDBOX0_ACK),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VEBOX0),
+          readAudit(GEN11_FORCEWAKE_MEDIA_VEBOX0_ACK),
+          gtPmReg,
+          readAudit(gtPmReg));
 }
 
 void FakeIrisXEGuC::logBootFailureSignature(const char* reason, uint64_t startNs,
@@ -1849,11 +1953,11 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         return false;
     }
 
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] ============================================\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] V291: CORRECTED Linux boot sequence\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] Key fix: GUC_CTL=0xC05C (was 0xC010)\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] DMA offset=0x2000, SOFT_SCRATCH params, PRIVILEGED bit\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] V293: Linux-closer boot sequence\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] DMA offset=0x2000, SOFT_SCRATCH params, PRIVILEGED bit\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] Experiment: skip explicit GUC_CTL write, add DMA timing diagnostics\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] ============================================\n");
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
@@ -1907,6 +2011,10 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     uint32_t srcLow = (uint32_t)(srcAddr & 0xFFFFFFFFULL);
     uint32_t srcHigh = (uint32_t)((srcAddr >> 32) & 0x0000FFFFULL);
 
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] DMA source GGTT=0x%016llX header_offset=0x%X src=0x%016llX\n",
+          gpuAddr,
+          layout.header_offset,
+          srcAddr);
     // V291: DMA destination = 0x2000 (Linux standard, not 0x0)
     // Lower 8KB of WOPCM is for stack; uCode loads at 0x2000
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_ADDR_0_LOW", DMA_ADDR_0_LOW_V137,
@@ -1930,6 +2038,15 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
                          START_DMA_V137 | UOS_MOVE_V137, 0);
 
+    uint32_t dmaCtrlImmediate = fOwner->safeMMIORead(DMA_CTRL_V137);
+    uint32_t statusImmediate = fOwner->safeMMIORead(GUC_STATUS_V137);
+    IODelay(50);
+    uint32_t dmaCtrl50us = fOwner->safeMMIORead(DMA_CTRL_V137);
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] DMA trigger snapshot: ctrl_now=0x%08X ctrl_50us=0x%08X status=0x%08X\n",
+          dmaCtrlImmediate,
+          dmaCtrl50us,
+          statusImmediate);
+
     uint64_t dmaStart = mach_absolute_time();
     bool dmaDone = false;
     int dmaPolls = 0;
@@ -1940,17 +2057,20 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
             dmaDone = true;
             break;
         }
-        IOSleep(1);
+        IODelay(50);
     }
 
     if (!dmaDone) {
-        IOLog("(FakeIrisXE) [GuC][V291][Linux] DMA failed after %d polls\n", dmaPolls);
+        IOLog("(FakeIrisXE) [GuC][V293][Linux] DMA failed after %d polls\n", dmaPolls);
         releaseForceWake();
         emitStageReport(kGuCStageFailure, startNs, retryIndex);
         return false;
     }
     writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137, 0, 0);
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] DMA complete in %d polls\n", dmaPolls);
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] DMA complete in %d polls final_ctrl=0x%08X status=0x%08X\n",
+          dmaPolls,
+          fOwner->safeMMIORead(DMA_CTRL_V137),
+          fOwner->safeMMIORead(GUC_STATUS_V137));
 
     // Step 6: Write SOFT_SCRATCH params (Linux writes SCRATCH(0)=0, then SCRATCH(1-6)=params)
     // V291: Use 0xC180 addresses (Linux SOFT_SCRATCH, not Gen11 0x190240)
@@ -1962,22 +2082,13 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     fOwner->safeMMIOWrite(0xC194, 0x00000000U); // SCRATCH(5) = DEVID
     fOwner->safeMMIOWrite(0xC198, 0x00000000U); // SCRATCH(6) = LOG params
     IOSleep(5);
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] SOFT_SCRATCH params written\n");
-
-    // Step 7: Write GUC_CTL at 0xC05C - THIS IS THE KEY FIX
-    // V291: Writing to the CORRECT GUC_CTL register (was 0xC010 - wrong!)
-    // GUC_CTL at 0xC05C releases MIA from reset, triggering bootrom to start
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] >>> Writing GUC_CTL=0x%08X at 0xC05C <<<\n", 0x00030000U);
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] STATUS before GUC_CTL: 0x%08X\n",
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] SOFT_SCRATCH params written\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] Skipping explicit GUC_CTL write; GUC_CTL(0xC05C)=0x%08X STATUS=0x%08X\n",
+          fOwner->safeMMIORead(GUC_CTL_V137),
           fOwner->safeMMIORead(GUC_STATUS_V137));
-    fOwner->safeMMIOWrite(GUC_CTL_V137, 0x00030000U);
-    IOSleep(5);
-    uint32_t ctlWritten = fOwner->safeMMIORead(GUC_STATUS_V137);
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] STATUS after GUC_CTL: 0x%08X\n", ctlWritten);
 
     // Step 8: Poll for boot - expect bootrom=0x76, kernel=0xF0
-    IOLog("(FakeIrisXE) [GuC][V291][Linux] Polling for bootrom...\n");
-    uint64_t pollStart = mach_absolute_time();
+    IOLog("(FakeIrisXE) [GuC][V293][Linux] Polling for bootrom...\n");
     bool bootSuccess = false;
     for (int p = 0; p < 200 && !bootSuccess; p++) {
         IOSleep(10);
@@ -1988,25 +2099,25 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         uint32_t auth = (status >> 30) & 0x03U;
 
         if (p < 10 || p % 20 == 0 || bootrom != 0 || kernel != 0) {
-            IOLog("(FakeIrisXE) [GuC][V291][Linux] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X mia=0x%X auth=0x%X\n",
+            IOLog("(FakeIrisXE) [GuC][V293][Linux] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X mia=0x%X auth=0x%X\n",
                   p * 10, status, bootrom, kernel, mia, auth);
         }
 
         if (kernel == 0xF0 && bootrom == 0x76) {
-            IOLog("(FakeIrisXE) [GuC][V291][Linux] SUCCESS! GuC running! STATUS=0x%08X\n", status);
+            IOLog("(FakeIrisXE) [GuC][V293][Linux] SUCCESS! GuC running! STATUS=0x%08X\n", status);
             bootSuccess = true;
             break;
         }
         if (kernel == 0x02) {
-            IOLog("(FakeIrisXE) [GuC][V291][Linux] AUTH FAILED: kernel=0x%02X\n", kernel);
+            IOLog("(FakeIrisXE) [GuC][V293][Linux] AUTH FAILED: kernel=0x%02X\n", kernel);
             break;
         }
     }
 
     if (!bootSuccess) {
         uint32_t finalStatus = fOwner->safeMMIORead(GUC_STATUS_V137);
-        IOLog("(FakeIrisXE) [GuC][V291][Linux] Boot failed: STATUS=0x%08X\n", finalStatus);
-        IOLog("(FakeIrisXE) [GuC][V291][Linux] bootrom=0x%02X kernel=0x%02X mia=0x%X\n",
+        IOLog("(FakeIrisXE) [GuC][V293][Linux] Boot failed: STATUS=0x%08X\n", finalStatus);
+        IOLog("(FakeIrisXE) [GuC][V293][Linux] bootrom=0x%02X kernel=0x%02X mia=0x%X\n",
               (finalStatus >> 1) & 0x7FU, (finalStatus >> 8) & 0xFFU, (finalStatus >> 16) & 0x07U);
         releaseForceWake();
         emitStageReport(kGuCStageFailure, startNs, retryIndex);
@@ -2026,10 +2137,10 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         return false;
     }
 
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] ============================================\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] V291: Linux-aligned minimal path\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] GUC_CTL=0xC05C, DMA@0x2000, PRIVILEGED bit\n");
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] V293: Linux-aligned minimal path\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] DMA@0x2000, PRIVILEGED bit, no explicit GUC_CTL write\n");
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] ============================================\n");
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
@@ -2073,6 +2184,10 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
     uint32_t srcLow = (uint32_t)(srcAddr & 0xFFFFFFFFULL);
     uint32_t srcHigh = (uint32_t)((srcAddr >> 32) & 0x0000FFFFULL);
 
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] DMA source GGTT=0x%016llX header_offset=0x%X src=0x%016llX\n",
+          gpuAddr,
+          layout.header_offset,
+          srcAddr);
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_ADDR_0_LOW", DMA_ADDR_0_LOW_V137, srcLow, 0);
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_ADDR_0_HIGH", DMA_ADDR_0_HIGH_V137, srcHigh, 0);
     writeRegWithReadback(kGuCStageDmaProgram, "DMA_ADDR_1_HIGH", DMA_ADDR_1_HIGH_V137,
@@ -2089,6 +2204,15 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
     writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137,
                          START_DMA_V137 | UOS_MOVE_V137, 0);
 
+    uint32_t dmaCtrlImmediate = fOwner->safeMMIORead(DMA_CTRL_V137);
+    uint32_t statusImmediate = fOwner->safeMMIORead(GUC_STATUS_V137);
+    IODelay(50);
+    uint32_t dmaCtrl50us = fOwner->safeMMIORead(DMA_CTRL_V137);
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] DMA trigger snapshot: ctrl_now=0x%08X ctrl_50us=0x%08X status=0x%08X\n",
+          dmaCtrlImmediate,
+          dmaCtrl50us,
+          statusImmediate);
+
     uint64_t dmaStart = mach_absolute_time();
     bool dmaDone = false;
     int dmaPolls = 0;
@@ -2099,17 +2223,20 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
             dmaDone = true;
             break;
         }
-        IOSleep(1);
+        IODelay(50);
     }
 
     if (!dmaDone) {
-        IOLog("(FakeIrisXE) [GuC][V291][Minimal] DMA failed after %d polls\n", dmaPolls);
+        IOLog("(FakeIrisXE) [GuC][V293][Minimal] DMA failed after %d polls\n", dmaPolls);
         releaseForceWake();
         return false;
     }
 
     writeRegWithReadback(kGuCStageDmaTrigger, "DMA_CTRL", DMA_CTRL_V137, 0, 0);
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] DMA complete in %d polls\n", dmaPolls);
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] DMA complete in %d polls final_ctrl=0x%08X status=0x%08X\n",
+          dmaPolls,
+          fOwner->safeMMIORead(DMA_CTRL_V137),
+          fOwner->safeMMIORead(GUC_STATUS_V137));
 
     // SOFT_SCRATCH params (Linux addresses 0xC180)
     fOwner->safeMMIOWrite(0xC180, 0);
@@ -2121,12 +2248,9 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
     fOwner->safeMMIOWrite(0xC198, 0x00000000U);
     IOSleep(5);
 
-    // V291: Write GUC_CTL at 0xC05C (CORRECTED - was 0xC010)
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] >>> Writing GUC_CTL=0x%08X at 0xC05C <<<\n", 0x00030000U);
-    fOwner->safeMMIOWrite(GUC_CTL_V137, 0x00030000U);
-    IOSleep(5);
-
-    IOLog("(FakeIrisXE) [GuC][V291][Minimal] STATUS=0x%08X\n", fOwner->safeMMIORead(GUC_STATUS_V137));
+    IOLog("(FakeIrisXE) [GuC][V293][Minimal] Skipping explicit GUC_CTL write; GUC_CTL(0xC05C)=0x%08X STATUS=0x%08X\n",
+          fOwner->safeMMIORead(GUC_CTL_V137),
+          fOwner->safeMMIORead(GUC_STATUS_V137));
 
     // Poll for boot
     bool bootSuccess = false;
@@ -2137,23 +2261,23 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         uint32_t kernel = (status >> 8) & 0xFFU;
 
         if (p < 10 || p % 20 == 0 || bootrom != 0 || kernel != 0) {
-            IOLog("(FakeIrisXE) [GuC][V291][Minimal] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X\n",
+            IOLog("(FakeIrisXE) [GuC][V293][Minimal] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X\n",
                   p * 10, status, bootrom, kernel);
         }
 
         if (kernel == 0xF0 && bootrom == 0x76) {
-            IOLog("(FakeIrisXE) [GuC][V291][Minimal] SUCCESS! GuC running!\n");
+            IOLog("(FakeIrisXE) [GuC][V293][Minimal] SUCCESS! GuC running!\n");
             bootSuccess = true;
             break;
         }
         if (kernel == 0x02) {
-            IOLog("(FakeIrisXE) [GuC][V291][Minimal] AUTH FAILED: kernel=0x%02X\n", kernel);
+            IOLog("(FakeIrisXE) [GuC][V293][Minimal] AUTH FAILED: kernel=0x%02X\n", kernel);
             break;
         }
     }
 
     if (!bootSuccess) {
-        IOLog("(FakeIrisXE) [GuC][V291][Minimal] Boot failed: STATUS=0x%08X\n",
+        IOLog("(FakeIrisXE) [GuC][V293][Minimal] Boot failed: STATUS=0x%08X\n",
               fOwner->safeMMIORead(GUC_STATUS_V137));
         releaseForceWake();
         return false;
@@ -2357,7 +2481,7 @@ bool FakeIrisXEGuC::loadGuCFirmware(const uint8_t* fwData, size_t fwSize)
     fOwner->safeMMIOWrite(GEN11_GUC_FW_SIZE, (uint32_t)(allocSize / 4096));
 
     if (!bootGuCFirmware(fwData, fwSize, gpuAddr)) {
-        IOLog("(FakeIrisXE) [GuC] Apple-only firmware boot failed; stopping GuC init cleanly\n");
+        IOLog("(FakeIrisXE) [GuC] Firmware boot failed after minimal -> Linux attempts; stopping GuC init cleanly\n");
         fGuCMode = false;
         configureRPS();
         return false;
@@ -2375,16 +2499,16 @@ bool FakeIrisXEGuC::bootGuCFirmware(const uint8_t* fwData, size_t fwSize, uint64
 {
     uint64_t startNs = mach_absolute_time();
     GuCFirmwareMode mode = selectFirmwareMode();
-    IOLog("(FakeIrisXE) [GuC][V291][Boot] mode=%s\n", firmwareModeName(mode));
+    IOLog("(FakeIrisXE) [GuC][V293][Boot] mode=%s\n", firmwareModeName(mode));
 
-    IOLog("(FakeIrisXE) [GuC][Boot][V291] STRATEGY: Minimal → Linux (single comprehensive path)\n");
+    IOLog("(FakeIrisXE) [GuC][Boot][V293] STRATEGY: Minimal -> Linux (single comprehensive path)\n");
 
     // V291: Minimal path FIRST (fastest, no pre-auth overhead)
     if (runMinimalBringUpPath(fwData, fwSize, gpuAddr, 0, startNs)) {
-        IOLog("(FakeIrisXE) [GuC][Boot][V291] SUCCESS: Minimal path worked!\n");
+        IOLog("(FakeIrisXE) [GuC][Boot][V293] SUCCESS: Minimal path worked!\n");
         return true;
     }
-    IOLog("(FakeIrisXE) [GuC][Boot][V291] Minimal path failed → trying Linux path\n");
+    IOLog("(FakeIrisXE) [GuC][Boot][V293] Minimal path failed -> trying Linux path\n");
     // V291: Linux path as second attempt (more comprehensive)
     return runLinuxBringUpPath(fwData, fwSize, gpuAddr, 0, startNs);
 }

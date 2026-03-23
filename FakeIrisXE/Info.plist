@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.291</string>
+	<string>1.0.293</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.291</string>
+	<string>1.0.293</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V291 - GuC clock gate root cause: extended GUC_CTL, ADS-first boot, GT reset cycle, extended polling</string>
+	<string>FakeIrisXe V293 - GuC DMA diagnostics: no explicit GUC_CTL write, tighter DMA polling, cleaned boot messaging</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
