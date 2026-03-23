@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.295</string>
+	<string>1.0.297</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.295</string>
+	<string>1.0.297</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V295 - single GuC boot attempt: drop redundant preflight upload, skip legacy FW_ADDR regs, add failure map probe</string>
+	<string>FakeIrisXe V297 - ADD GUC_CTL write + H2G INIT message: CRITICAL handshake steps for GuC boot</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
