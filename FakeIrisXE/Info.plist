@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.287</string>
+	<string>1.0.289</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.287</string>
+	<string>1.0.289</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V287 - Register-map truth pass: dumpGucMapProbe at 6 checkpoints, removed status write</string>
+	<string>FakeIrisXe V289 - GuC clock gate root cause: extended GUC_CTL, ADS-first boot, GT reset cycle, extended polling</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
