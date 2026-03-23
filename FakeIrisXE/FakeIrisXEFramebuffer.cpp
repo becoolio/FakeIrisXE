@@ -2055,7 +2055,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V290] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V291] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2190,14 +2190,14 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V281: Apple path first with Intel firmware (KEY STRATEGY - no GUC_CTL dependency!)
     // V281: Apple path uses GUC_MISC_CONTROL+auth-kick instead of GUC_CTL (never tried with Intel fw)
     // V281: Linux fallback uses Apple SHIM=0x00208617, extended GUC register investigation
-    // V290: Minimal bare-DMA FIRST → Apple path → Linux path
+    // V291: Minimal bare-DMA FIRST → Apple path → Linux path
     // Skip GuC only when explicitly requested via -fakeirisxe-noguc.
     // -fakeirisxe-guc now behaves the same as plain -fakeirisxe (both try GuC).
 
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V290] Stage 4: Minimal bare-DMA FIRST → Apple path → Linux fallback\n");
+        IOLog("(FakeIrisXE) [V291] Stage 4: Minimal bare-DMA FIRST → Apple path → Linux fallback\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2225,13 +2225,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V290] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V291] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V290] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V291] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
@@ -2242,7 +2242,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // The previous 17 direct-Execlist iterations (V254-V270) all failed with
     // F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V290] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        IOLog("(FakeIrisXE) [V291] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2396,7 +2396,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V290] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V291] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -6342,17 +6342,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V290] ============================================\n");
-    IOLog("(FakeIrisXE)[V290] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V290] ============================================\n");
+    IOLog("(FakeIrisXE)[V291] ============================================\n");
+    IOLog("(FakeIrisXE)[V291] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V291] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V290] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V291] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V290] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V291] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V290] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V290] ============================================\n");
+    IOLog("(FakeIrisXE)[V291] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V291] ============================================\n");
     return success;
 }
 
@@ -7355,22 +7355,22 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
         return false;
     }
     
-    // V290: Load Linux TGL GuC firmware v70.1.1 only
+    // V291: Load Linux TGL GuC firmware v70.1.1 only
     // Apple firmware removed - ME is dead, blocking Apple path
     const unsigned char* guc_bin = tgl_guc_70_1_1_bin;
     unsigned int guc_len = tgl_guc_70_1_1_bin_len;
-    IOLog("(FakeIrisXE) [V290] Loading Linux TGL GuC v70.1.1 (%u bytes)\n", guc_len);
+    IOLog("(FakeIrisXE) [V291] Loading Linux TGL GuC v70.1.1 (%u bytes)\n", guc_len);
 
     if (!guc_bin || guc_len == 0) {
-        IOLog("(FakeIrisXE) [V290] GuC firmware not available\n");
+        IOLog("(FakeIrisXE) [V291] GuC firmware not available\n");
         return false;
     }
     
     if (!fGuC->loadGuCFirmware(guc_bin, guc_len)) {
-        IOLog("(FakeIrisXE) [V290] GuC firmware load failed\n");
+        IOLog("(FakeIrisXE) [V291] GuC firmware load failed\n");
         return false;
     }
-    IOLog("(FakeIrisXE) [V290] GuC firmware loaded\n");
+    IOLog("(FakeIrisXE) [V291] GuC firmware loaded\n");
     
     // Load HuC firmware from embedded array (if available)
     if (tgl_huc_7_9_3_bin && tgl_huc_7_9_3_bin_len > 0) {
