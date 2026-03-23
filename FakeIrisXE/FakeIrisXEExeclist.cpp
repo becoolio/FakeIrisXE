@@ -83,7 +83,7 @@ static const uint32_t kProofPerCtxBbOffset = (kProofRenderContextPages + 1u) * 4
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
- static const char* kExeclistVersion = "V289";
+ static const char* kExeclistVersion = "V290";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);

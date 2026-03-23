@@ -6,19 +6,11 @@
 	<dict>
 		<key>Resources/Info.plist</key>
 		<data>
-		+Nhq9ToNUWuA91S+F1L563664zI=
+		XLDY9+W+XiMm+LCmS0CN/1wKt2Q=
 		</data>
 		<key>Resources/README.md</key>
 		<data>
 		omzdnt29HdEU+aLTk4OzYvL3kns=
-		</data>
-		<key>Resources/apple_tgl_guc.bin</key>
-		<data>
-		bhBO+A7mu0muumuVY7qWYhR/6o8=
-		</data>
-		<key>Resources/apple_tgl_huc.bin</key>
-		<data>
-		9NImmqVg+BU14vHLbPm4ex27dpU=
 		</data>
 		<key>Resources/regs.txt</key>
 		<data>
@@ -43,11 +35,11 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			+Nhq9ToNUWuA91S+F1L563664zI=
+			XLDY9+W+XiMm+LCmS0CN/1wKt2Q=
 			</data>
 			<key>hash2</key>
 			<data>
-			GKMpP0ZXV9EWHWazNlqOOdNVbWNCldhQl/Vbqad9nTg=
+			74F8ze1SCBzK7e6TYrPGg8NjysM1s114weN6gS8dCCs=
 			</data>
 		</dict>
 		<key>Resources/README.md</key>
@@ -59,28 +51,6 @@
 			<key>hash2</key>
 			<data>
 			aFfTFmVxfwcrMqNGR9Xk4y+W82igIDuLZSoUxlWo4aQ=
-			</data>
-		</dict>
-		<key>Resources/apple_tgl_guc.bin</key>
-		<dict>
-			<key>hash</key>
-			<data>
-			bhBO+A7mu0muumuVY7qWYhR/6o8=
-			</data>
-			<key>hash2</key>
-			<data>
-			3Mz0roBnXS75Fz2dPMZHXehEHNtzhyEvGy8BaHSQPkg=
-			</data>
-		</dict>
-		<key>Resources/apple_tgl_huc.bin</key>
-		<dict>
-			<key>hash</key>
-			<data>
-			9NImmqVg+BU14vHLbPm4ex27dpU=
-			</data>
-			<key>hash2</key>
-			<data>
-			Pc7dZTLbyYJx5urlQ1YOBykwvbFqpZf3bdXRLLd1pbA=
 			</data>
 		</dict>
 		<key>Resources/regs.txt</key>

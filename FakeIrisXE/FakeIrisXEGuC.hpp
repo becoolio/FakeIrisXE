@@ -116,10 +116,7 @@ private:
     const char* authStatusName(uint8_t authStatus) const;
     void logBootFailureSignature(const char* reason, uint64_t startNs, uint32_t retryIndex,
                                  uint32_t rawStatusOverride = 0xFFFFFFFFU);
-    bool prepareAppleWopcm(GuCStage stage, uint32_t desiredSizeValue, uint32_t desiredOffsetValue);
     bool runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
-                             uint32_t retryIndex, uint64_t startNs);
-    bool runAppleBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                              uint32_t retryIndex, uint64_t startNs);
     bool runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, uint64_t gpuAddr,
                               uint32_t retryIndex, uint64_t startNs);
@@ -135,8 +132,6 @@ private:
     uint32_t selectGtPmConfigReg() const;
     bool ownerBooleanPropertyEnabled(const char* key) const;
     void logForceWakeDiagnostics(const char* label) const;
-    void logAppleBootAudit(const char* label) const;
-    void logAppleRegisterWindow(const char* label) const;
     bool ensureApplePublicKeyBlob(uint64_t* outGpuAddr, bool logBlob);
     bool writeAndPollAppleReg(GuCStage stage, const char* label, uint32_t writeReg,
                               uint32_t writeValue, uint32_t pollReg, uint32_t pollMask,
