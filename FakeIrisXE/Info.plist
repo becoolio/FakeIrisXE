@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.297</string>
+	<string>1.0.298</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.297</string>
+	<string>1.0.298</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V297 - ADD GUC_CTL write + H2G INIT message: CRITICAL handshake steps for GuC boot</string>
+	<string>FakeIrisXe V298 - execution proof, surface binding, BLT path, and GuC validation updates</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

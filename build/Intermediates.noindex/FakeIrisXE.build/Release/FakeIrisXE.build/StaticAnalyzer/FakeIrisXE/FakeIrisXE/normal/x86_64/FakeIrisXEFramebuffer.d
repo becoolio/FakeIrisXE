@@ -1,6 +1,6 @@
 dependencies: \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEFramebuffer.cpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEFramebuffer.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEFramebuffer.cpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEFramebuffer.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/acpi/IOACPIPlatformDevice.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/libkern/c++/OSContainers.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/libkern/c++/OSObject.h \
@@ -338,11 +338,11 @@ dependencies: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/IOCommandGate.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/os/atomic.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/stdatomic.h \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEGEM.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEExeclist.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXERing.h \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEBacklight.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEConnectorManager.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEGEM.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEExeclist.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXERing.h \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEBacklight.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEConnectorManager.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/graphics/IOAccelerator.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/graphics/IOAccelTypes.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/IOUserClient.h \
@@ -354,10 +354,10 @@ dependencies: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/sys/vnode_if.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/sys/buf.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/IOTimerEventSource.h \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelerator.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAcceleratorUserClient.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelShared.h \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/i915_reg.h \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEGuC.hpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/embedded_firmware.h \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelerator.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEAcceleratorUserClient.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEAccelShared.h \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/i915_reg.h \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEGuC.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/embedded_firmware.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/pexpert/device_tree.h

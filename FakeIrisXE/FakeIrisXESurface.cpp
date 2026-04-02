@@ -23,6 +23,16 @@ void FakeIrisXESurface::free() {
     OSObject::free();
 }
 
+uint64_t FakeIrisXESurface::getGpuAddress() const
+{
+    return fGem ? fGem->gpuAddress() : 0;
+}
+
+void* FakeIrisXESurface::getCpuAddress() const
+{
+    return fDesc ? fDesc->getBytesNoCopy() : nullptr;
+}
+
 IOReturn FakeIrisXESurface::mapToTask(task_t task, IOMemoryDescriptor** outDesc, uint64_t* outAddr) {
     if (!task || !outDesc || !outAddr) return kIOReturnBadArgument;
     *outDesc = nullptr;

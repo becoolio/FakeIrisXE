@@ -1,5 +1,5 @@
 dependencies: \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/build/Intermediates.noindex/FakeIrisXE.build/Release/FakeIrisXE.build/DerivedSources/FakeIrisXE_info.c \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/build/Intermediates.noindex/FakeIrisXE.build/Release/FakeIrisXE.build/DerivedSources/FakeIrisXE_info.c \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/mach/mach_types.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/stdint.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/machine/types.h \

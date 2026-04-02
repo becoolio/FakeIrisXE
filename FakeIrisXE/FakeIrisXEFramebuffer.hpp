@@ -687,9 +687,12 @@ protected:
     FakeIrisXEGEM*    fFenceGEM = nullptr;
     uint64_t          fRingGpuVA = 0;             // GPU VA of ring buffer (GGTT)
     size_t            fRingSize = 0;              // bytes
+    uint64_t          fBltRingGpuVA = 0;
+    size_t            fBltRingSize = 0;
     uint32_t fFenceSeq = 0;
     volatile uint32_t fFenceCompletedSeq = 0;
     FakeIrisXEGEM* fRingGem = nullptr;  // V221: RCS ring buffer GEM
+    FakeIrisXEGEM* fBltRingGem = nullptr;
     FakeIrisXEGEM* fScratchGem = nullptr;  // V221: Scratch page for writeback
     FakeIrisXEGEM* fLrcGem = nullptr;  // V221: LRC context GEM
     uint64_t fScratchGpuVA = 0;  // V221: Scratch GPU VA
@@ -706,6 +709,11 @@ protected:
     
     
     uint32_t appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem, size_t userBatchOffsetBytes, size_t userBatchSizeBytes);
+    uint32_t appendFenceAndSubmitOnRing(FakeIrisXERing* ring,
+                                        FakeIrisXEGEM* userBatchGem,
+                                        size_t userBatchOffsetBytes,
+                                        size_t userBatchSizeBytes,
+                                        bool trackPending);
     uint32_t readCompletedFenceSeq() const;
    
     void handleInterrupt(IOInterruptEventSource* src, int count);
@@ -726,6 +734,8 @@ protected:
     void dumpIRQAndRingRegsSafe();
     
     void enableRcsInterruptsSafely();
+
+    bool publishDisplayIdentityFromEdid();
 
     // V240: Connector Manager for Tiger Lake
     void initializeConnectorManager();

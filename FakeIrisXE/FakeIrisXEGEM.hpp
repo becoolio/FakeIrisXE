@@ -25,6 +25,7 @@ public:
 
     uint64_t physicalAddress() const { return fPhysAddr; }
     IOBufferMemoryDescriptor* memoryDescriptor() const { return fBuffer; }
+    size_t size() const { return fSize; }
 
     uint32_t pageCount() const { return (uint32_t)((fSize + 4095) / 4096); }
 
@@ -45,6 +46,7 @@ private:
 public:
     void setGpuAddress(uint64_t a) { fGpuAddress = a; }
     uint64_t gpuAddress() const { return fGpuAddress; }
+    void clearGpuAddress() { fGpuAddress = 0; }
 
     
     

@@ -25,7 +25,7 @@ FakeIrisXEGEM* FakeIrisXELRC::buildLRCContext(
     if (outErr) *outErr = kIOReturnError;
     if (!fb || !ringGem) return nullptr;
 
-    const size_t ctxSize = 4096;
+    const size_t ctxSize = 16 * 4096;
     FakeIrisXEGEM* ctxGem = FakeIrisXEGEM::withSize(ctxSize, 0);
     if (!ctxGem) return nullptr;
 
@@ -45,7 +45,16 @@ FakeIrisXEGEM* FakeIrisXELRC::buildLRCContext(
     }
     bzero(p, ctxSize);
 
-    uint64_t ctxGpu = fb->ggttMap(ctxGem) & ~0xFFFULL;
+    uint64_t ctxGpu = ctxGem->gpuAddress();
+    if (!ctxGpu) {
+        ctxGpu = fb->ggttMap(ctxGem);
+    }
+    ctxGpu &= ~0xFFFULL;
+    if (!ctxGpu) {
+        ctxGem->unpin();
+        ctxGem->release();
+        return nullptr;
+    }
 
     //
     // ===== GEN12 LRC HEADER =====

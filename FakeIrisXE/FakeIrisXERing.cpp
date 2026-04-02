@@ -27,15 +27,38 @@ static inline uint32_t mmio_read32(volatile uint32_t* mmio, uint32_t off)
 }
 
 
-FakeIrisXERing::FakeIrisXERing(volatile uint32_t* mmioBase, uint32_t ringBaseOffset)
+FakeIrisXERing::FakeIrisXERing(volatile uint32_t* mmioBase,
+                               uint32_t ringBaseOffset,
+                               uint32_t headReg,
+                               uint32_t tailReg,
+                               uint32_t startReg,
+                               uint32_t ctlReg,
+                               uint32_t altStartLo,
+                               uint32_t altStartHi,
+                               uint32_t altHead,
+                               uint32_t altTail)
 : mMMIO(mmioBase),
   mRingBaseOffset(ringBaseOffset),
+  mHeadReg(headReg ? headReg : ringHeadReg(ringBaseOffset)),
+  mTailReg(tailReg ? tailReg : ringTailReg(ringBaseOffset)),
+  mStartReg(startReg ? startReg : ringStartReg(ringBaseOffset)),
+  mCtlReg(ctlReg ? ctlReg : ringCtlReg(ringBaseOffset)),
+  mAltStartLo(altStartLo),
+  mAltStartHi(altStartHi),
+  mAltHead(altHead),
+  mAltTail(altTail),
   mRingCPU(nullptr),
   mOwnsRingCPU(false),
   mRingSize(0),
   mRingWriteOffset(0),
   mRingGPUAddr(0)
 {
+    if (!mAltStartLo && !mAltStartHi && !mAltHead && !mAltTail && ringBaseOffset == TGL_RCS0_BASE) {
+        mAltStartLo = kAltRcsRbStartLo;
+        mAltStartHi = kAltRcsRbStartHi;
+        mAltHead = kAltRcsRbHead;
+        mAltTail = kAltRcsRbTail;
+    }
     IOLog("(FakeIrisXE) Ring created with base offset 0x%X\n", ringBaseOffset);
 }
 
@@ -78,7 +101,7 @@ void FakeIrisXERing::programRingBaseToHW()
 {
     if (!mMMIO || !mRingGPUAddr) return;
 
-    uint32_t baseStart = ringStartReg(mRingBaseOffset);
+    uint32_t baseStart = mStartReg;
 
     // V206: Add readback of START before writing
     uint32_t start_before = mmio_read32(mMMIO, baseStart);
@@ -92,21 +115,25 @@ void FakeIrisXERing::programRingBaseToHW()
     IOLog("(FakeIrisXE)[V206] START (0x%X) after=0x%08X (expected 0x%08X)\n", 
           baseStart, start_after, (uint32_t)mRingGPUAddr);
     
-    mmio_write32(mMMIO, kAltRcsRbStartLo, (uint32_t)mRingGPUAddr);
-    mmio_write32(mMMIO, kAltRcsRbStartHi, (uint32_t)(mRingGPUAddr >> 32));
+    if (mAltStartLo) {
+        mmio_write32(mMMIO, mAltStartLo, (uint32_t)mRingGPUAddr);
+    }
+    if (mAltStartHi) {
+        mmio_write32(mMMIO, mAltStartHi, (uint32_t)(mRingGPUAddr >> 32));
+    }
 
     (void)mmio_read32(mMMIO, baseStart);
     IOLog("(FakeIrisXE) Ring base programmed: START=0x%X ALT_LO=0x%X ALT_HI=0x%X addr=0x%llX\n",
-          baseStart, kAltRcsRbStartLo, kAltRcsRbStartHi, (unsigned long long)mRingGPUAddr);
+          baseStart, mAltStartLo, mAltStartHi, (unsigned long long)mRingGPUAddr);
 }
 
 void FakeIrisXERing::enableRing()
 {
     if (!mMMIO) return;
 
-    const uint32_t headReg = ringHeadReg(mRingBaseOffset);
-    const uint32_t tailReg = ringTailReg(mRingBaseOffset);
-    const uint32_t ctlReg = ringCtlReg(mRingBaseOffset);
+    const uint32_t headReg = mHeadReg;
+    const uint32_t tailReg = mTailReg;
+    const uint32_t ctlReg = mCtlReg;
 
     // Gen9+ ring CTL: bit0=enable, bits 20:12=(ring pages - 1)
     // where each page is 4KB.
@@ -119,8 +146,12 @@ void FakeIrisXERing::enableRing()
     // Reset head/tail before enabling.
     mmio_write32(mMMIO, headReg, 0);
     mmio_write32(mMMIO, tailReg, 0);
-    mmio_write32(mMMIO, kAltRcsRbHead, 0);
-    mmio_write32(mMMIO, kAltRcsRbTail, 0);
+    if (mAltHead) {
+        mmio_write32(mMMIO, mAltHead, 0);
+    }
+    if (mAltTail) {
+        mmio_write32(mMMIO, mAltTail, 0);
+    }
     
     // V206: Add more debugging - read back HEAD/TAIL
     uint32_t head_after = mmio_read32(mMMIO, headReg);
@@ -137,7 +168,7 @@ void FakeIrisXERing::enableRing()
     IOLog("(FakeIrisXE)[V152] Ring CTL (0x%X) = 0x%08x\n", ctlReg, ctl);
     
     // V207: Check if START is still valid after writing CTL
-    uint32_t start_check = mmio_read32(mMMIO, ringStartReg(mRingBaseOffset));
+    uint32_t start_check = mmio_read32(mMMIO, mStartReg);
     IOLog("(FakeIrisXE)[V207] START check after CTL: START=0x%08X (expected 0x%llX)\n", 
           start_check, (unsigned long long)mRingGPUAddr);
 }
@@ -165,19 +196,21 @@ void FakeIrisXERing::updateHWTail()
 {
     if (!mMMIO) return;
 
-    uint32_t tailReg = ringTailReg(mRingBaseOffset);
+    uint32_t tailReg = mTailReg;
     uint32_t tail = (uint32_t)mRingWriteOffset;
     mmio_write32(mMMIO, tailReg, tail);
-    mmio_write32(mMMIO, kAltRcsRbTail, tail);
+    if (mAltTail) {
+        mmio_write32(mMMIO, mAltTail, tail);
+    }
     (void)mmio_read32(mMMIO, tailReg);
 }
 
 uint32_t FakeIrisXERing::readHWHead()
 {
-    uint32_t headReg = ringHeadReg(mRingBaseOffset);
+    uint32_t headReg = mHeadReg;
     uint32_t head = mmio_read32(mMMIO, headReg);
-    if (!head)
-        head = mmio_read32(mMMIO, kAltRcsRbHead);
+    if (!head && mAltHead)
+        head = mmio_read32(mMMIO, mAltHead);
     return head;
 }
 

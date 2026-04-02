@@ -1,6 +1,6 @@
 dependencies: \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEFenceRetirement.cpp \
-  /Users/becoolio/Documents/Github/Untitled/FakeIrisXE/FakeIrisXE/FakeIrisXEFenceRetirement.hpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEFenceRetirement.cpp \
+  /Users/becoolio/Documents/GitHub/FakeIrisXE/FakeIrisXE/FakeIrisXEFenceRetirement.hpp \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/IOKit/IOWorkLoop.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/libkern/c++/OSObject.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/Kernel.framework/Headers/libkern/c++/OSMetaClass.h \

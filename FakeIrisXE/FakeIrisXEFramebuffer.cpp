@@ -460,7 +460,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V297 - Single GuC boot attempt        ║\n");
+    IOLog("║       FAKEIRISXE V298 - Single GuC boot attempt        ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -610,6 +610,9 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     
     // V138: Initialize BLT ring pointer
     fBltRing = nullptr;
+    fBltRingGem = nullptr;
+    fBltRingGpuVA = 0;
+    fBltRingSize = 0;
     
     IOLog("FakeIrisXEFramebuffer::init succeeded\n");
     return true;
@@ -1013,7 +1016,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V297 - Single GuC boot attempt       ║\n");
+    IOLog("║       FAKEIRISXE V298 - Single GuC boot attempt       ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1812,6 +1815,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // === V170: Display Identity Injection (Apple internal panel) ===
     // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
     {
+        if (publishDisplayIdentityFromEdid()) {
+            IOLog("[V298] Native panel EDID/identity detected - fallback display injection skipped\n");
+        } else {
         uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
         uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
         const char* displayName = "Color LCD";
@@ -1914,6 +1920,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         applyBacklightPresetForIdentity(displayVendorID, displayProductID);
         
         IOLog("[V170] Display identity applied: Vendor=0x%04X, Product=0x%04X\n", displayVendorID, displayProductID);
+        }
     }
 
     // === V161: Proper LG Display EDID for Tiger Lake integrated panel (LGD 0x071E) ===
@@ -2055,7 +2062,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("IOGPUDVFM", kOSBooleanFalse);
     setProperty("AGPMFullControl", kOSBooleanFalse);
     setProperty("IOGPUPowerControl", kOSBooleanFalse);
-    IOLog("[V297] Acceleration and AGPM-facing claims held back until execution proof exists\n");
+    IOLog("[V298] Acceleration and AGPM-facing claims held back until execution proof exists\n");
     
     // Quartz Extreme requirements
     
@@ -2197,7 +2204,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     updateExecutionState(false, "stage4-begin");
 
     if (directProofMode) {
-        IOLog("(FakeIrisXE) [V297] Stage 4: Minimal bare-DMA FIRST -> Linux fallback\n");
+        IOLog("(FakeIrisXE) [V298] Stage 4: Minimal bare-DMA FIRST -> Linux fallback\n");
     } else {
         // V200: CRITICAL - Ensure GT power is enabled BEFORE ring creation
         IOLog("(FakeIrisXE) [V204] Ensuring GT power is enabled before ring creation...\n");
@@ -2225,13 +2232,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // V45: FIRMWARE LOADING (After GGTT init, Intel PRM sequence)
     // ================================================
     logStage(5, "Firmware + execution submission mode");
-    IOLog("(FakeIrisXE) [V297] Loading firmware (Intel PRM compliant)...\n");
+    IOLog("(FakeIrisXE) [V298] Loading firmware (Intel PRM compliant)...\n");
 
     setProperty("FakeIrisXEBootDiagFull", runBootDiagFull ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEBootDiagQuick", runBootDiagQuick ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("FakeIrisXEDirectProofMode", directProofMode ? kOSBooleanTrue : kOSBooleanFalse);
 
-    IOLog("(FakeIrisXE) [V297] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
+    IOLog("(FakeIrisXE) [V298] Runtime toggles: diag_full=%u diag_quick=%u direct_proof=%u skip_guc=%u force_guc=%u\n",
           runBootDiagFull ? 1U : 0U,
           runBootDiagQuick ? 1U : 0U,
           directProofMode ? 1U : 0U,
@@ -2242,7 +2249,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // The previous 17 direct-Execlist iterations (V254-V270) all failed with
     // F_NO_SCHEDULING_PROGRESS because Gen12 requires GuC for scheduling.
     if (skipGuCInit) {
-        IOLog("(FakeIrisXE) [V297] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
+        IOLog("(FakeIrisXE) [V298] ⚠️ Skipping GuC init (-fakeirisxe-noguc set)\n");
         fGuCEnabled = false;
         fRcsRingValidated = false;
         fCommandSubmissionReady = false;
@@ -2396,7 +2403,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
             }
 
             if (directProofMode) {
-                IOLog("FakeIrisXEFramebuffer: [V297] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
+                IOLog("FakeIrisXEFramebuffer: [V298] Direct proof mode active - skipping legacy RCS/BLT ring warmup path\n");
             } else {
                 // Create / init RCS ring (existing helper returns bool)
                 if (!fRcsRing && createRcsRing(256 * 1024)) {
@@ -2764,7 +2771,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V297, single-attempt GuC boot path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V298, single-attempt GuC boot path)\n");
     return true;
 
 }
@@ -2843,6 +2850,16 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
     if (fBltRing) {
         delete fBltRing;
         fBltRing = nullptr;
+    }
+    if (fBltRingGem) {
+        if (fBltRingGpuVA && fBltRingSize) {
+            ggttUnmap(fBltRingGpuVA, static_cast<uint32_t>((fBltRingSize + 4095U) >> 12));
+        }
+        fBltRingGem->unpin();
+        fBltRingGem->release();
+        fBltRingGem = nullptr;
+        fBltRingGpuVA = 0;
+        fBltRingSize = 0;
     }
 
     // V281: Release Execlist (OSObject subclass - use release() not delete)
@@ -4372,7 +4389,14 @@ IOReturn FakeIrisXEFramebuffer::setPowerState(unsigned long state,
                                               IOService* whatDevice)
 {
     IOLog("[FakeIrisXEFramebuffer] setPowerState(%lu)\n", state);
-    return super::setPowerState(state, whatDevice);
+    setNumberProperty(this, "FakeIrisXEPowerState", state, 32);
+    setProperty("FakeIrisXEPowerOn", state ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("AGPM_Enabled", kOSBooleanFalse);
+    setProperty("GPUPowerManagementEnabled", kOSBooleanFalse);
+    setProperty("IOGPUPowerManagement", kOSBooleanFalse);
+    setProperty("FakeIrisXESleepWakeScaffold", kOSBooleanTrue);
+
+    return IOPMAckImplied;
 }
 
 
@@ -5637,6 +5661,10 @@ static inline uint32_t make_ggtt_pte32_hi(uint64_t phys) {
 uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
     if (!gem || !fGGTT) return 0;
 
+    if (gem->gpuAddress()) {
+        return gem->gpuAddress();
+    }
+
     IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
     if (!md) {
         IOLog("(FakeIrisXE) ggttMap: gem->memoryDescriptor() is NULL (gem=%p)\n", gem);
@@ -5701,6 +5729,7 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
 
     uint64_t ret = gpuAddr;
     fNextGGTTOffset += ((uint64_t)pages << 12);
+    gem->setGpuAddress(ret);
     IOLog("FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x%llx pages=%u (TGL PTEs)\n", (unsigned long long)ret, pages);
     return ret;
 }
@@ -5730,6 +5759,11 @@ void* FakeIrisXEFramebuffer::ggttGetCPUAddr(FakeIrisXEGEM* gem) {
 uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t minOffset) {
     if (!gem || !fGGTT) return 0;
 
+    const uint64_t alignedFloor = (minOffset + 4095ULL) & ~4095ULL;
+    if (gem->gpuAddress() && gem->gpuAddress() >= alignedFloor) {
+        return gem->gpuAddress();
+    }
+
     IOBufferMemoryDescriptor* md = gem->memoryDescriptor();
     if (!md) {
         IOLog("(FakeIrisXE) ggttMapAtOrAbove: gem->memoryDescriptor() is NULL (gem=%p)\n", gem);
@@ -5744,7 +5778,7 @@ uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t mi
     uint32_t pages = gem->pageCount();
     
     // V140: Align minOffset to page boundary and ensure fNextGGTTOffset is at least minOffset
-    minOffset = (minOffset + 4095) & ~4095ULL;
+    minOffset = alignedFloor;
     if (fNextGGTTOffset < minOffset) {
         fNextGGTTOffset = minOffset;
     }
@@ -5796,6 +5830,7 @@ uint64_t FakeIrisXEFramebuffer::ggttMapAtOrAbove(FakeIrisXEGEM* gem, uint64_t mi
 
     uint64_t ret = gpuAddr;
     fNextGGTTOffset += ((uint64_t)pages << 12);
+    gem->setGpuAddress(ret);
     IOLog("FakeIrisXEFramebuffer: ggttMapAtOrAbove -> GPU VA 0x%llx pages=%u\n", (unsigned long long)ret, pages);
     return ret;
 }
@@ -6342,17 +6377,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V297] ============================================\n");
-    IOLog("(FakeIrisXE)[V297] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V297] ============================================\n");
+    IOLog("(FakeIrisXE)[V298] ============================================\n");
+    IOLog("(FakeIrisXE)[V298] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V298] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V297] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V298] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V297] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V298] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V297] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V297] ============================================\n");
+    IOLog("(FakeIrisXE)[V298] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V298] ============================================\n");
     return success;
 }
 
@@ -6385,18 +6420,38 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createBltRing(size_t ringBytes)
         return nullptr;
     }
 
-    // Create BLT ring object with BLT base offset (0x22000)
-    fBltRing = new FakeIrisXERing(fBar0, 0x22000);  // BLT ring base
-    if (!fBltRing) {
-        IOLog("❌ createBltRing — ring object alloc failed\n");
+    IOBufferMemoryDescriptor* ringDesc = ringGem->memoryDescriptor();
+    if (!ringDesc || !ringDesc->getBytesNoCopy()) {
+        IOLog("❌ createBltRing — ring CPU mapping missing\n");
+        ggttUnmap(ringGpuVA, static_cast<uint32_t>((ringBytes + 4095U) >> 12));
         ringGem->unpin();
         ringGem->release();
         return nullptr;
     }
 
-    // Save metadata into ring object
+    bzero(ringDesc->getBytesNoCopy(), ringBytes);
+
+    // BCS0 uses direct ring register addresses instead of the RCS base+0x30 layout.
+    fBltRing = new FakeIrisXERing(fBar0,
+                                  TGL_BCS0_BASE,
+                                  BCS0_RING_HEAD,
+                                  BCS0_RING_TAIL,
+                                  BCS0_RING_START,
+                                  BCS0_RING_CTL);
+    if (!fBltRing) {
+        IOLog("❌ createBltRing — ring object alloc failed\n");
+        ggttUnmap(ringGpuVA, static_cast<uint32_t>((ringBytes + 4095U) >> 12));
+        ringGem->unpin();
+        ringGem->release();
+        return nullptr;
+    }
+
+    fBltRing->attachRingCPUAddress(ringDesc->getBytesNoCopy());
     fBltRing->attachRingGPUAddress(ringGpuVA);
-    fBltRing->setRingSize(ringBytes);  // V154: Set ring size before enableRing
+    fBltRing->setRingSize(ringBytes);
+    fBltRingGem = ringGem;
+    fBltRingGpuVA = ringGpuVA;
+    fBltRingSize = ringBytes;
 
     // Program BLT ring registers
     fBltRing->programRingBaseToHW();
@@ -6675,12 +6730,20 @@ static FakeIrisXEGEM* createMasterBatchChain(FakeIrisXEFramebuffer* fb, uint64_t
 // - userBatchSizeBytes: size of user batch region (for logging only)
 // Returns sequence number (non-zero) on success, 0 on failure.
 uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem, size_t userBatchOffsetBytes, size_t userBatchSizeBytes) {
-    if (!userBatchGem || !fRcsRing) {
+    return appendFenceAndSubmitOnRing(fRcsRing, userBatchGem, userBatchOffsetBytes, userBatchSizeBytes, true);
+}
+
+uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmitOnRing(FakeIrisXERing* ring,
+                                                           FakeIrisXEGEM* userBatchGem,
+                                                           size_t userBatchOffsetBytes,
+                                                           size_t userBatchSizeBytes,
+                                                           bool trackPending) {
+    if (!userBatchGem || !ring) {
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - invalid args\n");
         return 0;
     }
 
-    if (!validateRcsRingState("appendFenceAndSubmit", true)) {
+    if (ring == fRcsRing && !validateRcsRingState("appendFenceAndSubmit", true)) {
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - ring validation failed\n");
         return 0;
     }
@@ -6728,8 +6791,8 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
         return 0;
     }
 
-    // 3) Ensure user batch is pinned and mapped (pin if needed). We will map to GPU VA if not present.
-    userBatchGem->pin();
+    // 3) Ensure user batch is mapped into GGTT. The batch object itself stays owned by the
+    // caller/handle table; we only need a stable GPU VA for submission.
     uint64_t userGpu = userBatchGem->gpuAddress();
     if (!userGpu) {
         userGpu = ggttMap(userBatchGem);
@@ -6737,7 +6800,6 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
             IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - ggttMap(user) failed\n");
             tailGem->unpin();
             tailGem->release();
-            userBatchGem->unpin();
             return 0;
         }
     }
@@ -6749,37 +6811,64 @@ uint32_t FakeIrisXEFramebuffer::appendFenceAndSubmit(FakeIrisXEGEM* userBatchGem
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - master chain creation failed\n");
         tailGem->unpin();
         tailGem->release();
-        userBatchGem->unpin();
         return 0;
     }
 
     // 5) Submit master batch (this will execute user batch then tail in order)
-    bool ok = fRcsRing->submitBatch64(masterGpuAddr);
+    bool ok = ring->submitBatch64(masterGpuAddr);
     if (!ok) {
         IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - ring submit failed\n");
         masterGem->unpin(); masterGem->release();
         tailGem->unpin(); tailGem->release();
-        userBatchGem->unpin();
         return 0;
     }
 
     IOLog("FakeIrisXEFramebuffer: Batch submitted (master=0x%llx user=0x%llx tail=0x%llx) seq=%u\n",
           (unsigned long long)masterGpuAddr, (unsigned long long)userGpu, (unsigned long long)tailGpuAddr, seq);
 
-    if (!addPendingSubmission(seq, masterGem, tailGem)) {
-        IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - pending queue add failed (seq=%u)\n", seq);
+    if (trackPending) {
+        if (!addPendingSubmission(seq, masterGem, tailGem)) {
+            IOLog("FakeIrisXEFramebuffer: appendFenceAndSubmit - pending queue add failed (seq=%u)\n", seq);
+            masterGem->unpin();
+            masterGem->release();
+            tailGem->unpin();
+            tailGem->release();
+            return 0;
+        }
+
+        // Drop local references; pending-submission list owns retained refs now.
+        masterGem->release();
+        tailGem->release();
+    } else {
         masterGem->unpin();
         masterGem->release();
         tailGem->unpin();
         tailGem->release();
-        return 0;
     }
 
-    // Drop local references; pending-submission list owns retained refs now.
-    masterGem->release();
-    tailGem->release();
-
     trackGPUCommandSubmitted();
+
+    if (ring != fRcsRing && fenceDesc) {
+        volatile uint32_t* fenceCpu = reinterpret_cast<volatile uint32_t*>(fenceDesc->getBytesNoCopy());
+        bool completed = false;
+        for (uint32_t poll = 0; fenceCpu && poll < 100; ++poll) {
+            __sync_synchronize();
+            if (fenceCpu[0] == seq) {
+                completed = true;
+                break;
+            }
+            IOSleep(1);
+        }
+
+        if (completed) {
+            fFenceCompletedSeq = seq;
+            trackGPUCommandCompleted(seq);
+            completePendingSubmission(seq);
+            IOLog("FakeIrisXEFramebuffer: BLT fence completed synchronously seq=%u\n", seq);
+        } else {
+            IOLog("FakeIrisXEFramebuffer: BLT fence pending seq=%u (deferred cleanup at stop)\n", seq);
+        }
+    }
 
     return seq;
 }
@@ -7359,18 +7448,18 @@ bool FakeIrisXEFramebuffer::initGuCSystem()
     // Apple firmware removed - ME is dead, blocking Apple path
     const unsigned char* guc_bin = tgl_guc_70_1_1_bin;
     unsigned int guc_len = tgl_guc_70_1_1_bin_len;
-    IOLog("(FakeIrisXE) [V297] Loading Linux TGL GuC v70.1.1 (%u bytes)\n", guc_len);
+    IOLog("(FakeIrisXE) [V298] Loading Linux TGL GuC v70.1.1 (%u bytes)\n", guc_len);
 
     if (!guc_bin || guc_len == 0) {
-        IOLog("(FakeIrisXE) [V297] GuC firmware not available\n");
+        IOLog("(FakeIrisXE) [V298] GuC firmware not available\n");
         return false;
     }
     
     if (!fGuC->loadGuCFirmware(guc_bin, guc_len)) {
-        IOLog("(FakeIrisXE) [V297] GuC firmware load failed\n");
+        IOLog("(FakeIrisXE) [V298] GuC firmware load failed\n");
         return false;
     }
-    IOLog("(FakeIrisXE) [V297] GuC firmware loaded\n");
+    IOLog("(FakeIrisXE) [V298] GuC firmware loaded\n");
     
     // Load HuC firmware from embedded array (if available)
     if (tgl_huc_7_9_3_bin && tgl_huc_7_9_3_bin_len > 0) {
@@ -7421,8 +7510,29 @@ bool FakeIrisXEFramebuffer::diagnoseGuCSubmissionFailure()
 // ============================================================================
 bool FakeIrisXEFramebuffer::testGuCCommandExecution()
 {
-    IOLog("(FakeIrisXE) [V43] testGuCCommandExecution(): GuC command execution test not implemented\n");
-    return false;
+    if (!fGuC) {
+        IOLog("(FakeIrisXE) [V298] testGuCCommandExecution(): GuC object missing\n");
+        setProperty("FakeIrisXEGuCCommandPathReady", kOSBooleanFalse);
+        return false;
+    }
+
+    IOLog("(FakeIrisXE) [V298] testGuCCommandExecution(): validating GuC state and transport\n");
+    fGuC->dumpGuCStatus();
+
+    const bool ready = fGuC->isGuCReady();
+    setProperty("FakeIrisXEGuCReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
+
+    bool submissionTest = false;
+    if (ready) {
+        submissionTest = fGuC->testCommandSubmission();
+    }
+
+    setProperty("FakeIrisXEGuCCommandPathReady", submissionTest ? kOSBooleanTrue : kOSBooleanFalse);
+    setNumberProperty(this, "FakeIrisXEGuCStatus", safeMMIORead(GEN11_GUC_STATUS), 32);
+    IOLog("(FakeIrisXE) [V298] GuC validation: ready=%u submission_test=%u\n",
+          ready ? 1U : 0U,
+          submissionTest ? 1U : 0U);
+    return ready && submissionTest;
 }
 
 // ============================================================================
@@ -7654,10 +7764,16 @@ IOReturn FakeIrisXEFramebuffer::destroySurface(uint64_t surfaceId)
     for (uint32_t i = 0; i < kMaxSurfaces; i++) {
         if (fSurfaces[i].inUse && fSurfaces[i].id == surfaceId) {
             // Unmap from GGTT
-            unmapGEMFromGGTT(fSurfaces[i].gpuAddress);
+            if (fSurfaces[i].gemObj) {
+                ggttUnmap(fSurfaces[i].gpuAddress, fSurfaces[i].gemObj->pageCount());
+                fSurfaces[i].gemObj->clearGpuAddress();
+            } else {
+                unmapGEMFromGGTT(fSurfaces[i].gpuAddress);
+            }
             
             // Release GEM object
             if (fSurfaces[i].gemObj) {
+                fSurfaces[i].gemObj->unpin();
                 fSurfaces[i].gemObj->release();
             }
             
@@ -7755,7 +7871,7 @@ IOReturn FakeIrisXEFramebuffer::copyToFramebuffer(uint64_t surfaceId, uint32_t x
         return kIOReturnNotFound;
     }
     
-    if (!fExeclist || !fRcsRing) {
+    if (!fBltRing && !fRcsRing) {
         IOLog("[V90] copyToFramebuffer: GPU infrastructure not ready\n");
         return kIOReturnNotReady;
     }
@@ -7770,7 +7886,7 @@ IOReturn FakeIrisXEFramebuffer::copyToFramebuffer(uint64_t surfaceId, uint32_t x
 IOReturn FakeIrisXEFramebuffer::fillRect(uint32_t x, uint32_t y, uint32_t width, 
                                          uint32_t height, uint32_t color)
 {
-    if (!fExeclist || !fRcsRing) {
+    if (!fBltRing && !fRcsRing) {
         IOLog("[V90] fillRect: GPU infrastructure not ready\n");
         return kIOReturnNotReady;
     }
@@ -7798,7 +7914,7 @@ IOReturn FakeIrisXEFramebuffer::submit2DCommandBuffer(void* commands, size_t siz
 {
     IOLog("[V90] submit2DCommandBuffer: %zu bytes\n", size);
     
-    if (!fExeclist || !fRcsRing) {
+    if (!fBltRing && !fRcsRing) {
         IOLog("[V90] submit2DCommandBuffer: GPU infrastructure not ready\n");
         return kIOReturnNotReady;
     }
@@ -7810,16 +7926,70 @@ IOReturn FakeIrisXEFramebuffer::submitBlitCommand(uint32_t opcode, void* data, s
 {
     IOLog("[V90] submitBlitCommand: opcode=%u, size=%zu\n", opcode, size);
     
-    if (!fExeclist || !fRcsRing) {
+    FakeIrisXERing* submitRing = fBltRing ? fBltRing : fRcsRing;
+    if (!submitRing) {
         return kIOReturnNotReady;
     }
+
+    auto findSurfaceByGpuAddress = [&](uint64_t gpuAddr) -> SurfaceInfo* {
+        for (uint32_t i = 0; i < kMaxSurfaces; ++i) {
+            if (fSurfaces[i].inUse && fSurfaces[i].gpuAddress == gpuAddr) {
+                return &fSurfaces[i];
+            }
+        }
+        return nullptr;
+    };
     
     switch (opcode) {
         case 0x46: // XY_SRC_COPY_BLT
-        case 0x50: // XY_COLOR_BLT
-        case 0x52: // XY_PIXEL_BLT
-            IOLog("[V90]   -> opcode recognized but not implemented\n");
-            return kIOReturnUnsupported;
+        case 0x52: { // XY_PIXEL_BLT
+            if (!data || size < (16 * sizeof(uint32_t))) {
+                return kIOReturnBadArgument;
+            }
+            uint32_t* words = reinterpret_cast<uint32_t*>(data);
+            uint64_t dstBase = ((uint64_t)words[7] << 32) | words[6];
+            uint64_t srcBase = ((uint64_t)words[13] << 32) | words[12];
+            SurfaceInfo* srcSurf = findSurfaceByGpuAddress(srcBase);
+            SurfaceInfo* dstSurf = findSurfaceByGpuAddress(dstBase);
+            if (!srcSurf || !dstSurf) {
+                IOLog("[V90]   -> blit surfaces not found for src=0x%llx dst=0x%llx\n",
+                      (unsigned long long)srcBase,
+                      (unsigned long long)dstBase);
+                return kIOReturnNotFound;
+            }
+
+            const uint32_t dstX1 = words[2];
+            const uint32_t dstY1 = words[3];
+            const uint32_t dstX2 = words[4];
+            const uint32_t dstY2 = words[5];
+            const uint32_t srcX1 = words[10];
+            const uint32_t srcY1 = words[11];
+            const uint32_t width = (dstX2 > dstX1) ? (dstX2 - dstX1) : 0;
+            const uint32_t height = (dstY2 > dstY1) ? (dstY2 - dstY1) : 0;
+            return submitBlitXY_SRC_COPY(srcSurf, dstSurf, srcX1, srcY1,
+                                         dstX1, dstY1, width, height);
+        }
+        case 0x50: {
+            if (!data || size < (11 * sizeof(uint32_t))) {
+                return kIOReturnBadArgument;
+            }
+            uint32_t* words = reinterpret_cast<uint32_t*>(data);
+            uint64_t dstBase = ((uint64_t)words[7] << 32) | words[6];
+            SurfaceInfo* dstSurf = findSurfaceByGpuAddress(dstBase);
+            if (!dstSurf) {
+                IOLog("[V90]   -> fill surface not found for dst=0x%llx\n",
+                      (unsigned long long)dstBase);
+                return kIOReturnNotFound;
+            }
+
+            const uint32_t dstX1 = words[2];
+            const uint32_t dstY1 = words[3];
+            const uint32_t dstX2 = words[4];
+            const uint32_t dstY2 = words[5];
+            const uint32_t width = (dstX2 > dstX1) ? (dstX2 - dstX1) : 0;
+            const uint32_t height = (dstY2 > dstY1) ? (dstY2 - dstY1) : 0;
+            return submitBlitXY_COLOR_BLT(dstSurf, dstX1, dstY1, width, height, words[10]);
+        }
         default:
             IOLog("[V90]   -> Unknown opcode 0x%02x\n", opcode);
             return kIOReturnUnsupported;
@@ -7883,8 +8053,9 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_SRC_COPY(
         return kIOReturnBadArgument;
     }
     
-    if (!fExeclist || !fRcsRing) {
-        IOLog("[V91] ❌ Execlist/Ring not initialized\n");
+    FakeIrisXERing* submitRing = fBltRing ? fBltRing : fRcsRing;
+    if (!submitRing) {
+        IOLog("[V91] ❌ BLT/RCS ring not initialized\n");
         return kIOReturnNotReady;
     }
     
@@ -7992,7 +8163,7 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_SRC_COPY(
     IOLog("[V91] Submitting to GPU via execlist...\n");
     
     // Use appendFenceAndSubmit for proper fence tracking
-    uint32_t seqNum = appendFenceAndSubmit(batchGem, 0, idx * 4);
+    uint32_t seqNum = appendFenceAndSubmitOnRing(submitRing, batchGem, 0, idx * 4, true);
     
     if (seqNum == 0) {
         IOLog("[V91] ❌ Failed to submit blit command\n");
@@ -8250,7 +8421,8 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_COLOR_BLT_Full(
         return kIOReturnBadArgument;
     }
     
-    if (!fExeclist || !fRcsRing) {
+    FakeIrisXERing* submitRing = fBltRing ? fBltRing : fRcsRing;
+    if (!submitRing) {
         IOLog("[V92] ❌ GPU not ready\n");
         return kIOReturnNotReady;
     }
@@ -8324,7 +8496,7 @@ IOReturn FakeIrisXEFramebuffer::submitBlitXY_COLOR_BLT_Full(
     
     IOLog("[V92]   Fill 0x%08x at (%u,%u) size %ux%u\n", color, x, y, width, height);
     
-    uint32_t seqNum = appendFenceAndSubmit(batchGem, 0, idx * 4);
+    uint32_t seqNum = appendFenceAndSubmitOnRing(submitRing, batchGem, 0, idx * 4, true);
     if (seqNum == 0) {
         IOLog("[V92] ❌ Failed to submit fill command\n");
         batchGem->release();

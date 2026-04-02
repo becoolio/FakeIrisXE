@@ -17,6 +17,9 @@ public:
 
     uint32_t getID() const { return fInfo.ioSurfaceID; }
     const FakeIrisXESurfaceInfo& getInfo() const { return fInfo; }
+    FakeIrisXEGEM* getGem() const { return fGem; }
+    uint64_t getGpuAddress() const;
+    void* getCpuAddress() const;
 
     void retainClient() { fRefCount++; }
     bool releaseClient() { return (--fRefCount == 0); }

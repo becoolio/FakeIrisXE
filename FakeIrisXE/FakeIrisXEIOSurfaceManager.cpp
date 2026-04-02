@@ -121,3 +121,44 @@ IOReturn FakeIrisXEIOSurfaceManager::unmapSurfaceFromTask(uint32_t surfID, IOMem
     surf->release();
     return ret;
 }
+
+IOReturn FakeIrisXEIOSurfaceManager::getSurfaceInfo(uint32_t surfID,
+                                                    FakeIrisXESurfaceInfo* outInfo,
+                                                    uint64_t* outGpuAddr)
+{
+    const OSSymbol* key = makeSurfKey(surfID);
+    if (!key) return kIOReturnNoMemory;
+
+    IOLockLock(fLock);
+    FakeIrisXESurface* surf = OSDynamicCast(FakeIrisXESurface, fMap->getObject(key));
+    if (surf) surf->retain();
+    IOLockUnlock(fLock);
+    key->release();
+
+    if (!surf) return kIOReturnNotFound;
+
+    if (outInfo) {
+        *outInfo = surf->getInfo();
+    }
+    if (outGpuAddr) {
+        *outGpuAddr = surf->getGpuAddress();
+    }
+
+    surf->release();
+    return kIOReturnSuccess;
+}
+
+FakeIrisXEGEM* FakeIrisXEIOSurfaceManager::getSurfaceGem(uint32_t surfID)
+{
+    const OSSymbol* key = makeSurfKey(surfID);
+    if (!key) return nullptr;
+
+    IOLockLock(fLock);
+    FakeIrisXESurface* surf = OSDynamicCast(FakeIrisXESurface, fMap->getObject(key));
+    FakeIrisXEGEM* gem = surf ? surf->getGem() : nullptr;
+    if (gem) gem->retain();
+    IOLockUnlock(fLock);
+    key->release();
+
+    return gem;
+}

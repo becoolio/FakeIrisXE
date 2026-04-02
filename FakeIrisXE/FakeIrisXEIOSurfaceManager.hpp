@@ -20,6 +20,8 @@ public:
 
     IOReturn mapSurfaceToTask(uint32_t surfID, task_t task, IOMemoryDescriptor** outDesc, uint64_t* outAddr);
     IOReturn unmapSurfaceFromTask(uint32_t surfID, IOMemoryMap* map);
+    IOReturn getSurfaceInfo(uint32_t surfID, FakeIrisXESurfaceInfo* outInfo, uint64_t* outGpuAddr);
+    FakeIrisXEGEM* getSurfaceGem(uint32_t surfID);
 
 private:
     OSDictionary* fMap;

@@ -319,6 +319,7 @@ bool FakeIrisXEAcceleratorUserClient::unpinGemHandle(uint32_t handle) {
 
     if (gpuVA && pages) {
         fb->ggttUnmap(gpuVA, pages);
+        gem->clearGpuAddress();
     }
     gem->unpin();
 
@@ -413,6 +414,17 @@ IOReturn FakeIrisXEAcceleratorUserClient::registerSurface(uint32_t surfID, uint3
     RLLog("[RegisterSurface] id=%u handle=%u w=%u h=%u stride=%u fmt=0x%x",
           (unsigned)surfID, (unsigned)handle, (unsigned)w, (unsigned)h, (unsigned)rowBytes, (unsigned)pixFmt);
     FakeIrisXESurfaceInfo info = {1, surfID, w, h, rowBytes, pixFmt, handle};
+
+    if (fOwner) {
+        FakeIrisXEFramebuffer* fb = fOwner->framebuffer();
+        if (fb && !gem->gpuAddress()) {
+            uint64_t gpuAddr = fb->ggttMap(gem);
+            if (!gpuAddr) {
+                gem->release();
+                return kIOReturnNoMemory;
+            }
+        }
+    }
 
     if (fOwner && fOwner->surfaceManager()) {
         IOReturn r = fOwner->surfaceManager()->createSurface(surfID, gem, info);

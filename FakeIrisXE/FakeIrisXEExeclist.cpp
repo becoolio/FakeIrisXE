@@ -548,30 +548,6 @@ static bool allocateProofResources(FakeIrisXEExeclist* self, RcsProofResources& 
     __sync_synchronize();
     OSSynchronizeIO();
 
-    res.pml4Gem = FakeIrisXEGEM::withSize(kProofPml4Bytes, 0);
-    if (!res.pml4Gem) {
-        IOLog("(FakeIrisXE) [V274] ❌ PML4 allocation failed\n");
-        releaseProofResources(self, res);
-        return false;
-    }
-    res.pml4Gem->pin();
-
-    IOBufferMemoryDescriptor* pml4Md = res.pml4Gem->memoryDescriptor();
-    if (!pml4Md || !pml4Md->getBytesNoCopy()) {
-        IOLog("(FakeIrisXE) [V274] ❌ PML4 CPU mapping failed\n");
-        releaseProofResources(self, res);
-        return false;
-    }
-
-    bzero(pml4Md->getBytesNoCopy(), kProofPml4Bytes);
-    uint64_t pml4SegLen = 0;
-    res.pml4PhysAddr = res.pml4Gem->getPhysicalSegment(0, &pml4SegLen) & ~0xFFFULL;
-    if (!res.pml4PhysAddr) {
-        IOLog("(FakeIrisXE) [V274] ❌ PML4 physical address acquisition failed\n");
-        releaseProofResources(self, res);
-        return false;
-    }
-
     const uint64_t sharedHwsGpuAddr = self->fCsbGGTT & ~0xFFFULL;
     res.csbGpuAddr = sharedHwsGpuAddr + kExecCsbOffsetBytes;
     if (!res.csbGpuAddr) {
@@ -2494,7 +2470,10 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
 
     if (!hw->lrcGem || ret != kIOReturnSuccess) {
         IOLog("[V61] ❌ createHwContextFor: buildLRCContext FAILED (lrcGem=%p ret=0x%x)\n", hw->lrcGem, ret);
-        if (hw->lrcGem) hw->lrcGem->release();
+        if (hw->lrcGem) {
+            hw->lrcGem->unpin();
+            hw->lrcGem->release();
+        }
         hw->lrcGem = nullptr;
 
         hw->ringGem->unpin();
@@ -2505,10 +2484,12 @@ FakeIrisXEExeclist::XEHWContext* FakeIrisXEExeclist::createHwContextFor(uint32_t
     IOLog("[V61] createHwContextFor: LRC context built successfully\n");
 
     IOLog("[V61] createHwContextFor: Pinning LRC GEM...\n");
-    hw->lrcGem->pin();
-    IOLog("[V61] createHwContextFor: Mapping LRC to GGTT...\n");
-    hw->lrcGGTT = fOwner->ggttMap(hw->lrcGem);
-    IOLog("[V61] createHwContextFor: ggttMap(lrc) returned=0x%llX\n", hw->lrcGGTT);
+    IOLog("[V61] createHwContextFor: Using builder-provided LRC mapping...\n");
+    hw->lrcGGTT = hw->lrcGem->gpuAddress();
+    if (!hw->lrcGGTT) {
+        hw->lrcGGTT = fOwner->ggttMap(hw->lrcGem);
+    }
+    IOLog("[V61] createHwContextFor: LRC GGTT=0x%llX\n", hw->lrcGGTT);
     if (!hw->lrcGGTT) {
         IOLog("[V61] ❌ createHwContextFor: ggttMap(LRC) FAILED\n");
         hw->lrcGem->unpin();

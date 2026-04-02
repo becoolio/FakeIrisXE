@@ -593,10 +593,24 @@ IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceI
 {
     if (!fCtxLock) return kIOReturnNoResources;
 
+    uint64_t gpuAddr = in.gpuAddr;
+    FakeIrisXEGEM* surfaceGem = nullptr;
+    const uint32_t surfaceKey = in.ioSurfaceID ? in.ioSurfaceID : in.surfaceID;
+    if (surfaceKey && fSurfaceMgr) {
+        surfaceGem = fSurfaceMgr->getSurfaceGem(surfaceKey);
+        if (surfaceGem && !gpuAddr && fFB) {
+            gpuAddr = surfaceGem->gpuAddress();
+            if (!gpuAddr) {
+                gpuAddr = fFB->ggttMap(surfaceGem);
+            }
+        }
+    }
+
     IOLockLock(fCtxLock);
     XEContext* ctx = lookupContext(ctxId);
     if (!ctx) {
         IOLockUnlock(fCtxLock);
+        if (surfaceGem) surfaceGem->release();
         return kIOReturnNotFound;
     }
 
@@ -612,18 +626,28 @@ IOReturn FakeIrisXEAccelerator::bindSurface(uint32_t ctxId, const XEBindSurfaceI
     // IMPORTANT: user-space must pass a pointer that's already mapped into the client task
     // (for testing we accept that pointer value and store it).
     // We save as void* kernel-side, but it points into the client's address space.
-    ctx->surfCPU = reinterpret_cast<void*>( (uintptr_t) in.cpuPtr );
+    ctx->surfCPU = reinterpret_cast<void*>((uintptr_t)in.cpuPtr);
+    if (!ctx->surfCPU && surfaceGem && surfaceGem->memoryDescriptor()) {
+        ctx->surfCPU = surfaceGem->memoryDescriptor()->getBytesNoCopy();
+    }
 
     IOLockUnlock(fCtxLock);
 
-    out.gpuAddr = 0;
-    out.status  = kIOReturnUnsupported;
+    out.gpuAddr = gpuAddr;
+    out.status  = gpuAddr ? kIOReturnSuccess : kIOReturnUnsupported;
 
     IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: ctx=%u iosurf=%u cpuPtr=%p %ux%u stride=%u fmt=0x%08x\n",
           ctxId, in.ioSurfaceID, ctx->surfCPU, in.width, in.height, in.bytesPerRow, in.pixelFormat);
-    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: GPU address mapping not implemented (returns unsupported)\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel] BindSurface: gpuAddr=0x%llx status=0x%x key=%u\n",
+          (unsigned long long)gpuAddr,
+          out.status,
+          surfaceKey);
 
-    return kIOReturnUnsupported;
+    if (surfaceGem) {
+        surfaceGem->release();
+    }
+
+    return out.status;
 }
 
 
