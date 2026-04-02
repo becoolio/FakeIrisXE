@@ -15,7 +15,7 @@
 
 static const size_t kFakeIrisXEMaxEdidBytes = 512;
 static const size_t kFakeIrisXEMaxDpcdBytes = 16;
-static const size_t kFakeIrisXEMaxVbtBytes = 8192;
+static const size_t kFakeIrisXEMaxVbtBytes = 16384;
 
 // Tiger Lake has 4 DDI ports: A, B, C, D (some shared with USB-C/TC)
 enum class TGLConnectorType {
@@ -146,6 +146,9 @@ private:
     bool m_vbtLoaded;
     uint16_t m_vbtVersion;
     uint16_t m_bdbVersion;
+    uint8_t m_opregionMajor;
+    uint8_t m_opregionMinor;
+    uint32_t m_opregionMboxes;
     size_t m_vbtLength;
     uint8_t m_vbtStorage[kFakeIrisXEMaxVbtBytes];
     
@@ -241,6 +244,7 @@ private:
     bool loadVBT();
     bool loadVBTFromOpRegion();
     bool loadVBTFromRegistry();
+    bool validateVBTBlob(const uint8_t* bytes, size_t length, const char* source) const;
     bool parseVBTConnectors();
     bool applyVBTChildDevice(const uint8_t* childBytes, uint8_t childSize, uint8_t slotIndex);
     bool decodeChildDeviceToConnector(const uint8_t* childBytes, uint8_t childSize, TGLConnectorDesc& outConn) const;

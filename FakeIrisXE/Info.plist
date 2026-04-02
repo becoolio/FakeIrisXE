@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.299</string>
+	<string>1.0.300</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.299</string>
+	<string>1.0.300</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V299 - AUX/DPCD EDID, VBT discovery, proof diagnostics, and accelerator contract updates</string>
+	<string>FakeIrisXe V300 - OpRegion RVDA VBT, native AUX EDID, connector cleanup, and proof support updates</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

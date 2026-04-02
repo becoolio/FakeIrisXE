@@ -556,7 +556,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V299 - AUX/VBT/diagnostics update     ║\n");
+    IOLog("║       FAKEIRISXE V300 - native VBT/EDID bring-up       ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1112,7 +1112,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V299 - AUX/VBT/diagnostics update    ║\n");
+    IOLog("║       FAKEIRISXE V300 - native VBT/EDID bring-up      ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1913,7 +1913,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
     {
         if (publishDisplayIdentityFromEdid()) {
-            IOLog("[V299] Native panel EDID/identity detected - fallback display injection skipped\n");
+            IOLog("[V300] Native panel EDID/identity detected - fallback display injection skipped\n");
         } else {
         uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
         uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
@@ -2868,7 +2868,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V299, AUX/VBT/diagnostic proof path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V300, native VBT/EDID proof path)\n");
     return true;
 
 }
@@ -5673,7 +5673,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
 
     applyBacklightPresetForIdentity(vendorID, productID);
 
-    IOLog("[V299] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V300] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6096,7 +6096,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V299] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V300] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6604,17 +6604,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V299] ============================================\n");
-    IOLog("(FakeIrisXE)[V299] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V299] ============================================\n");
+    IOLog("(FakeIrisXE)[V300] ============================================\n");
+    IOLog("(FakeIrisXE)[V300] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V300] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V299] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V300] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V299] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V300] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V299] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V299] ============================================\n");
+    IOLog("(FakeIrisXE)[V300] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V300] ============================================\n");
     return success;
 }
 

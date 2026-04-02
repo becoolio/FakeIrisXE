@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V299 - AUX/DPCD EDID, VBT discovery, proof diagnostics, and accelerator contract updates</string>
+	<string>FakeIrisXe V300 - OpRegion RVDA VBT, native AUX EDID, connector cleanup, and proof support updates</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.299</string>
+	<string>1.0.300</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.299</string>
+	<string>1.0.300</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>

@@ -28,6 +28,13 @@ static const uint8_t kDpAuxReplyAck = 0x0;
 static const uint8_t kDpAuxReplyNack = 0x1;
 static const uint8_t kDpAuxReplyDefer = 0x2;
 
+static const uint32_t kOpRegionSize = 8u * 1024u;
+static const uint32_t kOpRegionVbtOffset = 0x400u;
+static const uint32_t kOpRegionAsleOffset = 0x300u;
+static const uint32_t kOpRegionAsleExtOffset = 0x1C00u;
+static const uint32_t kMboxAsle = (1u << 2);
+static const uint32_t kMboxAsleExt = (1u << 4);
+
 static const uint8_t kVbtBlockGeneralDefinitions = 2;
 static const uint8_t kVbtBlockEdp = 27;
 static const uint8_t kVbtBlockLfpOptions = 40;
@@ -81,6 +88,50 @@ struct __attribute__((packed)) VbtHeader {
     uint8_t reserved0;
     uint32_t bdbOffset;
     uint32_t aimOffset[4];
+};
+
+struct __attribute__((packed)) OpRegionHeader {
+    char signature[16];
+    uint32_t sizeKb;
+    struct {
+        uint8_t revision;
+        uint8_t minor;
+        uint8_t major;
+        uint8_t reserved;
+    } over;
+    uint8_t biosVer[32];
+    uint8_t vbiosVer[16];
+    uint8_t driverVer[16];
+    uint32_t mboxes;
+    uint32_t driverModel;
+    uint32_t pcon;
+    uint8_t dver[32];
+    uint8_t reserved[124];
+};
+
+struct __attribute__((packed)) OpRegionAsle {
+    uint32_t ardy;
+    uint32_t aslc;
+    uint32_t tche;
+    uint32_t alsi;
+    uint32_t bclp;
+    uint32_t pfit;
+    uint32_t cblv;
+    uint16_t bclm[20];
+    uint32_t cpfm;
+    uint32_t epfm;
+    uint8_t plut[74];
+    uint32_t pfmb;
+    uint32_t cddv;
+    uint32_t pcft;
+    uint32_t srot;
+    uint32_t iuer;
+    uint64_t fdss;
+    uint32_t fdsp;
+    uint32_t stat;
+    uint64_t rvda;
+    uint32_t rvds;
+    uint8_t reserved[58];
 };
 
 struct __attribute__((packed)) BdbHeader {
@@ -249,6 +300,42 @@ static bool isValidEdidChecksum(const uint8_t* edid)
     return sum == 0;
 }
 
+static const char* auxReplyName(uint8_t reply)
+{
+    switch (reply) {
+        case kDpAuxReplyAck:
+            return "ACK";
+        case kDpAuxReplyNack:
+            return "NACK";
+        case kDpAuxReplyDefer:
+            return "DEFER";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static uint16_t dpcdMaxLinkRateMbps(uint8_t encodedRate)
+{
+    switch (encodedRate) {
+        case 0x06:
+            return 1620;
+        case 0x08:
+            return 2160;
+        case 0x09:
+            return 2430;
+        case 0x0A:
+            return 2700;
+        case 0x0C:
+            return 3240;
+        case 0x14:
+            return 5400;
+        case 0x1E:
+            return 8100;
+        default:
+            return 0;
+    }
+}
+
 } // namespace
 
 FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
@@ -259,6 +346,9 @@ FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
       m_vbtLoaded(false),
       m_vbtVersion(0),
       m_bdbVersion(0),
+      m_opregionMajor(0),
+      m_opregionMinor(0),
+      m_opregionMboxes(0),
       m_vbtLength(0)
 {
     bzero(m_connectors, sizeof(m_connectors));
@@ -377,9 +467,12 @@ void FakeIrisXEConnectorManager::probeConnectors()
         bool auxCandidate = conn.isInternal || hpdPresent;
 
         if (conn.type == TGLConnectorType::HDMI) {
-            conn.present = hpdPresent;
-            IOLog("[TGL-Connector] Connector %u HDMI present=%u (HPD only, no AUX EDID path yet)\n",
+            const bool ddiActive = isDDIEnabled(conn.ddiPort);
+            conn.present = hpdPresent && ddiActive;
+            IOLog("[TGL-Connector] Connector %u HDMI hpd=%u ddiActive=%u present=%u (conservative HPD policy)\n",
                   i,
+                  hpdPresent ? 1u : 0u,
+                  ddiActive ? 1u : 0u,
                   conn.present ? 1u : 0u);
             continue;
         }
@@ -387,11 +480,20 @@ void FakeIrisXEConnectorManager::probeConnectors()
         if (auxCandidate && readDPCD(conn, 0x00000u, conn.dpcd, sizeof(conn.dpcd))) {
             conn.hasDpcd = true;
             conn.present = true;
+            const uint8_t dpcdRev = conn.dpcd[0];
+            const uint16_t maxLinkRate = dpcdMaxLinkRateMbps(conn.dpcd[1]);
+            const uint8_t maxLanes = conn.dpcd[2] & 0x1Fu;
+            if (maxLinkRate) {
+                conn.maxBitRate = maxLinkRate;
+            }
+            if (maxLanes >= 1u && maxLanes <= 4u) {
+                conn.maxLanes = maxLanes;
+            }
             IOLog("[TGL-Connector] Connector %u %s DPCD rev=%u.%u maxLink=0x%02X lanes=0x%02X\n",
                   i,
                   connectorTypeName(conn.type),
-                  conn.dpcd[0],
-                  conn.dpcd[1],
+                  dpcdRev >> 4,
+                  dpcdRev & 0x0Fu,
                   conn.dpcd[1],
                   conn.dpcd[2]);
         } else if (conn.isInternal && isEDPPanelPowered()) {
@@ -944,17 +1046,37 @@ bool FakeIrisXEConnectorManager::auxI2CWrite(TGLAUXChannel aux, uint8_t address,
     uint32_t recvBytes = sizeof(recv);
     for (uint32_t attempt = 0; attempt < 5u; ++attempt) {
         if (!auxTransfer(aux, send, sendBytes, recv, recvBytes) || recvBytes < 1u) {
+            IOLog("[TGL-Connector] AUX I2C write req=0x%X addr=0x%02X bytes=%u mot=%u attempt=%u transfer failed\n",
+                  request,
+                  address,
+                  size,
+                  mot ? 1u : 0u,
+                  attempt + 1u);
             recvBytes = sizeof(recv);
             continue;
         }
 
         const uint8_t reply = recv[0] >> 4;
+        IOLog("[TGL-Connector] AUX I2C write req=0x%X addr=0x%02X bytes=%u mot=%u attempt=%u reply=%s(0x%X) payload=%u\n",
+              request,
+              address,
+              size,
+              mot ? 1u : 0u,
+              attempt + 1u,
+              auxReplyName(reply),
+              reply,
+              recvBytes);
         if (reply == kDpAuxReplyDefer) {
             IOSleep(1);
             recvBytes = sizeof(recv);
             continue;
         }
-        return reply == kDpAuxReplyAck;
+        if (reply == kDpAuxReplyAck) {
+            return true;
+        }
+        if (reply == kDpAuxReplyNack) {
+            return false;
+        }
     }
 
     return false;
@@ -981,15 +1103,31 @@ bool FakeIrisXEConnectorManager::auxI2CRead(TGLAUXChannel aux, uint8_t address, 
 
         for (uint32_t attempt = 0; attempt < 5u; ++attempt) {
             if (!auxTransfer(aux, send, sizeof(send), recv, recvBytes) || recvBytes < 1u) {
+                IOLog("[TGL-Connector] AUX I2C read addr=0x%02X bytes=%u mot=%u attempt=%u transfer failed\n",
+                      address,
+                      chunk,
+                      mot ? 1u : 0u,
+                      attempt + 1u);
                 recvBytes = sizeof(recv);
                 continue;
             }
 
             const uint8_t reply = recv[0] >> 4;
+            IOLog("[TGL-Connector] AUX I2C read addr=0x%02X bytes=%u mot=%u attempt=%u reply=%s(0x%X) payload=%u\n",
+                  address,
+                  chunk,
+                  mot ? 1u : 0u,
+                  attempt + 1u,
+                  auxReplyName(reply),
+                  reply,
+                  recvBytes);
             if (reply == kDpAuxReplyDefer) {
                 IOSleep(1);
                 recvBytes = sizeof(recv);
                 continue;
+            }
+            if (reply == kDpAuxReplyNack) {
+                return false;
             }
             if (reply != kDpAuxReplyAck || recvBytes < chunk + 1u) {
                 return false;
@@ -1030,12 +1168,20 @@ bool FakeIrisXEConnectorManager::readEDID(TGLConnectorDesc& conn)
         const uint8_t segment = static_cast<uint8_t>(blockIndex / 2u);
         uint8_t offset = static_cast<uint8_t>((blockIndex % 2u) ? 0x80u : 0x00u);
 
-        if (!auxI2CWrite(conn.auxChannel, 0x30u, &segment, 1u, false)) {
-            IOLog("[TGL-Connector] EDID segment write failed for connector %u block %u\n", conn.index, blockIndex);
-            return false;
+        if (blockIndex >= 2u) {
+            if (!auxI2CWrite(conn.auxChannel, 0x30u, &segment, 1u, false)) {
+                IOLog("[TGL-Connector] EDID segment write failed for connector %u block %u segment=%u\n",
+                      conn.index,
+                      blockIndex,
+                      segment);
+                return false;
+            }
         }
         if (!auxI2CWrite(conn.auxChannel, 0x50u, &offset, 1u, true)) {
-            IOLog("[TGL-Connector] EDID offset write failed for connector %u block %u\n", conn.index, blockIndex);
+            IOLog("[TGL-Connector] EDID offset write failed for connector %u block %u offset=0x%02X\n",
+                  conn.index,
+                  blockIndex,
+                  offset);
             return false;
         }
         if (!auxI2CRead(conn.auxChannel, 0x50u, out, 128u, false)) {
@@ -1081,6 +1227,57 @@ bool FakeIrisXEConnectorManager::loadVBT()
     return loadVBTFromRegistry();
 }
 
+bool FakeIrisXEConnectorManager::validateVBTBlob(const uint8_t* bytes, size_t length, const char* source) const
+{
+    if (!bytes || length < sizeof(VbtHeader)) {
+        IOLog("[TGL-Connector] %s VBT rejected: blob too small (%llu bytes)\n",
+              source ? source : "unknown",
+              static_cast<unsigned long long>(length));
+        return false;
+    }
+
+    if (memcmp(bytes, "$VBT", 4) != 0) {
+        IOLog("[TGL-Connector] %s VBT rejected: missing $VBT signature\n", source ? source : "unknown");
+        return false;
+    }
+
+    const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes);
+    const uint16_t headerSize = readLe16(&header->headerSize);
+    const uint16_t vbtSize = readLe16(&header->vbtSize);
+    const uint32_t bdbOffset = readLe32(&header->bdbOffset);
+    if (headerSize < sizeof(VbtHeader) || vbtSize < headerSize || vbtSize > length) {
+        IOLog("[TGL-Connector] %s VBT rejected: headerSize=%u vbtSize=%u blobLen=%llu\n",
+              source ? source : "unknown",
+              headerSize,
+              vbtSize,
+              static_cast<unsigned long long>(length));
+        return false;
+    }
+
+    if (bdbOffset < headerSize || bdbOffset + sizeof(BdbHeader) > vbtSize) {
+        IOLog("[TGL-Connector] %s VBT rejected: invalid BDB offset 0x%X (header=%u size=%u)\n",
+              source ? source : "unknown",
+              bdbOffset,
+              headerSize,
+              vbtSize);
+        return false;
+    }
+
+    const BdbHeader* bdbHeader = reinterpret_cast<const BdbHeader*>(bytes + bdbOffset);
+    const uint16_t bdbHeaderSize = readLe16(&bdbHeader->headerSize);
+    const uint16_t bdbSize = readLe16(&bdbHeader->bdbSize);
+    if (bdbHeaderSize < sizeof(BdbHeader) || bdbSize < bdbHeaderSize || bdbOffset + bdbSize > vbtSize) {
+        IOLog("[TGL-Connector] %s VBT rejected: invalid BDB header size=%u total=%u vbtSize=%u\n",
+              source ? source : "unknown",
+              bdbHeaderSize,
+              bdbSize,
+              vbtSize);
+        return false;
+    }
+
+    return true;
+}
+
 bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
 {
     if (!m_provider) {
@@ -1093,7 +1290,7 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
         return false;
     }
 
-    IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(asls, 0x2000u, kIODirectionInOut);
+    IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(asls, kOpRegionSize, kIODirectionInOut);
     if (!desc) {
         IOLog("[TGL-Connector] Failed to create OpRegion descriptor @0x%08X\n", asls);
         return false;
@@ -1109,36 +1306,95 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
     bool loaded = false;
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(map->getVirtualAddress());
     const uint32_t length = static_cast<uint32_t>(map->getLength());
-    if (bytes && length >= sizeof(VbtHeader)) {
-        const uint32_t scanStart = 0x400u;
-        for (uint32_t off = scanStart; off + sizeof(VbtHeader) <= length; ++off) {
-            if (memcmp(bytes + off, "$VBT", 4) != 0) {
-                continue;
+    if (bytes && length >= sizeof(OpRegionHeader)) {
+        const OpRegionHeader* opregion = reinterpret_cast<const OpRegionHeader*>(bytes);
+        if (memcmp(opregion->signature, "IntelGraphicsMem", 16) != 0) {
+            IOLog("[TGL-Connector] OpRegion signature mismatch at ASLS=0x%08X\n", asls);
+        } else {
+            m_opregionMajor = opregion->over.major;
+            m_opregionMinor = opregion->over.minor;
+            m_opregionMboxes = readLe32(&opregion->mboxes);
+            IOLog("[TGL-Connector] OpRegion v%u.%u size=%uKB mboxes=0x%08X ASLS=0x%08X\n",
+                  m_opregionMajor,
+                  m_opregionMinor,
+                  readLe32(&opregion->sizeKb),
+                  m_opregionMboxes,
+                  asls);
+
+            if ((m_opregionMboxes & kMboxAsle) != 0u && length >= kOpRegionAsleOffset + sizeof(OpRegionAsle)) {
+                const OpRegionAsle* asle = reinterpret_cast<const OpRegionAsle*>(bytes + kOpRegionAsleOffset);
+                uint64_t rvda = asle->rvda;
+                const uint32_t rvds = asle->rvds;
+                IOLog("[TGL-Connector] OpRegion ASLE RVDA=0x%llX RVDS=0x%X\n",
+                      static_cast<unsigned long long>(rvda),
+                      rvds);
+
+                if (rvda != 0u && rvds >= sizeof(VbtHeader)) {
+                    if (m_opregionMajor > 2u || (m_opregionMajor == 2u && m_opregionMinor >= 1u)) {
+                        rvda += asls;
+                    }
+
+                    IOMemoryDescriptor* vbtDesc = IOMemoryDescriptor::withPhysicalAddress(rvda, rvds, kIODirectionInOut);
+                    if (vbtDesc) {
+                        IOMemoryMap* vbtMap = vbtDesc->map();
+                        if (vbtMap) {
+                            const uint8_t* rvdaBytes = reinterpret_cast<const uint8_t*>(vbtMap->getVirtualAddress());
+                            const uint32_t rvdaLen = static_cast<uint32_t>(vbtMap->getLength());
+                            if (validateVBTBlob(rvdaBytes, rvdaLen, "OpRegion RVDA")) {
+                                const VbtHeader* header = reinterpret_cast<const VbtHeader*>(rvdaBytes);
+                                const uint16_t vbtSize = readLe16(&header->vbtSize);
+                                m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
+                                memcpy(m_vbtStorage, rvdaBytes, m_vbtLength);
+                                m_vbtVersion = readLe16(&header->version);
+                                m_vbtLoaded = true;
+                                loaded = true;
+                                IOLog("[TGL-Connector] Loaded external VBT from OpRegion RVDA: phys=0x%llX size=%u version=%u\n",
+                                      static_cast<unsigned long long>(rvda),
+                                      m_vbtLength,
+                                      m_vbtVersion);
+                            }
+                            vbtMap->release();
+                        } else {
+                            IOLog("[TGL-Connector] Failed to map external RVDA VBT at 0x%llX size=0x%X\n",
+                                  static_cast<unsigned long long>(rvda),
+                                  rvds);
+                        }
+                        vbtDesc->release();
+                    } else {
+                        IOLog("[TGL-Connector] Failed to create descriptor for RVDA VBT at 0x%llX size=0x%X\n",
+                              static_cast<unsigned long long>(rvda),
+                              rvds);
+                    }
+                }
             }
 
-            const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes + off);
-            const uint16_t vbtSize = readLe16(&header->vbtSize);
-            const uint32_t bdbOffset = readLe32(&header->bdbOffset);
-            if (vbtSize < sizeof(VbtHeader) || off + vbtSize > length || bdbOffset >= vbtSize) {
-                continue;
+            if (!loaded) {
+                const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : kOpRegionSize;
+                if (inlineVbtLimit > kOpRegionVbtOffset && validateVBTBlob(bytes + kOpRegionVbtOffset, inlineVbtLimit - kOpRegionVbtOffset, "OpRegion mailbox4")) {
+                    const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes + kOpRegionVbtOffset);
+                    const uint16_t vbtSize = readLe16(&header->vbtSize);
+                    m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
+                    memcpy(m_vbtStorage, bytes + kOpRegionVbtOffset, m_vbtLength);
+                    m_vbtVersion = readLe16(&header->version);
+                    m_vbtLoaded = true;
+                    loaded = true;
+                    IOLog("[TGL-Connector] Loaded inline VBT from OpRegion mailbox4: offset=0x%X size=%u version=%u\n",
+                          kOpRegionVbtOffset,
+                          m_vbtLength,
+                          m_vbtVersion);
+                }
             }
-
-            m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
-            memcpy(m_vbtStorage, bytes + off, m_vbtLength);
-            m_vbtVersion = readLe16(&header->version);
-            m_vbtLoaded = true;
-            loaded = true;
-            IOLog("[TGL-Connector] Loaded VBT from OpRegion: ASLS=0x%08X offset=0x%X size=%u version=%u\n",
-                  asls,
-                  off,
-                  m_vbtLength,
-                  m_vbtVersion);
-            break;
         }
     }
 
     map->release();
     desc->release();
+    if (!loaded) {
+        IOLog("[TGL-Connector] No valid VBT found in OpRegion (major=%u minor=%u mboxes=0x%08X)\n",
+              m_opregionMajor,
+              m_opregionMinor,
+              m_opregionMboxes);
+    }
     return loaded;
 }
 
@@ -1161,13 +1417,14 @@ bool FakeIrisXEConnectorManager::loadVBTFromRegistry()
         }
 
         const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data->getBytesNoCopy());
-        if (!bytes || memcmp(bytes, "$VBT", 4) != 0) {
+        if (!validateVBTBlob(bytes, data->getLength(), kKeys[i])) {
             continue;
         }
 
-        m_vbtLength = data->getLength() > kFakeIrisXEMaxVbtBytes ? kFakeIrisXEMaxVbtBytes : data->getLength();
-        memcpy(m_vbtStorage, bytes, m_vbtLength);
         const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes);
+        const uint16_t vbtSize = readLe16(&header->vbtSize);
+        m_vbtLength = vbtSize > kFakeIrisXEMaxVbtBytes ? kFakeIrisXEMaxVbtBytes : vbtSize;
+        memcpy(m_vbtStorage, bytes, m_vbtLength);
         m_vbtVersion = readLe16(&header->version);
         m_vbtLoaded = true;
         IOLog("[TGL-Connector] Loaded VBT from provider property %s size=%u version=%u\n",
@@ -1237,16 +1494,24 @@ bool FakeIrisXEConnectorManager::decodeChildDeviceToConnector(const uint8_t* chi
     const uint8_t laneInfo = childByte(childBytes, childSize, 23u);
     const uint8_t supportInfo = childByte(childBytes, childSize, 24u);
     const uint8_t auxChannel = childByte(childBytes, childSize, 25u);
+    const uint8_t dongleDetect = childByte(childBytes, childSize, 26u);
+    const uint8_t dvoWiring = childByte(childBytes, childSize, 28u);
+    const uint16_t extendedType = childLe16(childBytes, childSize, 30u);
+    const uint8_t dvoFunction = childByte(childBytes, childSize, 32u);
     const uint8_t typeCFlags = childByte(childBytes, childSize, 33u);
+    const uint8_t dpMaxRateField = childByte(childBytes, childSize, 38u) & 0x7u;
 
     const bool isInternal = (handle == kDeviceHandleLfp1 || handle == kDeviceHandleLfp2 ||
                              deviceType == kDeviceTypeEDp || deviceType == kDeviceTypeIntLfp ||
                              (deviceType & kDeviceTypeInternalConnector) != 0u);
-    const bool dpSupport = (supportInfo & (1u << 1)) != 0u || deviceType == kDeviceTypeDp ||
+    const bool dpSupport = deviceType == kDeviceTypeDp ||
                            deviceType == kDeviceTypeEDp ||
-                           (deviceType & kDeviceTypeDisplayPortOutput) != 0u;
-    const bool hdmiSupport = (supportInfo & (1u << 0)) != 0u || deviceType == kDeviceTypeHdmi ||
-                             (deviceType & kDeviceTypeTmdsOutput) != 0u;
+                           (deviceType & kDeviceTypeDisplayPortOutput) != 0u ||
+                           (supportInfo & (1u << 1)) != 0u ||
+                           auxChannel != 0u;
+    const bool hdmiSupport = deviceType == kDeviceTypeHdmi ||
+                             (deviceType & kDeviceTypeTmdsOutput) != 0u ||
+                             (supportInfo & (1u << 0)) != 0u;
     const bool dpUsbTypeC = (typeCFlags & 0x1u) != 0u;
 
     TGLConnectorType type = TGLConnectorType::Unknown;
@@ -1414,10 +1679,44 @@ bool FakeIrisXEConnectorManager::decodeChildDeviceToConnector(const uint8_t* chi
     outConn.hdpBit = hpdBit;
     outConn.maxLanes = maxLanes;
     outConn.maxBitRate = (type == TGLConnectorType::HDMI) ? 5940 : 10100;
+    switch (dpMaxRateField) {
+        case 1:
+            outConn.maxBitRate = 1620;
+            break;
+        case 2:
+            outConn.maxBitRate = 2700;
+            break;
+        case 3:
+            outConn.maxBitRate = 5400;
+            break;
+        case 4:
+            outConn.maxBitRate = 8100;
+            break;
+        case 5:
+            outConn.maxBitRate = 10000;
+            break;
+        default:
+            break;
+    }
     outConn.isInternal = isInternal;
     outConn.supportsAudio = (type != TGLConnectorType::eDP);
     outConn.discoveredFromVbt = true;
     outConn.panelType = 0xFFu;
+
+    IOLog("[TGL-Connector] VBT child handle=0x%04X type=0x%04X dvo=0x%02X aux=0x%02X ddc=0x%02X typeC=%u support=0x%02X detect=0x%02X wire=0x%02X ext=0x%04X func=0x%02X -> %s on %s\n",
+          handle,
+          deviceType,
+          dvoPort,
+          auxChannel,
+          childByte(childBytes, childSize, 19u),
+          dpUsbTypeC ? 1u : 0u,
+          supportInfo,
+          dongleDetect,
+          dvoWiring,
+          extendedType,
+          dvoFunction,
+          connectorTypeName(type),
+          ddiName(mappedDdi));
 
     return true;
 }
@@ -1464,6 +1763,7 @@ bool FakeIrisXEConnectorManager::parseVBTConnectors()
     }
 
     const uint8_t childDevSize = generalDefs[4];
+    const uint8_t advertisedChildCount = (generalDefsSize > 5u) ? generalDefs[5] : 0u;
     if (childDevSize < 23u || generalDefsSize <= 5u) {
         IOLog("[TGL-Connector] VBT GENERAL_DEFINITIONS child size invalid: %u\n", childDevSize);
         return false;
@@ -1476,6 +1776,12 @@ bool FakeIrisXEConnectorManager::parseVBTConnectors()
     const uint8_t* children = generalDefs + 5u;
     const uint16_t childBytes = generalDefsSize - 5u;
     const uint16_t childCount = childBytes / childDevSize;
+    IOLog("[TGL-Connector] VBT GENERAL_DEFINITIONS childSize=%u advertisedCount=%u computedCount=%u bootDisplay=0x%02X%02X\n",
+          childDevSize,
+          advertisedChildCount,
+          childCount,
+          generalDefs[3],
+          generalDefs[2]);
 
     uint8_t nextSlot = 0;
     for (uint16_t pass = 0; pass < 2 && nextSlot < 4u; ++pass) {
