@@ -130,6 +130,7 @@ public:
     const uint8_t* getPrimaryDisplayEDID(uint16_t* outLength, TGLConnectorDesc** outConnector) const;
     const char* getOpRegionSource() const { return m_opregionSource; }
     uint64_t getOpRegionPhys() const { return m_opregionPhys; }
+    uint32_t getOpRegionHeaderOffset() const { return m_opregionHeaderOffset; }
     bool isOpRegionSignatureValid() const { return m_opregionSignatureValid; }
     uint64_t getOpRegionRvda() const { return m_opregionRvda; }
     uint32_t getOpRegionRvds() const { return m_opregionRvds; }
@@ -158,6 +159,7 @@ private:
     uint8_t m_opregionMinor;
     uint32_t m_opregionMboxes;
     uint64_t m_opregionPhys;
+    uint32_t m_opregionHeaderOffset;
     uint64_t m_opregionRvda;
     uint32_t m_opregionRvds;
     bool m_opregionSignatureValid;

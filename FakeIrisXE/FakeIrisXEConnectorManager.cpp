@@ -380,6 +380,22 @@ static OSObject* copyPropertyFromServiceChain(IOService* service, const char* ke
     return nullptr;
 }
 
+static uint32_t findOpRegionHeaderOffset(const uint8_t* bytes, uint32_t length)
+{
+    if (!bytes || length < 16u) {
+        return UINT32_MAX;
+    }
+
+    const uint32_t scanLimit = (length < 0x100u) ? length : 0x100u;
+    for (uint32_t offset = 0; offset + 16u <= scanLimit; ++offset) {
+        if (memcmp(bytes + offset, "IntelGraphicsMem", 16) == 0) {
+            return offset;
+        }
+    }
+
+    return UINT32_MAX;
+}
+
 } // namespace
 
 FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
@@ -394,6 +410,7 @@ FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
       m_opregionMinor(0),
       m_opregionMboxes(0),
       m_opregionPhys(0),
+      m_opregionHeaderOffset(0),
       m_opregionRvda(0),
       m_opregionRvds(0),
       m_opregionSignatureValid(false),
@@ -1337,6 +1354,7 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
     m_opregionMinor = 0;
     m_opregionMboxes = 0;
     m_opregionPhys = 0;
+    m_opregionHeaderOffset = 0;
     m_opregionRvda = 0;
     m_opregionRvds = 0;
     m_opregionSignatureValid = false;
@@ -1367,14 +1385,18 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
         }
 
         logRawBytes(source ? source : "opregion", bytes, length);
-        const OpRegionHeader* opregion = reinterpret_cast<const OpRegionHeader*>(bytes);
-        if (memcmp(opregion->signature, "IntelGraphicsMem", 16) != 0) {
+        const uint32_t headerOffset = findOpRegionHeaderOffset(bytes, length);
+        if (headerOffset == UINT32_MAX || headerOffset + sizeof(OpRegionHeader) > length) {
             IOLog("[TGL-Connector] %s rejected: OpRegion signature mismatch\n", source ? source : "opregion");
             return false;
         }
 
+        const OpRegionHeader* opregion = reinterpret_cast<const OpRegionHeader*>(bytes + headerOffset);
+        const uint64_t adjustedPhysBase = physBase ? (physBase + headerOffset) : 0;
+
         m_opregionSignatureValid = true;
-        m_opregionPhys = physBase;
+        m_opregionPhys = adjustedPhysBase;
+        m_opregionHeaderOffset = headerOffset;
         m_opregionMajor = opregion->over.major;
         m_opregionMinor = opregion->over.minor;
         m_opregionMboxes = opregion->mboxes;
@@ -1382,21 +1404,22 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
             strlcpy(m_opregionSource, source, sizeof(m_opregionSource));
         }
 
-        IOLog("[TGL-Connector] %s accepted: OpRegion v%u.%u size=%uKB mboxes=0x%08X phys=0x%llX\n",
+        IOLog("[TGL-Connector] %s accepted: header_offset=0x%X adjusted_phys=0x%llX v%u.%u size=%uKB mboxes=0x%08X\n",
               source ? source : "opregion",
+              headerOffset,
+              static_cast<unsigned long long>(adjustedPhysBase),
               m_opregionMajor,
               m_opregionMinor,
               opregion->sizeKb,
-              m_opregionMboxes,
-              static_cast<unsigned long long>(physBase));
+              m_opregionMboxes);
 
-        if ((m_opregionMboxes & kMboxAsle) != 0u && length >= kOpRegionAsleOffset + sizeof(OpRegionAsle)) {
-            const OpRegionAsle* asle = reinterpret_cast<const OpRegionAsle*>(bytes + kOpRegionAsleOffset);
+        if ((m_opregionMboxes & kMboxAsle) != 0u && headerOffset + kOpRegionAsleOffset + sizeof(OpRegionAsle) <= length) {
+            const OpRegionAsle* asle = reinterpret_cast<const OpRegionAsle*>(bytes + headerOffset + kOpRegionAsleOffset);
             uint64_t rvda = asle->rvda;
             m_opregionRvds = asle->rvds;
             if (rvda != 0u && m_opregionRvds >= sizeof(VbtHeader)) {
                 if (m_opregionMajor > 2u || (m_opregionMajor == 2u && m_opregionMinor >= 1u)) {
-                    rvda += physBase;
+                    rvda += adjustedPhysBase;
                 }
                 m_opregionRvda = rvda;
                 IOLog("[TGL-Connector] %s RVDA=0x%llX RVDS=0x%X\n",
@@ -1433,8 +1456,12 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
             }
         }
 
-        const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : length;
-        if (inlineVbtLimit > kOpRegionVbtOffset && consumeVbtBlob(bytes + kOpRegionVbtOffset, inlineVbtLimit - kOpRegionVbtOffset, "opregion-inline", physBase + kOpRegionVbtOffset)) {
+        const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : (length - headerOffset);
+        if (inlineVbtLimit > kOpRegionVbtOffset && headerOffset + inlineVbtLimit <= length &&
+            consumeVbtBlob(bytes + headerOffset + kOpRegionVbtOffset,
+                           inlineVbtLimit - kOpRegionVbtOffset,
+                           "opregion-inline",
+                           adjustedPhysBase ? (adjustedPhysBase + kOpRegionVbtOffset) : 0)) {
             return true;
         }
 

@@ -2072,8 +2072,10 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
     }
 
     // Step 8: Poll for boot - expect bootrom=0x76, kernel=0xF0
-    IOLog("(FakeIrisXE) [GuC][V298][Linux] Polling for bootrom...\n");
+    IOLog("(FakeIrisXE) [GuC][V302][Linux] Polling for bootrom (state-change logging)...\n");
     bool bootSuccess = false;
+    uint32_t lastStatus = 0xFFFFFFFFu;
+    uint32_t stableRepeats = 0;
     for (int p = 0; p < 200 && !bootSuccess; p++) {
         IOSleep(10);
         uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
@@ -2082,9 +2084,17 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
         uint32_t mia = (status >> 16) & 0x07U;
         uint32_t auth = (status >> 30) & 0x03U;
 
-        if (p < 10 || p % 20 == 0 || bootrom != 0 || kernel != 0) {
-            IOLog("(FakeIrisXE) [GuC][V298][Linux] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X mia=0x%X auth=0x%X\n",
+        if (status != lastStatus) {
+            IOLog("(FakeIrisXE) [GuC][V302][Linux] [%3dms] STATUS change -> 0x%08X bootrom=0x%02X kernel=0x%02X mia=0x%X auth=0x%X\n",
                   p * 10, status, bootrom, kernel, mia, auth);
+            lastStatus = status;
+            stableRepeats = 0;
+        } else {
+            ++stableRepeats;
+            if (stableRepeats == 20 || stableRepeats == 100) {
+                IOLog("(FakeIrisXE) [GuC][V302][Linux] [%3dms] STATUS still 0x%08X for %u polls (bootrom=0x%02X kernel=0x%02X)\n",
+                      p * 10, status, stableRepeats, bootrom, kernel);
+            }
         }
 
         if (kernel == 0xF0 && bootrom == 0x76) {
@@ -2100,8 +2110,8 @@ bool FakeIrisXEGuC::runLinuxBringUpPath(const uint8_t* fwData, size_t fwSize, ui
 
     if (!bootSuccess) {
         uint32_t finalStatus = fOwner->safeMMIORead(GUC_STATUS_V137);
-        IOLog("(FakeIrisXE) [GuC][V298][Linux] Boot failed: STATUS=0x%08X\n", finalStatus);
-        IOLog("(FakeIrisXE) [GuC][V298][Linux] bootrom=0x%02X kernel=0x%02X mia=0x%X\n",
+        IOLog("(FakeIrisXE) [GuC][V302][Linux] Boot failed: STATUS=0x%08X\n", finalStatus);
+        IOLog("(FakeIrisXE) [GuC][V302][Linux] bootrom=0x%02X kernel=0x%02X mia=0x%X\n",
               (finalStatus >> 1) & 0x7FU, (finalStatus >> 8) & 0xFFU, (finalStatus >> 16) & 0x07U);
         dumpGucMapProbe("v295-linux-failure");
         releaseForceWake();
@@ -2122,10 +2132,10 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
         return false;
     }
 
-    IOLog("(FakeIrisXE) [GuC][V298][Minimal] ============================================\n");
-    IOLog("(FakeIrisXE) [GuC][V298][Minimal] V298: Linux-aligned minimal path\n");
-    IOLog("(FakeIrisXE) [GuC][V298][Minimal] DMA@0x2000, PRIVILEGED bit, masked DMA_CTRL, no explicit GUC_CTL write\n");
-    IOLog("(FakeIrisXE) [GuC][V298][Minimal] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V302][Minimal] ============================================\n");
+    IOLog("(FakeIrisXE) [GuC][V302][Minimal] Linux-aligned minimal path\n");
+    IOLog("(FakeIrisXE) [GuC][V302][Minimal] DMA@0x2000, PRIVILEGED bit, masked DMA_CTRL, no explicit GUC_CTL write\n");
+    IOLog("(FakeIrisXE) [GuC][V302][Minimal] ============================================\n");
 
     emitStageReport(kGuCStageForceWake, startNs, retryIndex);
     if (!acquireForceWake()) {
@@ -2241,15 +2251,25 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
 
     // Poll for boot
     bool bootSuccess = false;
+    uint32_t lastStatus = 0xFFFFFFFFu;
+    uint32_t stableRepeats = 0;
     for (int p = 0; p < 200 && !bootSuccess; p++) {
         IOSleep(10);
         uint32_t status = fOwner->safeMMIORead(GUC_STATUS_V137);
         uint32_t bootrom = (status >> 1) & 0x7FU;
         uint32_t kernel = (status >> 8) & 0xFFU;
 
-        if (p < 10 || p % 20 == 0 || bootrom != 0 || kernel != 0) {
-            IOLog("(FakeIrisXE) [GuC][V298][Minimal] [%3dms] STATUS=0x%08X bootrom=0x%02X kernel=0x%02X\n",
+        if (status != lastStatus) {
+            IOLog("(FakeIrisXE) [GuC][V302][Minimal] [%3dms] STATUS change -> 0x%08X bootrom=0x%02X kernel=0x%02X\n",
                   p * 10, status, bootrom, kernel);
+            lastStatus = status;
+            stableRepeats = 0;
+        } else {
+            ++stableRepeats;
+            if (stableRepeats == 20 || stableRepeats == 100) {
+                IOLog("(FakeIrisXE) [GuC][V302][Minimal] [%3dms] STATUS still 0x%08X for %u polls (bootrom=0x%02X kernel=0x%02X)\n",
+                      p * 10, status, stableRepeats, bootrom, kernel);
+            }
         }
 
         if (kernel == 0xF0 && bootrom == 0x76) {
@@ -2264,7 +2284,7 @@ bool FakeIrisXEGuC::runMinimalBringUpPath(const uint8_t* fwData, size_t fwSize, 
     }
 
     if (!bootSuccess) {
-        IOLog("(FakeIrisXE) [GuC][V298][Minimal] Boot failed: STATUS=0x%08X\n",
+        IOLog("(FakeIrisXE) [GuC][V302][Minimal] Boot failed: STATUS=0x%08X\n",
               fOwner->safeMMIORead(GUC_STATUS_V137));
         releaseForceWake();
         return false;

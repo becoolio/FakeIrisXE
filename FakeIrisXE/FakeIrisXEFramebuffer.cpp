@@ -514,6 +514,8 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
 
     setNumberProperty(service, "DisplayProductID", mergedDisplayProductID, 32);
     setNumberProperty(service, "DisplayVendorID", mergedDisplayVendorID, 32);
+    setNumberProperty(service, "IODisplayProductID", mergedDisplayProductID, 32);
+    setNumberProperty(service, "IODisplayVendorID", mergedDisplayVendorID, 32);
     setNumberProperty(service, "IODisplayGUID", kMergedDisplayGUID, 64);
     service->setProperty("DisplayProductName", mergedDisplayName);
     service->setProperty("IODisplayName", mergedDisplayName);
@@ -548,6 +550,8 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
         if (providerName && !strcmp(providerName, "display0")) {
             setNumberProperty(provider, "DisplayProductID", mergedDisplayProductID, 32);
             setNumberProperty(provider, "DisplayVendorID", mergedDisplayVendorID, 32);
+            setNumberProperty(provider, "IODisplayProductID", mergedDisplayProductID, 32);
+            setNumberProperty(provider, "IODisplayVendorID", mergedDisplayVendorID, 32);
             setNumberProperty(provider, "IODisplayGUID", kMergedDisplayGUID, 64);
             provider->setProperty("DisplayProductName", mergedDisplayName);
             setNumberProperty(provider, "IOGFlags", 4, 32);
@@ -585,7 +589,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V301 - opregion ladder + csb focus    ║\n");
+    IOLog("║       FAKEIRISXE V302 - aligned opregion + rcs focus   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1141,7 +1145,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V301 - opregion ladder + csb focus   ║\n");
+    IOLog("║       FAKEIRISXE V302 - aligned opregion + rcs focus  ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1942,7 +1946,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
     {
         if (publishDisplayIdentityFromEdid()) {
-            IOLog("[V301] Native panel EDID/identity detected - fallback display injection skipped\n");
+            IOLog("[V302] Native panel EDID/identity detected - fallback display injection skipped\n");
         } else {
         uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
         uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
@@ -2897,7 +2901,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V301, opregion ladder and CSB proof path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V302, aligned opregion and RCS proof path)\n");
     return true;
 
 }
@@ -5617,6 +5621,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         }
         setProperty("FakeIrisXEOpRegionSignatureValid", fConnectorManager->isOpRegionSignatureValid() ? kOSBooleanTrue : kOSBooleanFalse);
         setNumberProperty(this, "FakeIrisXEOpRegionPhys", fConnectorManager->getOpRegionPhys(), 64);
+        setNumberProperty(this, "FakeIrisXEOpRegionHeaderOffset", fConnectorManager->getOpRegionHeaderOffset(), 32);
         setNumberProperty(this, "FakeIrisXEOpRegionRvda", fConnectorManager->getOpRegionRvda(), 64);
         setNumberProperty(this, "FakeIrisXEOpRegionRvds", fConnectorManager->getOpRegionRvds(), 32);
         setNumberProperty(this, "FakeIrisXEVBTVersion", fConnectorManager->getVBTVersion(), 32);
@@ -5720,7 +5725,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
 
     applyBacklightPresetForIdentity(vendorID, productID);
 
-    IOLog("[V301] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V302] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6143,7 +6148,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V301] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V302] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6651,17 +6656,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V301] ============================================\n");
-    IOLog("(FakeIrisXE)[V301] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V301] ============================================\n");
+    IOLog("(FakeIrisXE)[V302] ============================================\n");
+    IOLog("(FakeIrisXE)[V302] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V302] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V301] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V302] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V301] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V302] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V301] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V301] ============================================\n");
+    IOLog("(FakeIrisXE)[V302] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V302] ============================================\n");
     return success;
 }
 

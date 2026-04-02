@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.301</string>
+	<string>1.0.302</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.301</string>
+	<string>1.0.302</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V301 - OpRegion discovery ladder, native EDID cleanup, VBT cross-checks, and CSB proof diagnostics</string>
+	<string>FakeIrisXe V302 - aligned OpRegion parsing, native identity convergence, RCS descriptor diagnostics, and quieter GuC polling</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
