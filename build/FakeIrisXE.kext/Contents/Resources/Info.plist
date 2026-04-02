@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V298 - execution proof, surface binding, BLT path, and GuC validation updates</string>
+	<string>FakeIrisXe V299 - AUX/DPCD EDID, VBT discovery, proof diagnostics, and accelerator contract updates</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.298</string>
+	<string>1.0.299</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.298</string>
+	<string>1.0.299</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>

@@ -103,6 +103,12 @@ enum ProofFailureType {
     MiPacketWrong,
     EngineHardHalted,
     NoSchedulingProgress,
+    ScratchMappingUnavailable,
+    ElspRejected,
+    CsbNoProgress,
+    ContextStateNotLoaded,
+    BatchNeverStarted,
+    ScratchWritebackMissing,
 };
 
 struct RcsProofResources {
@@ -128,6 +134,30 @@ struct RcsProofResources {
     uint32_t descLo = 0;
     uint32_t descHi = 0;
     bool submitAccepted = false;
+};
+
+struct ProofObservations {
+    bool scratchCpuMapped = false;
+    bool elspAccepted = false;
+    bool execlistStatusChanged = false;
+    bool csbAdvanced = false;
+    bool ccidChanged = false;
+    bool contextControlChanged = false;
+    bool schedulingProgress = false;
+    bool ringStateLoaded = false;
+    bool ringConsumed = false;
+    bool batchStarted = false;
+    bool acthdObserved = false;
+    uint32_t lastScratchValue = kProofScratchInitial;
+    uint32_t lastExeclistStatusLo = 0;
+    uint32_t lastExeclistStatusHi = 0;
+    uint32_t lastCsbRead = 0;
+    uint32_t lastRcsStatus = 0;
+    uint32_t lastGtError = 0;
+    uint32_t lastActhdLo = 0;
+    uint32_t lastActhdHi = 0;
+    uint32_t lastBbAddrLo = 0;
+    uint32_t lastBbAddrHi = 0;
 };
 
 static const uint32_t kGen12RcsLri0Regs[] = {
@@ -330,21 +360,56 @@ static uint32_t buildProofIndirectCtxCommands(const RcsProofResources& res, uint
 static const char* proofFailureLabel(ProofFailureType type)
 {
     switch (type) {
+        case ElspRejected:
+            return "A_ELSP_REJECTED";
         case DescriptorWrong:
-            return "A_DESCRIPTOR_FORMAT_WRONG";
+            return "B_DESCRIPTOR_FORMAT_WRONG";
         case LrcLayoutWrong:
-            return "B_LRC_LAYOUT_WRONG";
+            return "C_LRC_LAYOUT_WRONG";
+        case ContextStateNotLoaded:
+            return "D_CONTEXT_STATE_NOT_LOADED";
         case RingStateWrong:
-            return "C_RING_STATE_WRONG";
+            return "E_RING_STATE_WRONG";
+        case BatchNeverStarted:
+            return "F_BATCH_NEVER_STARTED";
         case MiPacketWrong:
-            return "D_MI_PACKET_WRONG";
+            return "G_MI_PACKET_WRONG";
+        case ScratchWritebackMissing:
+            return "H_SCRATCH_WRITEBACK_MISSING";
         case EngineHardHalted:
-            return "E_RCS_HARD_HALTED";
+            return "I_RCS_HARD_HALTED";
+        case ScratchMappingUnavailable:
+            return "J_SCRATCH_MAPPING_UNAVAILABLE";
+        case CsbNoProgress:
+            return "K_CSB_NO_PROGRESS";
         case NoSchedulingProgress:
-            return "F_NO_SCHEDULING_PROGRESS";
+            return "L_NO_SCHEDULING_PROGRESS";
         default:
             return "NONE";
     }
+}
+
+static void setProofBoolProperty(IORegistryEntry* entry, const char* key, bool value)
+{
+    if (!entry || !key) {
+        return;
+    }
+    entry->setProperty(key, value ? kOSBooleanTrue : kOSBooleanFalse);
+}
+
+static void setProofNumberProperty(IORegistryEntry* entry, const char* key, uint64_t value, uint32_t bits)
+{
+    if (!entry || !key) {
+        return;
+    }
+
+    OSNumber* number = OSNumber::withNumber(value, bits);
+    if (!number) {
+        return;
+    }
+
+    entry->setProperty(key, number);
+    number->release();
 }
 
 static void logProofDwords(const char* label, const uint32_t* words, uint32_t count)
@@ -866,7 +931,10 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
     return true;
 }
 
-static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, ProofFailureType& failure)
+static bool pollProofProgress(FakeIrisXEExeclist* self,
+                              RcsProofResources& res,
+                              ProofFailureType& failure,
+                              ProofObservations& observations)
 {
     if (!self || !self->fOwner || !res.scratchGem) {
         failure = LrcLayoutWrong;
@@ -875,9 +943,10 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
 
     volatile uint32_t* scratchCpu = (volatile uint32_t*)self->fOwner->ggttGetCPUAddr(res.scratchGem);
     if (!scratchCpu) {
-        failure = LrcLayoutWrong;
+        failure = ScratchMappingUnavailable;
         return false;
     }
+    observations.scratchCpuMapped = true;
 
     const uint32_t initialStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
     const uint32_t initialStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
@@ -885,10 +954,7 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
     const uint32_t initialCcid = self->mmioRead32(kExecCcidReg);
     const uint32_t initialCtxCtrl = self->mmioRead32(kExecContextControlReg);
 
-    bool elspAccepted = res.submitAccepted;
-    bool schedulingProgress = false;
-    bool ringStateLoaded = false;
-    bool ringConsumed = false;
+    observations.elspAccepted = res.submitAccepted;
 
     IOLog("(FakeIrisXE) [V274] ========== EXECUTION POLL ==========" "\n");
 
@@ -923,15 +989,30 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
         const bool statusValid = (execlistStatusLo & (kExecStatusSlot0Valid | kExecStatusSlot1Valid)) != 0;
         const bool statusActive = (execlistStatusLo & (kExecStatusSlot0Active | kExecStatusSlot1Active)) != 0;
 
-        schedulingProgress |= statusValid || statusActive ||
-                              (execlistStatusLo != initialStatusLo) ||
-                              (execlistStatusHi != initialStatusHi) ||
-                              (csbRead != initialCsbRead) ||
-                              (ccid != initialCcid) ||
-                              (ctxCtrl != initialCtxCtrl);
-        ringStateLoaded |= ((rcsStart & 0xFFFFF000u) == (uint32_t)(res.ringGpuAddr & 0xFFFFF000ULL)) &&
-                           ((rcsCtl & 0x001FF001u) == (res.ringCtl & 0x001FF001u));
-        ringConsumed |= ((rcsHead & 0x001FFFFCu) != 0) || acthdLo || acthdHi || bbAddrLo || bbAddrHi;
+        observations.execlistStatusChanged |= (execlistStatusLo != initialStatusLo) || (execlistStatusHi != initialStatusHi);
+        observations.csbAdvanced |= (csbRead != initialCsbRead);
+        observations.ccidChanged |= (ccid != initialCcid);
+        observations.contextControlChanged |= (ctxCtrl != initialCtxCtrl);
+        observations.schedulingProgress |= statusValid || statusActive ||
+                                           observations.execlistStatusChanged ||
+                                           observations.csbAdvanced ||
+                                           observations.ccidChanged ||
+                                           observations.contextControlChanged;
+        observations.ringStateLoaded |= ((rcsStart & 0xFFFFF000u) == (uint32_t)(res.ringGpuAddr & 0xFFFFF000ULL)) &&
+                                        ((rcsCtl & 0x001FF001u) == (res.ringCtl & 0x001FF001u));
+        observations.acthdObserved |= (acthdLo != 0u) || (acthdHi != 0u);
+        observations.batchStarted |= observations.acthdObserved || (bbAddrLo != 0u) || (bbAddrHi != 0u);
+        observations.ringConsumed |= ((rcsHead & 0x001FFFFCu) != 0u) || observations.batchStarted;
+        observations.lastScratchValue = scratchValue;
+        observations.lastExeclistStatusLo = execlistStatusLo;
+        observations.lastExeclistStatusHi = execlistStatusHi;
+        observations.lastCsbRead = csbRead;
+        observations.lastRcsStatus = rcsStatus;
+        observations.lastGtError = gtError;
+        observations.lastActhdLo = acthdLo;
+        observations.lastActhdHi = acthdHi;
+        observations.lastBbAddrLo = bbAddrLo;
+        observations.lastBbAddrHi = bbAddrHi;
 
         if ((poll % 5u) == 0u || scratchValue == res.expectedValue || halted || wedged) {
             IOLog("(FakeIrisXE) [V274] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X RCS H/T/S=%08X/%08X/%08X\n",
@@ -955,16 +1036,30 @@ static bool pollProofProgress(FakeIrisXEExeclist* self, RcsProofResources& res, 
         }
     }
 
-    if (!elspAccepted) {
-        failure = DescriptorWrong;
-    } else if (!schedulingProgress) {
-        failure = NoSchedulingProgress;
-    } else if (!ringStateLoaded) {
-        failure = LrcLayoutWrong;
-    } else if (!ringConsumed) {
+    IOLog("(FakeIrisXE) [V274] Summary: elsp=%u schedule=%u csb=%u ccid=%u ctxctl=%u ringLoad=%u batch=%u ringConsume=%u scratch=0x%08X gtErr=0x%08X\n",
+          observations.elspAccepted ? 1u : 0u,
+          observations.schedulingProgress ? 1u : 0u,
+          observations.csbAdvanced ? 1u : 0u,
+          observations.ccidChanged ? 1u : 0u,
+          observations.contextControlChanged ? 1u : 0u,
+          observations.ringStateLoaded ? 1u : 0u,
+          observations.batchStarted ? 1u : 0u,
+          observations.ringConsumed ? 1u : 0u,
+          observations.lastScratchValue,
+          observations.lastGtError);
+
+    if (!observations.elspAccepted) {
+        failure = ElspRejected;
+    } else if (!observations.schedulingProgress) {
+        failure = observations.csbAdvanced ? NoSchedulingProgress : CsbNoProgress;
+    } else if (!observations.ringStateLoaded) {
+        failure = ContextStateNotLoaded;
+    } else if (!observations.batchStarted) {
+        failure = BatchNeverStarted;
+    } else if (!observations.ringConsumed) {
         failure = RingStateWrong;
     } else {
-        failure = MiPacketWrong;
+        failure = ScratchWritebackMissing;
     }
 
     return false;
@@ -977,6 +1072,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     }
 
     RcsProofResources res;
+    ProofObservations observations;
     ProofFailureType failure = None;
     bool success = false;
 
@@ -1017,7 +1113,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
         goto done_release;
     }
 
-    success = pollProofProgress(self, res, failure);
+    success = pollProofProgress(self, res, failure, observations);
 
 done_release:
     self->fOwner->forcewakeRenderRelease();
@@ -1026,6 +1122,17 @@ done_release:
     self->fIsReady = success;
     self->fOwner->setProperty("FakeIrisXEExeclistExecutionProven", success ? kOSBooleanTrue : kOSBooleanFalse);
     self->fOwner->setProperty("FakeIrisXERcsProofFailure", proofFailureLabel(failure));
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofElspAccepted", observations.elspAccepted);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofSchedulingProgress", observations.schedulingProgress);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofCsbAdvanced", observations.csbAdvanced);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofContextLoaded", observations.ringStateLoaded);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofBatchStarted", observations.batchStarted);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastScratch", observations.lastScratchValue, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastStatusLo", observations.lastExeclistStatusLo, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbRead", observations.lastCsbRead, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRcsStatus", observations.lastRcsStatus, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastGtError", observations.lastGtError, 32);
     self->fOwner->updateExecutionState(success, success ? "rcs-scratch-writeback" : proofFailureLabel(failure));
 
     if (!success) {

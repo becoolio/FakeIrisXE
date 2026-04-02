@@ -1007,6 +1007,7 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
     {
         setProperty("FakeIrisXELinkPending", kOSBooleanTrue);
         setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanFalse);
+        setProperty("FakeIrisXEAcceleratorContractReady", kOSBooleanFalse);
         setProperty("IOAccelReady", kOSBooleanFalse);
         setProperty("MetalSupported", kOSBooleanFalse);
         setProperty("MetalPlugin", kOSBooleanFalse);
@@ -1017,15 +1018,18 @@ void FakeIrisXEAccelerator::linkFromFramebuffer(FakeIrisXEFramebuffer* fb)
 
     setProperty("FakeIrisXELinkPending", kOSBooleanFalse);
     setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
+    setProperty("FakeIrisXEAcceleratorContractReady", kOSBooleanTrue);
     setProperty("IOAccelReady", kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalPlugin", kOSBooleanFalse);
     setProperty("IOGPU", kOSBooleanFalse);
     setProperty("IOAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("FakeIrisXEAcceleratorLinked", kOSBooleanTrue);
+    fFB->setProperty("IOFBAcceleratorLinked", kOSBooleanTrue);
+    fFB->setProperty("FakeIrisXEAccelContractReady", kOSBooleanTrue);
     fFB->setProperty("IOFBAccelerator", kOSBooleanFalse);
     fFB->setProperty("IOFBAcceleratorRegistryID", accelRegistryID, 64);
     fFB->setProperty("IOAccelServiceRegistryID", accelRegistryID, 64);
 
-    IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - diagnostic only, acceleration still unproven\n");
+    IOLog("(FakeIrisXEFramebuffer) [Accel] link complete - Apple contract metadata published, Metal/IOGPU still gated off\n");
 }

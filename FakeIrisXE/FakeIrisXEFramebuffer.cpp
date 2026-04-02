@@ -232,6 +232,102 @@ static void setDataProperty32(IORegistryEntry *entry, const char *key, uint32_t 
     data->release();
 }
 
+static bool isValidEdidBlock(const uint8_t* edid, size_t length)
+{
+    static const uint8_t kEdidHeader[8] = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+    if (!edid || length < 128) {
+        return false;
+    }
+
+    if (memcmp(edid, kEdidHeader, sizeof(kEdidHeader)) != 0) {
+        return false;
+    }
+
+    uint8_t sum = 0;
+    for (size_t i = 0; i < 128; ++i) {
+        sum = static_cast<uint8_t>(sum + edid[i]);
+    }
+    return sum == 0;
+}
+
+static uint16_t edidVendorId(const uint8_t* edid)
+{
+    return edid ? static_cast<uint16_t>((static_cast<uint16_t>(edid[8]) << 8) | edid[9]) : 0;
+}
+
+static uint16_t edidProductId(const uint8_t* edid)
+{
+    return edid ? static_cast<uint16_t>(edid[10] | (static_cast<uint16_t>(edid[11]) << 8)) : 0;
+}
+
+static uint32_t edidSerialNumber(const uint8_t* edid)
+{
+    if (!edid) {
+        return 0;
+    }
+    return static_cast<uint32_t>(edid[12]) |
+           (static_cast<uint32_t>(edid[13]) << 8) |
+           (static_cast<uint32_t>(edid[14]) << 16) |
+           (static_cast<uint32_t>(edid[15]) << 24);
+}
+
+static bool parseDisplayNameFromEdid(const uint8_t* edid, char* outName, size_t outNameSize)
+{
+    if (!edid || !outName || outNameSize < 2) {
+        return false;
+    }
+
+    outName[0] = '\0';
+    for (size_t off = 54; off + 18 <= 126; off += 18) {
+        if (edid[off] != 0x00 || edid[off + 1] != 0x00 || edid[off + 2] != 0x00) {
+            continue;
+        }
+        if (edid[off + 3] != 0xFC) {
+            continue;
+        }
+
+        size_t out = 0;
+        for (size_t i = 5; i < 18 && out + 1 < outNameSize; ++i) {
+            uint8_t c = edid[off + i];
+            if (c == 0x0A || c == 0x00) {
+                break;
+            }
+            outName[out++] = static_cast<char>(c);
+        }
+        outName[out] = '\0';
+        return out != 0;
+    }
+
+    return false;
+}
+
+static void parseDisplayImageSizeFromEdid(const uint8_t* edid, uint32_t& widthMm, uint32_t& heightMm)
+{
+    widthMm = 0;
+    heightMm = 0;
+    if (!edid) {
+        return;
+    }
+
+    if (edid[21] && edid[22]) {
+        widthMm = static_cast<uint32_t>(edid[21]) * 10u;
+        heightMm = static_cast<uint32_t>(edid[22]) * 10u;
+        return;
+    }
+
+    for (size_t off = 54; off + 18 <= 126; off += 18) {
+        if (edid[off] == 0x00 && edid[off + 1] == 0x00) {
+            continue;
+        }
+
+        widthMm = static_cast<uint32_t>(edid[off + 12]) | (static_cast<uint32_t>(edid[off + 14] >> 4) << 8);
+        heightMm = static_cast<uint32_t>(edid[off + 13]) | (static_cast<uint32_t>(edid[off + 14] & 0x0F) << 8);
+        if (widthMm && heightMm) {
+            return;
+        }
+    }
+}
+
 static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent, uint32_t raw);
 static uint32_t percentToVBLMultiplier(uint32_t percent);
 static uint32_t vblMultiplierToPercent(uint32_t vblm);
@@ -460,7 +556,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V298 - Single GuC boot attempt        ║\n");
+    IOLog("║       FAKEIRISXE V299 - AUX/VBT/diagnostics update     ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1016,7 +1112,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V298 - Single GuC boot attempt       ║\n");
+    IOLog("║       FAKEIRISXE V299 - AUX/VBT/diagnostics update    ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1548,6 +1644,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     setProperty("framebuffer-con0-enable", kOSBooleanTrue);
     setProperty("framebuffer-con1-enable", kOSBooleanTrue);
     setProperty("framebuffer-con2-enable", kOSBooleanTrue);
+    setProperty("framebuffer-con3-enable", kOSBooleanTrue);
     
     // V240: Use connector manager for dynamic connector properties if available
     if (fConnectorManager && fConnectorDiscoveryDone) {
@@ -1816,7 +1913,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
     {
         if (publishDisplayIdentityFromEdid()) {
-            IOLog("[V298] Native panel EDID/identity detected - fallback display injection skipped\n");
+            IOLog("[V299] Native panel EDID/identity detected - fallback display injection skipped\n");
         } else {
         uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
         uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
@@ -2771,7 +2868,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V298, single-attempt GuC boot path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V299, AUX/VBT/diagnostic proof path)\n");
     return true;
 
 }
@@ -5460,6 +5557,133 @@ void FakeIrisXEFramebuffer::initBacklightTable()
     applyBacklightPresetForIdentity(vendorID, productID);
 }
 
+bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
+{
+    const uint8_t* edidBytes = nullptr;
+    uint16_t edidLength = 0;
+    TGLConnectorDesc* edidConnector = nullptr;
+    const char* edidSource = "registry";
+
+    if (!fConnectorManager && mmioBase) {
+        fConnectorManager = new FakeIrisXEConnectorManager();
+        if (fConnectorManager && !fConnectorManager->init(mmioBase, pciDevice)) {
+            delete fConnectorManager;
+            fConnectorManager = nullptr;
+        }
+    }
+
+    if (fConnectorManager && !fConnectorDiscoveryDone) {
+        fConnectorManager->discoverConnectors();
+        fConnectorDiscoveryDone = true;
+    }
+
+    if (fConnectorManager) {
+        edidBytes = fConnectorManager->getPrimaryDisplayEDID(&edidLength, &edidConnector);
+        if (edidBytes && edidLength >= 128) {
+            edidSource = "connector-aux";
+        }
+    }
+
+    if (!edidBytes || edidLength < 128) {
+        OSData* edidData = OSDynamicCast(OSData, getProperty("IODisplayEDID"));
+        if (!edidData) {
+            edidData = OSDynamicCast(OSData, getProperty("AAPL00,PanelEDID"));
+        }
+        if (!edidData) {
+            edidData = OSDynamicCast(OSData, getProperty("AAPL00,override-no-connect"));
+        }
+        if (!edidData && pciDevice) {
+            edidData = OSDynamicCast(OSData, pciDevice->getProperty("IODisplayEDID"));
+        }
+        if (!edidData && pciDevice) {
+            edidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,PanelEDID"));
+        }
+        if (!edidData && pciDevice) {
+            edidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,override-no-connect"));
+        }
+
+        if (edidData) {
+            edidBytes = reinterpret_cast<const uint8_t*>(edidData->getBytesNoCopy());
+            edidLength = static_cast<uint16_t>(edidData->getLength());
+        }
+    }
+
+    if (!isValidEdidBlock(edidBytes, edidLength)) {
+        return false;
+    }
+
+    OSData* edidData = OSData::withBytes(edidBytes, edidLength);
+    if (!edidData) {
+        return false;
+    }
+
+    const uint32_t vendorID = edidVendorId(edidBytes);
+    const uint32_t productID = edidProductId(edidBytes);
+    const uint32_t serial = edidSerialNumber(edidBytes);
+    char displayName[32] = { 0 };
+    uint32_t widthMm = 0;
+    uint32_t heightMm = 0;
+
+    if (!parseDisplayNameFromEdid(edidBytes, displayName, sizeof(displayName))) {
+        strlcpy(displayName, edidConnector && edidConnector->isInternal ? "Color LCD" : "Display", sizeof(displayName));
+    }
+    parseDisplayImageSizeFromEdid(edidBytes, widthMm, heightMm);
+
+    setProperty("IODisplayEDID", edidData);
+    setProperty("AAPL00,PanelEDID", edidData);
+    setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
+    edidData->release();
+
+    setNumberProperty(this, "IODisplayVendorID", vendorID, 32);
+    setNumberProperty(this, "IODisplayProductID", productID, 32);
+    setNumberProperty(this, "IODisplaySerialNumber", serial, 32);
+    setNumberProperty(this, "DisplayVendorID", vendorID, 32);
+    setNumberProperty(this, "DisplayProductID", productID, 32);
+    if (widthMm) {
+        setNumberProperty(this, kDisplayHorizontalImageSize, widthMm, 32);
+    }
+    if (heightMm) {
+        setNumberProperty(this, kDisplayVerticalImageSize, heightMm, 32);
+    }
+
+    OSString* name = OSString::withCString(displayName);
+    if (name) {
+        setProperty("IODisplayName", name);
+        setProperty("DisplayProductName", name);
+        name->release();
+    }
+
+    OSString* source = OSString::withCString(edidSource);
+    if (source) {
+        setProperty("FakeIrisXEEdidSource", source);
+        source->release();
+    }
+
+    if (edidConnector) {
+        setProperty("built-in", edidConnector->isInternal ? kOSBooleanTrue : kOSBooleanFalse);
+        if (edidConnector->isInternal) {
+            setProperty("AAPL01-internal-panel", kOSBooleanTrue);
+            OSString* slotName = OSString::withCString("Internal@0,2,0");
+            if (slotName) {
+                setProperty("AAPL,slot-name", slotName);
+                slotName->release();
+            }
+        }
+    }
+
+    applyBacklightPresetForIdentity(vendorID, productID);
+
+    IOLog("[V299] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+          edidSource,
+          vendorID,
+          productID,
+          serial,
+          displayName,
+          widthMm,
+          heightMm);
+    return true;
+}
+
     // Set brightness 0..100
     bool FakeIrisXEFramebuffer::setBacklightPercent(uint32_t percent, const char* source)
     {
@@ -5864,12 +6088,15 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXERcsRingValidated", fRcsRingValidated ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("IOFBAccelerated", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("IOFBAccelerator", kOSBooleanFalse);
-    setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
+    if (!ready) {
+        setProperty("IOFBAcceleratorLinked", kOSBooleanFalse);
+    }
     setProperty("HardwareAccelerated", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("GPURendering", ready ? kOSBooleanTrue : kOSBooleanFalse);
+    setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V171] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V299] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6377,17 +6604,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V298] ============================================\n");
-    IOLog("(FakeIrisXE)[V298] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V298] ============================================\n");
+    IOLog("(FakeIrisXE)[V299] ============================================\n");
+    IOLog("(FakeIrisXE)[V299] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V299] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V298] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V299] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V298] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V299] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V298] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V298] ============================================\n");
+    IOLog("(FakeIrisXE)[V299] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V299] ============================================\n");
     return success;
 }
 
@@ -9033,7 +9260,7 @@ void FakeIrisXEFramebuffer::initializeConnectorManager() {
         }
         
         // Initialize with MMIO base
-        if (!fConnectorManager->init(mmioBase)) {
+        if (!fConnectorManager->init(mmioBase, pciDevice)) {
             IOLog("[V240] ERROR: Failed to initialize connector manager\n");
             delete fConnectorManager;
             fConnectorManager = nullptr;

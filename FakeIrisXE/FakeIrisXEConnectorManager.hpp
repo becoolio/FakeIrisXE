@@ -10,6 +10,12 @@
 
 #include <IOKit/IOService.h>
 #include <IOKit/pci/IOPCIDevice.h>
+#include <stddef.h>
+#include <stdint.h>
+
+static const size_t kFakeIrisXEMaxEdidBytes = 512;
+static const size_t kFakeIrisXEMaxDpcdBytes = 16;
+static const size_t kFakeIrisXEMaxVbtBytes = 8192;
 
 // Tiger Lake has 4 DDI ports: A, B, C, D (some shared with USB-C/TC)
 enum class TGLConnectorType {
@@ -69,6 +75,14 @@ struct TGLConnectorDesc {
     bool isInternal;            // True for eDP/internal panels
     bool supportsAudio;        // HDMI/DP audio capable
     uint32_t hdpBit;            // HDP status bit mask for this connector
+    bool present;               // Link/panel presence detected
+    bool discoveredFromVbt;     // Connector came from real VBT parsing
+    bool hasDpcd;               // DPCD base bytes cached
+    bool hasEdid;               // EDID bytes cached
+    uint8_t panelType;          // VBT panel type when known
+    uint16_t edidLength;        // Cached EDID byte count
+    uint8_t dpcd[kFakeIrisXEMaxDpcdBytes];
+    uint8_t edid[kFakeIrisXEMaxEdidBytes];
 };
 
 // Transcoder to pipe mapping
@@ -86,7 +100,7 @@ public:
     ~FakeIrisXEConnectorManager();
     
     // Initialize with MMIO base for register access
-    bool init(volatile uint8_t* mmioBase);
+    bool init(volatile uint8_t* mmioBase, IOPCIDevice* provider = nullptr);
     
     // Discover connectors from VBT or fallback
     void discoverConnectors();
@@ -111,6 +125,9 @@ public:
     
     // Get internal panel connector (eDP)
     TGLConnectorDesc* getInternalPanel();
+
+    const uint8_t* getConnectorEDID(uint8_t index, uint16_t* outLength) const;
+    const uint8_t* getPrimaryDisplayEDID(uint16_t* outLength, TGLConnectorDesc** outConnector) const;
     
     // Publish connector properties to IORegistry (for compatibility)
     void publishConnectorProperties();
@@ -122,9 +139,15 @@ public:
     
 private:
     volatile uint8_t* m_mmioBase;
+    IOPCIDevice* m_provider;
     TGLConnectorDesc m_connectors[4];
     uint8_t m_connectorCount;
     TGLConnectorDesc* m_internalPanel;
+    bool m_vbtLoaded;
+    uint16_t m_vbtVersion;
+    uint16_t m_bdbVersion;
+    size_t m_vbtLength;
+    uint8_t m_vbtStorage[kFakeIrisXEMaxVbtBytes];
     
     // Register helpers
     uint32_t readReg(uint32_t offset);
@@ -190,6 +213,7 @@ private:
     uint32_t getDDIBufferControl(TGLDDIPort port);
     uint32_t getTranscoderFunctionControl(TGLDDIPort port);
     uint32_t getAUXControl(TGLAUXChannel aux);
+    uint32_t getAUXData(TGLAUXChannel aux, uint32_t index);
     uint32_t getPipeConfig(uint8_t pipe);
     uint32_t getTranscoderConfig(uint8_t transcoder);
     
@@ -200,6 +224,27 @@ private:
     
     // HPD detection
     bool checkHPD(TGLConnectorDesc& conn);
+
+    // AUX/DPCD/EDID helpers
+    bool auxTransfer(TGLAUXChannel aux,
+                     const uint8_t* send,
+                     uint32_t sendBytes,
+                     uint8_t* recv,
+                     uint32_t& recvBytes);
+    bool auxNativeRead(TGLAUXChannel aux, uint32_t address, uint8_t* data, uint32_t size);
+    bool auxI2CWrite(TGLAUXChannel aux, uint8_t address, const uint8_t* data, uint32_t size, bool mot);
+    bool auxI2CRead(TGLAUXChannel aux, uint8_t address, uint8_t* data, uint32_t size, bool mot);
+    bool readDPCD(TGLConnectorDesc& conn, uint32_t address, uint8_t* data, uint32_t size);
+    bool readEDID(TGLConnectorDesc& conn);
+
+    // VBT discovery helpers
+    bool loadVBT();
+    bool loadVBTFromOpRegion();
+    bool loadVBTFromRegistry();
+    bool parseVBTConnectors();
+    bool applyVBTChildDevice(const uint8_t* childBytes, uint8_t childSize, uint8_t slotIndex);
+    bool decodeChildDeviceToConnector(const uint8_t* childBytes, uint8_t childSize, TGLConnectorDesc& outConn) const;
+    const uint8_t* findBDBSection(uint8_t blockId, uint16_t* outSize) const;
     
     // Initialize default/fallback connector map
     void initDefaultConnectorMap();
