@@ -336,6 +336,50 @@ static uint16_t dpcdMaxLinkRateMbps(uint8_t encodedRate)
     }
 }
 
+static void logRawBytes(const char* prefix, const uint8_t* bytes, size_t length)
+{
+    if (!prefix || !bytes || length == 0) {
+        return;
+    }
+
+    char line[3 * 16 + 1] = { 0 };
+    const size_t dumpLength = (length > 64u) ? 64u : length;
+    for (size_t offset = 0; offset < dumpLength; offset += 16u) {
+        size_t lineIndex = 0;
+        const size_t chunk = (dumpLength - offset > 16u) ? 16u : (dumpLength - offset);
+        for (size_t i = 0; i < chunk && (lineIndex + 3u) < sizeof(line); ++i) {
+            const int written = snprintf(line + lineIndex, sizeof(line) - lineIndex, "%02X%s", bytes[offset + i], (i + 1u < chunk) ? " " : "");
+            if (written <= 0) {
+                break;
+            }
+            lineIndex += static_cast<size_t>(written);
+        }
+        IOLog("[TGL-Connector] %s +0x%02llX: %s\n",
+              prefix,
+              static_cast<unsigned long long>(offset),
+              line);
+    }
+}
+
+static OSObject* copyPropertyFromServiceChain(IOService* service, const char* key)
+{
+    if (!service || !key) {
+        return nullptr;
+    }
+
+    IOService* current = service;
+    for (uint32_t depth = 0; current && depth < 6u; ++depth) {
+        OSObject* object = current->getProperty(key);
+        if (object) {
+            object->retain();
+            return object;
+        }
+        current = OSDynamicCast(IOService, current->getProvider());
+    }
+
+    return nullptr;
+}
+
 } // namespace
 
 FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
@@ -349,10 +393,15 @@ FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
       m_opregionMajor(0),
       m_opregionMinor(0),
       m_opregionMboxes(0),
+      m_opregionPhys(0),
+      m_opregionRvda(0),
+      m_opregionRvds(0),
+      m_opregionSignatureValid(false),
       m_vbtLength(0)
 {
     bzero(m_connectors, sizeof(m_connectors));
     bzero(m_vbtStorage, sizeof(m_vbtStorage));
+    bzero(m_opregionSource, sizeof(m_opregionSource));
 }
 
 FakeIrisXEConnectorManager::~FakeIrisXEConnectorManager()
@@ -1284,118 +1333,209 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
         return false;
     }
 
-    const uint32_t asls = m_provider->configRead32(0xFC) & ~0xFFFu;
-    if (!asls) {
-        IOLog("[TGL-Connector] ASLS is not programmed, cannot read OpRegion VBT\n");
-        return false;
-    }
+    m_opregionMajor = 0;
+    m_opregionMinor = 0;
+    m_opregionMboxes = 0;
+    m_opregionPhys = 0;
+    m_opregionRvda = 0;
+    m_opregionRvds = 0;
+    m_opregionSignatureValid = false;
+    bzero(m_opregionSource, sizeof(m_opregionSource));
 
-    IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(asls, kOpRegionSize, kIODirectionInOut);
-    if (!desc) {
-        IOLog("[TGL-Connector] Failed to create OpRegion descriptor @0x%08X\n", asls);
-        return false;
-    }
+    auto consumeVbtBlob = [&](const uint8_t* vbtBytes, uint32_t vbtLen, const char* source, uint64_t phys) -> bool {
+        if (!validateVBTBlob(vbtBytes, vbtLen, source)) {
+            return false;
+        }
+        const VbtHeader* header = reinterpret_cast<const VbtHeader*>(vbtBytes);
+        const uint16_t vbtSize = readLe16(&header->vbtSize);
+        m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
+        memcpy(m_vbtStorage, vbtBytes, m_vbtLength);
+        m_vbtVersion = readLe16(&header->version);
+        m_vbtLoaded = true;
+        if (source) {
+            strlcpy(m_opregionSource, source, sizeof(m_opregionSource));
+        }
+        if (phys) {
+            m_opregionPhys = phys;
+        }
+        return true;
+    };
 
-    IOMemoryMap* map = desc->map();
-    if (!map) {
-        desc->release();
-        IOLog("[TGL-Connector] Failed to map OpRegion @0x%08X\n", asls);
-        return false;
-    }
+    auto loadFromMappedOpRegion = [&](const uint8_t* bytes, uint32_t length, const char* source, uint64_t physBase) -> bool {
+        if (!bytes || length < sizeof(OpRegionHeader)) {
+            return false;
+        }
 
-    bool loaded = false;
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(map->getVirtualAddress());
-    const uint32_t length = static_cast<uint32_t>(map->getLength());
-    if (bytes && length >= sizeof(OpRegionHeader)) {
+        logRawBytes(source ? source : "opregion", bytes, length);
         const OpRegionHeader* opregion = reinterpret_cast<const OpRegionHeader*>(bytes);
         if (memcmp(opregion->signature, "IntelGraphicsMem", 16) != 0) {
-            IOLog("[TGL-Connector] OpRegion signature mismatch at ASLS=0x%08X\n", asls);
-        } else {
-            m_opregionMajor = opregion->over.major;
-            m_opregionMinor = opregion->over.minor;
-            m_opregionMboxes = readLe32(&opregion->mboxes);
-            IOLog("[TGL-Connector] OpRegion v%u.%u size=%uKB mboxes=0x%08X ASLS=0x%08X\n",
-                  m_opregionMajor,
-                  m_opregionMinor,
-                  readLe32(&opregion->sizeKb),
-                  m_opregionMboxes,
-                  asls);
+            IOLog("[TGL-Connector] %s rejected: OpRegion signature mismatch\n", source ? source : "opregion");
+            return false;
+        }
 
-            if ((m_opregionMboxes & kMboxAsle) != 0u && length >= kOpRegionAsleOffset + sizeof(OpRegionAsle)) {
-                const OpRegionAsle* asle = reinterpret_cast<const OpRegionAsle*>(bytes + kOpRegionAsleOffset);
-                uint64_t rvda = asle->rvda;
-                const uint32_t rvds = asle->rvds;
-                IOLog("[TGL-Connector] OpRegion ASLE RVDA=0x%llX RVDS=0x%X\n",
-                      static_cast<unsigned long long>(rvda),
-                      rvds);
+        m_opregionSignatureValid = true;
+        m_opregionPhys = physBase;
+        m_opregionMajor = opregion->over.major;
+        m_opregionMinor = opregion->over.minor;
+        m_opregionMboxes = opregion->mboxes;
+        if (source) {
+            strlcpy(m_opregionSource, source, sizeof(m_opregionSource));
+        }
 
-                if (rvda != 0u && rvds >= sizeof(VbtHeader)) {
-                    if (m_opregionMajor > 2u || (m_opregionMajor == 2u && m_opregionMinor >= 1u)) {
-                        rvda += asls;
-                    }
+        IOLog("[TGL-Connector] %s accepted: OpRegion v%u.%u size=%uKB mboxes=0x%08X phys=0x%llX\n",
+              source ? source : "opregion",
+              m_opregionMajor,
+              m_opregionMinor,
+              opregion->sizeKb,
+              m_opregionMboxes,
+              static_cast<unsigned long long>(physBase));
 
-                    IOMemoryDescriptor* vbtDesc = IOMemoryDescriptor::withPhysicalAddress(rvda, rvds, kIODirectionInOut);
-                    if (vbtDesc) {
-                        IOMemoryMap* vbtMap = vbtDesc->map();
-                        if (vbtMap) {
-                            const uint8_t* rvdaBytes = reinterpret_cast<const uint8_t*>(vbtMap->getVirtualAddress());
-                            const uint32_t rvdaLen = static_cast<uint32_t>(vbtMap->getLength());
-                            if (validateVBTBlob(rvdaBytes, rvdaLen, "OpRegion RVDA")) {
-                                const VbtHeader* header = reinterpret_cast<const VbtHeader*>(rvdaBytes);
-                                const uint16_t vbtSize = readLe16(&header->vbtSize);
-                                m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
-                                memcpy(m_vbtStorage, rvdaBytes, m_vbtLength);
-                                m_vbtVersion = readLe16(&header->version);
-                                m_vbtLoaded = true;
-                                loaded = true;
-                                IOLog("[TGL-Connector] Loaded external VBT from OpRegion RVDA: phys=0x%llX size=%u version=%u\n",
-                                      static_cast<unsigned long long>(rvda),
-                                      m_vbtLength,
-                                      m_vbtVersion);
-                            }
-                            vbtMap->release();
-                        } else {
-                            IOLog("[TGL-Connector] Failed to map external RVDA VBT at 0x%llX size=0x%X\n",
-                                  static_cast<unsigned long long>(rvda),
-                                  rvds);
-                        }
-                        vbtDesc->release();
-                    } else {
-                        IOLog("[TGL-Connector] Failed to create descriptor for RVDA VBT at 0x%llX size=0x%X\n",
-                              static_cast<unsigned long long>(rvda),
-                              rvds);
-                    }
+        if ((m_opregionMboxes & kMboxAsle) != 0u && length >= kOpRegionAsleOffset + sizeof(OpRegionAsle)) {
+            const OpRegionAsle* asle = reinterpret_cast<const OpRegionAsle*>(bytes + kOpRegionAsleOffset);
+            uint64_t rvda = asle->rvda;
+            m_opregionRvds = asle->rvds;
+            if (rvda != 0u && m_opregionRvds >= sizeof(VbtHeader)) {
+                if (m_opregionMajor > 2u || (m_opregionMajor == 2u && m_opregionMinor >= 1u)) {
+                    rvda += physBase;
                 }
-            }
+                m_opregionRvda = rvda;
+                IOLog("[TGL-Connector] %s RVDA=0x%llX RVDS=0x%X\n",
+                      source ? source : "opregion",
+                      static_cast<unsigned long long>(m_opregionRvda),
+                      m_opregionRvds);
 
-            if (!loaded) {
-                const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : kOpRegionSize;
-                if (inlineVbtLimit > kOpRegionVbtOffset && validateVBTBlob(bytes + kOpRegionVbtOffset, inlineVbtLimit - kOpRegionVbtOffset, "OpRegion mailbox4")) {
-                    const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes + kOpRegionVbtOffset);
-                    const uint16_t vbtSize = readLe16(&header->vbtSize);
-                    m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
-                    memcpy(m_vbtStorage, bytes + kOpRegionVbtOffset, m_vbtLength);
-                    m_vbtVersion = readLe16(&header->version);
-                    m_vbtLoaded = true;
-                    loaded = true;
-                    IOLog("[TGL-Connector] Loaded inline VBT from OpRegion mailbox4: offset=0x%X size=%u version=%u\n",
-                          kOpRegionVbtOffset,
-                          m_vbtLength,
-                          m_vbtVersion);
+                IOMemoryDescriptor* vbtDesc = IOMemoryDescriptor::withPhysicalAddress(m_opregionRvda, m_opregionRvds, kIODirectionInOut);
+                if (vbtDesc) {
+                    IOMemoryMap* vbtMap = vbtDesc->map();
+                    if (vbtMap) {
+                        const uint8_t* rvdaBytes = reinterpret_cast<const uint8_t*>(vbtMap->getVirtualAddress());
+                        const uint32_t rvdaLen = static_cast<uint32_t>(vbtMap->getLength());
+                        logRawBytes("opregion-rvda-vbt", rvdaBytes, rvdaLen);
+                        if (consumeVbtBlob(rvdaBytes, rvdaLen, "opregion-rvda", m_opregionRvda)) {
+                            vbtMap->release();
+                            vbtDesc->release();
+                            return true;
+                        }
+                        vbtMap->release();
+                    } else {
+                        IOLog("[TGL-Connector] %s failed: could not map RVDA blob at 0x%llX size=0x%X\n",
+                              source ? source : "opregion",
+                              static_cast<unsigned long long>(m_opregionRvda),
+                              m_opregionRvds);
+                    }
+                    vbtDesc->release();
+                } else {
+                    IOLog("[TGL-Connector] %s failed: could not create RVDA descriptor at 0x%llX size=0x%X\n",
+                          source ? source : "opregion",
+                          static_cast<unsigned long long>(m_opregionRvda),
+                          m_opregionRvds);
                 }
             }
         }
+
+        const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : length;
+        if (inlineVbtLimit > kOpRegionVbtOffset && consumeVbtBlob(bytes + kOpRegionVbtOffset, inlineVbtLimit - kOpRegionVbtOffset, "opregion-inline", physBase + kOpRegionVbtOffset)) {
+            return true;
+        }
+
+        return false;
+    };
+
+    auto tryPhysicalOpRegion = [&](uint64_t phys, const char* source) -> bool {
+        if (!phys) {
+            return false;
+        }
+        IOMemoryDescriptor* desc = IOMemoryDescriptor::withPhysicalAddress(phys, kOpRegionSize, kIODirectionInOut);
+        if (!desc) {
+            IOLog("[TGL-Connector] %s failed: could not create descriptor at 0x%llX\n",
+                  source ? source : "opregion-phys",
+                  static_cast<unsigned long long>(phys));
+            return false;
+        }
+        IOMemoryMap* map = desc->map();
+        if (!map) {
+            desc->release();
+            IOLog("[TGL-Connector] %s failed: could not map 0x%llX\n",
+                  source ? source : "opregion-phys",
+                  static_cast<unsigned long long>(phys));
+            return false;
+        }
+        const bool loaded = loadFromMappedOpRegion(reinterpret_cast<const uint8_t*>(map->getVirtualAddress()),
+                                                   static_cast<uint32_t>(map->getLength()),
+                                                   source,
+                                                   phys);
+        map->release();
+        desc->release();
+        return loaded;
+    };
+
+    const uint32_t asls = m_provider->configRead32(0xFC) & ~0xFFFu;
+    if (asls && tryPhysicalOpRegion(asls, "pci-asls")) {
+        return true;
     }
 
-    map->release();
-    desc->release();
-    if (!loaded) {
-        IOLog("[TGL-Connector] No valid VBT found in OpRegion (major=%u minor=%u mboxes=0x%08X)\n",
-              m_opregionMajor,
-              m_opregionMinor,
-              m_opregionMboxes);
+    static const char* kOpRegionBlobKeys[] = {
+        "AAPL,OpRegion",
+        "AAPL00,OpRegion",
+        "opregion",
+        "OpRegion",
+        "AAPL,IGPUOpRegion",
+        "AAPL,GraphicsMem",
+    };
+    for (uint32_t i = 0; i < sizeof(kOpRegionBlobKeys) / sizeof(kOpRegionBlobKeys[0]); ++i) {
+        OSObject* object = copyPropertyFromServiceChain(m_provider, kOpRegionBlobKeys[i]);
+        OSData* data = OSDynamicCast(OSData, object);
+        bool loaded = false;
+        if (data && data->getLength() >= sizeof(OpRegionHeader)) {
+            loaded = loadFromMappedOpRegion(reinterpret_cast<const uint8_t*>(data->getBytesNoCopy()),
+                                            static_cast<uint32_t>(data->getLength()),
+                                            kOpRegionBlobKeys[i],
+                                            0);
+        }
+        if (object) {
+            object->release();
+        }
+        if (loaded) {
+            return true;
+        }
     }
-    return loaded;
+
+    static const char* kOpRegionPhysKeys[] = {
+        "AAPL,OpRegionAddress",
+        "AAPL00,OpRegionAddress",
+        "opregion-address",
+        "OpRegionAddress",
+    };
+    for (uint32_t i = 0; i < sizeof(kOpRegionPhysKeys) / sizeof(kOpRegionPhysKeys[0]); ++i) {
+        OSObject* object = copyPropertyFromServiceChain(m_provider, kOpRegionPhysKeys[i]);
+        uint64_t phys = 0;
+        if (OSNumber* number = OSDynamicCast(OSNumber, object)) {
+            phys = number->unsigned64BitValue();
+        } else if (OSData* data = OSDynamicCast(OSData, object)) {
+            const uint8_t* raw = reinterpret_cast<const uint8_t*>(data->getBytesNoCopy());
+            if (raw && data->getLength() >= 8u) {
+                phys = static_cast<uint64_t>(readLe32(raw)) | (static_cast<uint64_t>(readLe32(raw + 4u)) << 32);
+            } else if (raw && data->getLength() >= 4u) {
+                phys = readLe32(raw);
+            }
+        }
+        if (object) {
+            object->release();
+        }
+        if (phys && tryPhysicalOpRegion(phys & ~0xFFFULL, kOpRegionPhysKeys[i])) {
+            return true;
+        }
+    }
+
+    IOLog("[TGL-Connector] No valid VBT found in OpRegion (source=%s major=%u minor=%u mboxes=0x%08X phys=0x%llX rvda=0x%llX rvds=0x%X)\n",
+          m_opregionSource[0] ? m_opregionSource : "none",
+          m_opregionMajor,
+          m_opregionMinor,
+          m_opregionMboxes,
+          static_cast<unsigned long long>(m_opregionPhys),
+          static_cast<unsigned long long>(m_opregionRvda),
+          m_opregionRvds);
+    return false;
 }
 
 bool FakeIrisXEConnectorManager::loadVBTFromRegistry()
@@ -1847,6 +1987,22 @@ bool FakeIrisXEConnectorManager::parseVBTConnectors()
                     break;
             }
         }
+    }
+
+    const bool ubuntuShape = (m_vbtLength == 0x21C0u) && (m_bdbVersion == 244u) && (childDevSize == 39u);
+    IOLog("[TGL-Connector] VBT cross-check: ubuntuShape=%u vbtSize=0x%llX bdb=%u childSize=%u\n",
+          ubuntuShape ? 1u : 0u,
+          static_cast<unsigned long long>(m_vbtLength),
+          m_bdbVersion,
+          childDevSize);
+    if (m_internalPanel) {
+        IOLog("[TGL-Connector] VBT internal panel: ddi=%s aux=%u panelType=%u lanes=%u rate=%u present=%u\n",
+              ddiName(m_internalPanel->ddiPort),
+              static_cast<unsigned>(m_internalPanel->auxChannel),
+              m_internalPanel->panelType,
+              m_internalPanel->maxLanes,
+              m_internalPanel->maxBitRate,
+              m_internalPanel->present ? 1u : 0u);
     }
 
     IOLog("[TGL-Connector] Parsed %u connectors from real VBT (VBT=%u BDB=%u)\n",

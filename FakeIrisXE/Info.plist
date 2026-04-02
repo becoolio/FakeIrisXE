@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.300</string>
+	<string>1.0.301</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.300</string>
+	<string>1.0.301</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V300 - OpRegion RVDA VBT, native AUX EDID, connector cleanup, and proof support updates</string>
+	<string>FakeIrisXe V301 - OpRegion discovery ladder, native EDID cleanup, VBT cross-checks, and CSB proof diagnostics</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

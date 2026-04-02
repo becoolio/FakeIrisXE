@@ -151,7 +151,11 @@ struct ProofObservations {
     uint32_t lastScratchValue = kProofScratchInitial;
     uint32_t lastExeclistStatusLo = 0;
     uint32_t lastExeclistStatusHi = 0;
+    uint32_t lastCsbCtrl = 0;
+    uint32_t lastCsbAddrLo = 0;
+    uint32_t lastCsbAddrHi = 0;
     uint32_t lastCsbRead = 0;
+    uint32_t lastCsbWriteAlias = 0;
     uint32_t lastRcsStatus = 0;
     uint32_t lastGtError = 0;
     uint32_t lastActhdLo = 0;
@@ -884,9 +888,41 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
     const uint32_t preHi = self->mmioRead32(kExecElspPrimaryHi);
     const uint32_t preStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
     const uint32_t preStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+    const uint32_t preCsbCtrl = self->mmioRead32(RCS0_CSB_CTRL);
+    const uint32_t preCsbAddrLo = self->mmioRead32(RCS0_CSB_ADDR_LO);
+    const uint32_t preCsbAddrHi = self->mmioRead32(RCS0_CSB_ADDR_HI);
+    const uint32_t preCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
+    const uint32_t preCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
+    const uint32_t preCtxCtrl = self->mmioRead32(kExecContextControlReg);
 
-    IOLog("(FakeIrisXE) [V274] Pre-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X\n",
-          preLo, preHi, preStatusLo, preStatusHi);
+    IOLog("(FakeIrisXE) [V301] Submit preflight: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X DESC=%08X/%08X ring=0x%llX tail=0x%X\n",
+          preLo,
+          preHi,
+          preStatusLo,
+          preStatusHi,
+          preCsbCtrl,
+          preCsbAddrHi,
+          preCsbAddrLo,
+          preCsbRead,
+          preCsbWrite,
+          preCtxCtrl,
+          res.descLo,
+          res.descHi,
+          static_cast<unsigned long long>(res.ringGpuAddr),
+          res.ringTailBytes);
+
+    if (self->fCsbGem) {
+        if (IOBufferMemoryDescriptor* csbMd = self->fCsbGem->memoryDescriptor()) {
+            volatile uint64_t* csb = csbCpuBase(csbMd);
+            if (csb) {
+                IOLog("(FakeIrisXE) [V301] Submit preflight: CSB[0]=0x%016llX CSB[1]=0x%016llX CSB[2]=0x%016llX CSB[3]=0x%016llX\n",
+                      static_cast<unsigned long long>(csb[0]),
+                      static_cast<unsigned long long>(csb[1]),
+                      static_cast<unsigned long long>(csb[2]),
+                      static_cast<unsigned long long>(csb[3]));
+            }
+        }
+    }
 
     self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, 0x00020001u);
     IOSleep(1);
@@ -901,13 +937,28 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
     const uint32_t postHi = self->mmioRead32(kExecElspPrimaryHi);
     const uint32_t postStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
     const uint32_t postStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+    const uint32_t postCsbCtrl = self->mmioRead32(RCS0_CSB_CTRL);
+    const uint32_t postCsbAddrLo = self->mmioRead32(RCS0_CSB_ADDR_LO);
+    const uint32_t postCsbAddrHi = self->mmioRead32(RCS0_CSB_ADDR_HI);
+    const uint32_t postCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
+    const uint32_t postCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
+    const uint32_t postCtxCtrl = self->mmioRead32(kExecContextControlReg);
 
     res.submitAccepted =
         (postLo != preLo) || (postHi != preHi) ||
         (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
 
-    IOLog("(FakeIrisXE) [V274] Post-submit ELSP: LO=0x%08X HI=0x%08X STATUS=0x%08X/0x%08X latched=%u\n",
-          postLo, postHi, postStatusLo, postStatusHi,
+    IOLog("(FakeIrisXE) [V301] Submit postwrite: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X latched=%u\n",
+          postLo,
+          postHi,
+          postStatusLo,
+          postStatusHi,
+          postCsbCtrl,
+          postCsbAddrHi,
+          postCsbAddrLo,
+          postCsbRead,
+          postCsbWrite,
+          postCtxCtrl,
           res.submitAccepted ? 1u : 0u);
 
     self->fOwner->forcewakeRenderHold();
@@ -925,7 +976,7 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self, RcsProofResources& r
     const uint32_t recoveredTail = self->mmioRead32(kExecRingTailReg);
     const uint32_t recoveredCtl = self->mmioRead32(kExecRingCtlReg);
     self->fOwner->forcewakeRenderRelease();
-    IOLog("(FakeIrisXE) [V274] Post-ELSP ring recover: START=0x%08X HEAD=0x%08X TAIL=0x%08X CTL=0x%08X\n",
+    IOLog("(FakeIrisXE) [V301] Post-ELSP ring recover: START=0x%08X HEAD=0x%08X TAIL=0x%08X CTL=0x%08X\n",
           recoveredStart, recoveredHead, recoveredTail, recoveredCtl);
 
     return true;
@@ -1006,7 +1057,11 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
         observations.lastScratchValue = scratchValue;
         observations.lastExeclistStatusLo = execlistStatusLo;
         observations.lastExeclistStatusHi = execlistStatusHi;
+        observations.lastCsbCtrl = csbCtrl;
+        observations.lastCsbAddrLo = csbAddrLo;
+        observations.lastCsbAddrHi = csbAddrHi;
         observations.lastCsbRead = csbRead;
+        observations.lastCsbWriteAlias = csbWriteAlias;
         observations.lastRcsStatus = rcsStatus;
         observations.lastGtError = gtError;
         observations.lastActhdLo = acthdLo;
@@ -1036,7 +1091,7 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
         }
     }
 
-    IOLog("(FakeIrisXE) [V274] Summary: elsp=%u schedule=%u csb=%u ccid=%u ctxctl=%u ringLoad=%u batch=%u ringConsume=%u scratch=0x%08X gtErr=0x%08X\n",
+    IOLog("(FakeIrisXE) [V301] Summary: elsp=%u schedule=%u csb=%u ccid=%u ctxctl=%u ringLoad=%u batch=%u ringConsume=%u scratch=0x%08X gtErr=0x%08X csbCtrl=0x%08X addr=%08X%08X wp=%08X\n",
           observations.elspAccepted ? 1u : 0u,
           observations.schedulingProgress ? 1u : 0u,
           observations.csbAdvanced ? 1u : 0u,
@@ -1046,7 +1101,11 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
           observations.batchStarted ? 1u : 0u,
           observations.ringConsumed ? 1u : 0u,
           observations.lastScratchValue,
-          observations.lastGtError);
+          observations.lastGtError,
+          observations.lastCsbCtrl,
+          observations.lastCsbAddrHi,
+          observations.lastCsbAddrLo,
+          observations.lastCsbWriteAlias);
 
     if (!observations.elspAccepted) {
         failure = ElspRejected;
@@ -1130,7 +1189,11 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastScratch", observations.lastScratchValue, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastStatusLo", observations.lastExeclistStatusLo, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbCtrl", observations.lastCsbCtrl, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbAddrLo", observations.lastCsbAddrLo, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbAddrHi", observations.lastCsbAddrHi, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbRead", observations.lastCsbRead, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbWrite", observations.lastCsbWriteAlias, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRcsStatus", observations.lastRcsStatus, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastGtError", observations.lastGtError, 32);
     self->fOwner->updateExecutionState(success, success ? "rcs-scratch-writeback" : proofFailureLabel(failure));
