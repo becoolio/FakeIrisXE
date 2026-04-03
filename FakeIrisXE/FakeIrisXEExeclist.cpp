@@ -171,7 +171,58 @@ struct ProofObservations {
     uint32_t lastRingStart = 0;
     uint32_t lastRingHead = 0;
     uint32_t lastRingTail = 0;
+    uint32_t attemptedRingMode = 0;
 };
+
+enum ProofRingProgrammingMode {
+    ProofRingModeLrcOnly = 0,
+    ProofRingModeLiveOnly = 1,
+    ProofRingModeCombined = 2,
+};
+
+static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
+{
+    switch (mode) {
+        case ProofRingModeLrcOnly:
+            return "lrc-only";
+        case ProofRingModeLiveOnly:
+            return "live-ring-only";
+        case ProofRingModeCombined:
+            return "combined";
+        default:
+            return "unknown";
+    }
+}
+
+static inline void proofWriteLe32(void* dst, uint32_t value);
+static inline void proofWriteLe64(void* dst, uint64_t value);
+
+static void patchProofLrcRingBlock(const RcsProofResources& res, ProofRingProgrammingMode mode)
+{
+    if (!res.lrcGem) {
+        return;
+    }
+    IOBufferMemoryDescriptor* md = res.lrcGem->memoryDescriptor();
+    if (!md) {
+        return;
+    }
+    uint8_t* lrcCpu = reinterpret_cast<uint8_t*>(md->getBytesNoCopy());
+    if (!lrcCpu) {
+        return;
+    }
+
+    const uint32_t startLo = (mode == ProofRingModeLiveOnly) ? 0u : (uint32_t)(res.ringGpuAddr & 0xFFFFFFFFULL);
+    const uint32_t startHi = (mode == ProofRingModeLiveOnly) ? 0u : (uint32_t)(res.ringGpuAddr >> 32);
+    const uint32_t tail = (mode == ProofRingModeLiveOnly) ? 0u : res.ringTailBytes;
+    const uint32_t ctl = (mode == ProofRingModeLiveOnly) ? 0u : res.ringCtl;
+
+    proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x00u, 0u);
+    proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x04u, tail);
+    proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x08u, startLo);
+    proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x0Cu, startHi);
+    proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x10u, ctl);
+    OSSynchronizeIO();
+}
 
 static const uint32_t kGen12RcsLri0Regs[] = {
     0x2244u, 0x2034u, 0x2030u, 0x2038u, 0x203Cu, 0x2168u, 0x2140u,
@@ -975,8 +1026,43 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     }
 
     self->fOwner->forcewakeRenderHold();
-    logProofLrcImage(res);
-    if (!programProofRingState(self, res, &observations)) {
+    static const ProofRingProgrammingMode kModes[] = {
+        ProofRingModeLrcOnly,
+        ProofRingModeLiveOnly,
+        ProofRingModeCombined,
+    };
+    bool ringProgrammingReady = false;
+    for (uint32_t i = 0; i < sizeof(kModes) / sizeof(kModes[0]); ++i) {
+        const ProofRingProgrammingMode mode = kModes[i];
+        observations.attemptedRingMode = static_cast<uint32_t>(mode);
+        patchProofLrcRingBlock(res, mode);
+        logProofLrcImage(res);
+
+        if (mode == ProofRingModeLrcOnly) {
+            observations.ringCtlEnabled = true;
+            observations.ringCtlMasked = false;
+            observations.lastRingStart = 0u;
+            observations.lastRingHead = 0u;
+            observations.lastRingTail = 0u;
+            observations.lastRingCtl = 0u;
+            IOLog("(FakeIrisXE) [%s] Ring program mode=%s: skipping live ring register programming\n",
+                  kExeclistVersion,
+                  proofRingModeLabel(mode));
+            ringProgrammingReady = true;
+            break;
+        }
+
+        if (programProofRingState(self, res, &observations)) {
+            IOLog("(FakeIrisXE) [%s] Ring program mode=%s accepted live RING_CTL=0x%08X\n",
+                  kExeclistVersion,
+                  proofRingModeLabel(mode),
+                  observations.lastRingCtl);
+            ringProgrammingReady = true;
+            break;
+        }
+    }
+
+    if (!ringProgrammingReady) {
         self->fOwner->forcewakeRenderRelease();
         failure = RingControlNotEnabled;
         return false;
@@ -1241,6 +1327,7 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingCtlEnabled", observations.ringCtlEnabled);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingCtlMasked", observations.ringCtlMasked);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
+    self->fOwner->setProperty("FakeIrisXERcsProofRingMode", proofRingModeLabel(static_cast<ProofRingProgrammingMode>(observations.attemptedRingMode)));
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastScratch", observations.lastScratchValue, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastStatusLo", observations.lastExeclistStatusLo, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbCtrl", observations.lastCsbCtrl, 32);

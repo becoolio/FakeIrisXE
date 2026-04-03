@@ -593,21 +593,63 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
     applyIdentityToLocalDisplayChildren(service);
 }
 
-static void injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
+static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 {
     if (!fb) {
-        return;
+        return false;
     }
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V305] display0 not found under FakeIrisXEFramebuffer yet\n");
-        return;
+        IOLog("[V306] display0 not found under FakeIrisXEFramebuffer yet\n");
+        return false;
     }
 
     applyDisplayMergeOverrides(displayService, fb);
-    IOLog("[V305] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    IOLog("[V306] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
     displayService->release();
+    return true;
+}
+
+void FakeIrisXEFramebuffer::displayIdentityRetryFired(IOTimerEventSource* sender)
+{
+    if (!sender || sender != displayInjectTimer || isInactive()) {
+        return;
+    }
+
+    if (injectDisplayMergeOverridesIfAvailable(this)) {
+        displayInjectRetryCount = 0;
+        return;
+    }
+
+    if (displayInjectRetryCount < 20u) {
+        ++displayInjectRetryCount;
+        displayInjectTimer->setTimeoutMS(500);
+    }
+}
+
+void FakeIrisXEFramebuffer::scheduleDisplayIdentityRetry()
+{
+    if (!workLoop || isInactive()) {
+        return;
+    }
+
+    if (!displayInjectTimer) {
+        displayInjectTimer = IOTimerEventSource::timerEventSource(
+            this,
+            OSMemberFunctionCast(IOTimerEventSource::Action, this, &FakeIrisXEFramebuffer::displayIdentityRetryFired));
+        if (!displayInjectTimer) {
+            return;
+        }
+        if (workLoop->addEventSource(displayInjectTimer) != kIOReturnSuccess) {
+            displayInjectTimer->release();
+            displayInjectTimer = nullptr;
+            return;
+        }
+    }
+
+    displayInjectRetryCount = 0;
+    displayInjectTimer->setTimeoutMS(250);
 }
 
 
@@ -620,7 +662,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V305 - ring ctl and display cleanup   ║\n");
+    IOLog("║       FAKEIRISXE V306 - ring mode isolation           ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1176,7 +1218,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V305 - ring ctl and display cleanup  ║\n");
+    IOLog("║       FAKEIRISXE V306 - ring mode isolation          ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1975,7 +2017,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     
     if (publishDisplayIdentityFromEdid()) {
-        IOLog("[V305] Native panel EDID/identity detected\n");
+        IOLog("[V306] Native panel EDID/identity detected\n");
     } else {
         OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
@@ -1996,7 +2038,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
         applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
-        IOLog("[V305] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+        IOLog("[V306] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
               edidVendorId(fallbackDisplayEDID),
               edidProductId(fallbackDisplayEDID));
     }
@@ -2787,7 +2829,9 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("WS notified\n");
 
     // Try to rewrite display identity on display0 when it appears under this framebuffer.
-    injectDisplayMergeOverridesIfAvailable(this);
+    if (!injectDisplayMergeOverridesIfAvailable(this)) {
+        scheduleDisplayIdentityRetry();
+    }
     
    
 
@@ -2844,7 +2888,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V305, ring control validation and display cleanup path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V306, ring mode isolation and display retry path)\n");
     return true;
 
 }
@@ -3115,7 +3159,9 @@ void FakeIrisXEFramebuffer::performSafeStop()
 
 void FakeIrisXEFramebuffer::startIOFB() {
     IOLog("FakeIrisXEFramebuffer::startIOFB() called\n");
-    injectDisplayMergeOverridesIfAvailable(this);
+    if (!injectDisplayMergeOverridesIfAvailable(this)) {
+        scheduleDisplayIdentityRetry();
+    }
 }
 
  
@@ -5671,7 +5717,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     applyBacklightPresetForIdentity(vendorID, productID);
     injectDisplayMergeOverridesIfAvailable(this);
 
-    IOLog("[V305] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V306] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6094,7 +6140,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V305] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V306] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6602,17 +6648,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V305] ============================================\n");
-    IOLog("(FakeIrisXE)[V305] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V305] ============================================\n");
+    IOLog("(FakeIrisXE)[V306] ============================================\n");
+    IOLog("(FakeIrisXE)[V306] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V306] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V305] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V306] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V305] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V306] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V305] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V305] ============================================\n");
+    IOLog("(FakeIrisXE)[V306] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V306] ============================================\n");
     return success;
 }
 
