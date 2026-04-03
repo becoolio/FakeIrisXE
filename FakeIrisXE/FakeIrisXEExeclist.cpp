@@ -85,7 +85,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V308";
+static const char* kExeclistVersion = "V309";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -108,6 +108,7 @@ enum ProofFailureType {
     NoSchedulingProgress,
     ScratchMappingUnavailable,
     ElspRejected,
+    ElspVisibleNotAccepted,
     CsbNoProgress,
     ContextStateNotLoaded,
     BatchNeverStarted,
@@ -141,8 +142,11 @@ struct RcsProofResources {
 
 struct ProofObservations {
     bool scratchCpuMapped = false;
+    bool elspWritten = false;
     bool elspAccepted = false;
     bool execlistStatusChanged = false;
+    bool slotValidChanged = false;
+    bool slotActiveChanged = false;
     bool csbAdvanced = false;
     bool ccidChanged = false;
     bool contextControlChanged = false;
@@ -176,6 +180,9 @@ struct ProofObservations {
     uint32_t attemptedCtxCtrl = 0;
     uint32_t attemptedAddrMode = 0;
     bool attemptedForceRestore = false;
+    bool attemptedPrivilege = true;
+    uint32_t lastSlotValidBits = 0;
+    uint32_t lastSlotActiveBits = 0;
 };
 
 enum ProofRingProgrammingMode {
@@ -197,20 +204,25 @@ struct ProofVariant {
     uint32_t ctxCtrl;
     uint32_t addrMode;
     bool forceRestore;
+    bool privilege;
     uint32_t execlistControlKick;
     uint32_t arbControl;
 };
 
 static const ProofVariant kProofVariants[] = {
-    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "no-force-restore",     ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, 0x00000001u, 0x00020001u },
-    { "ctxctrl-0x9",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "addrmode-0",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  0x00000001u, 0x00020001u },
-    { "kick-before-hi",       ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "kick-after-lo",        ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
-    { "arb-alt",              ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00000001u },
+    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "no-force-restore",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, true,  0x00000001u, 0x00020001u },
+    { "ctxctrl-0x9",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "ctxctrl-0x1",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "addrmode-0",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  true,  0x00000001u, 0x00020001u },
+    { "addrmode-1",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 1u,                true,  true,  0x00000001u, 0x00020001u },
+    { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, 0x00000001u, 0x00020001u },
+    { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, 0x00000001u, 0x00020001u },
+    { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
+    { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00000001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -238,6 +250,34 @@ static const char* proofSubmitStyleLabel(ProofSubmitStyle style)
             return "kick-after-lo";
         default:
             return "unknown";
+    }
+}
+
+static void decodeExeclistSlots(uint32_t statusLo, uint32_t& validBits, uint32_t& activeBits, const char*& queueState)
+{
+    validBits = 0u;
+    activeBits = 0u;
+    if (statusLo & kExecStatusSlot0Valid) {
+        validBits |= 1u << 0;
+    }
+    if (statusLo & kExecStatusSlot1Valid) {
+        validBits |= 1u << 1;
+    }
+    if (statusLo & kExecStatusSlot0Active) {
+        activeBits |= 1u << 0;
+    }
+    if (statusLo & kExecStatusSlot1Active) {
+        activeBits |= 1u << 1;
+    }
+
+    if (validBits == 0u && activeBits == 0u) {
+        queueState = "empty";
+    } else if (validBits != 0u && activeBits == 0u) {
+        queueState = "queued";
+    } else if (activeBits != 0u) {
+        queueState = "active";
+    } else {
+        queueState = "unknown";
     }
 }
 
@@ -595,28 +635,30 @@ static const char* proofFailureLabel(ProofFailureType type)
             return "D_RING_CTL_NOT_ENABLED";
         case ElspRejected:
             return "A_ELSP_REJECTED";
+        case ElspVisibleNotAccepted:
+            return "B_ELSP_VISIBLE_NOT_ACCEPTED";
         case DescriptorWrong:
-            return "B_DESCRIPTOR_FORMAT_WRONG";
+            return "C_DESCRIPTOR_FORMAT_WRONG";
         case LrcLayoutWrong:
-            return "C_LRC_LAYOUT_WRONG";
+            return "D_LRC_LAYOUT_WRONG";
         case ContextStateNotLoaded:
-            return "E_CONTEXT_STATE_NOT_LOADED";
+            return "F_CONTEXT_STATE_NOT_LOADED";
         case RingStateWrong:
-            return "F_RING_STATE_WRONG";
+            return "G_RING_STATE_WRONG";
         case BatchNeverStarted:
-            return "G_BATCH_NEVER_STARTED";
+            return "H_BATCH_NEVER_STARTED";
         case MiPacketWrong:
-            return "H_MI_PACKET_WRONG";
+            return "I_MI_PACKET_WRONG";
         case ScratchWritebackMissing:
-            return "I_SCRATCH_WRITEBACK_MISSING";
+            return "J_SCRATCH_WRITEBACK_MISSING";
         case EngineHardHalted:
-            return "J_RCS_HARD_HALTED";
+            return "K_RCS_HARD_HALTED";
         case ScratchMappingUnavailable:
-            return "K_SCRATCH_MAPPING_UNAVAILABLE";
+            return "L_SCRATCH_MAPPING_UNAVAILABLE";
         case CsbNoProgress:
-            return "L_CSB_NO_PROGRESS";
+            return "M_CSB_NO_PROGRESS";
         case NoSchedulingProgress:
-            return "M_NO_SCHEDULING_PROGRESS";
+            return "N_NO_SCHEDULING_PROGRESS";
         default:
             return "NONE";
     }
@@ -1152,18 +1194,25 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const uint32_t preCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
     const uint32_t preCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
     const uint32_t preCtxCtrl = self->mmioRead32(kExecContextControlReg);
+    uint32_t preValidBits = 0;
+    uint32_t preActiveBits = 0;
+    const char* preQueueState = nullptr;
+    decodeExeclistSlots(preStatusLo, preValidBits, preActiveBits, preQueueState);
     observations.attemptedRingMode = static_cast<uint32_t>(variant.ringMode);
     observations.attemptedSubmitStyle = static_cast<uint32_t>(variant.submitStyle);
     observations.attemptedCtxCtrl = variant.ctxCtrl;
     observations.attemptedAddrMode = variant.addrMode;
     observations.attemptedForceRestore = variant.forceRestore;
 
-    IOLog("(FakeIrisXE) [%s] Submit preflight: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X DESC=%08X/%08X ring=0x%llX tail=0x%X\n",
+    IOLog("(FakeIrisXE) [%s] Submit preflight: ELSP=%08X/%08X STATUS=%08X/%08X slots(valid=0x%X active=0x%X state=%s) CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X DESC=%08X/%08X ring=0x%llX tail=0x%X\n",
           kExeclistVersion,
           preLo,
           preHi,
           preStatusLo,
           preStatusHi,
+          preValidBits,
+          preActiveBits,
+          preQueueState,
           preCsbCtrl,
           preCsbAddrHi,
           preCsbAddrLo,
@@ -1256,18 +1305,24 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const uint32_t postCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
     const uint32_t postCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
     const uint32_t postCtxCtrl = self->mmioRead32(kExecContextControlReg);
+    uint32_t postValidBits = 0;
+    uint32_t postActiveBits = 0;
+    const char* postQueueState = nullptr;
+    decodeExeclistSlots(postStatusLo, postValidBits, postActiveBits, postQueueState);
     self->fOwner->forcewakeRenderRelease();
 
-    res.submitAccepted =
-        (postLo != preLo) || (postHi != preHi) ||
-        (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
+    observations.elspWritten = (postLo == res.descLo) || (postHi == res.descHi);
+    observations.slotValidChanged = (postValidBits != preValidBits);
+    observations.slotActiveChanged = (postActiveBits != preActiveBits);
+    res.submitAccepted = observations.slotValidChanged || observations.slotActiveChanged ||
+                         (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
 
     logProofSharedBacking(self, "post-submit");
     logProofRingGating(self, "post-submit");
 
-    IOLog("(FakeIrisXE) [%s] Submit postwrite: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X latched=%u\n",
+    IOLog("(FakeIrisXE) [%s] Submit postwrite: ELSP=%08X/%08X STATUS=%08X/%08X slots(valid=0x%X active=0x%X state=%s) CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X elspWritten=%u accepted=%u\n",
           kExeclistVersion,
-          postLo, postHi, postStatusLo, postStatusHi, postCsbCtrl, postCsbAddrHi, postCsbAddrLo, postCsbRead, postCsbWrite, postCtxCtrl, res.submitAccepted ? 1u : 0u);
+          postLo, postHi, postStatusLo, postStatusHi, postValidBits, postActiveBits, postQueueState, postCsbCtrl, postCsbAddrHi, postCsbAddrLo, postCsbRead, postCsbWrite, postCtxCtrl, observations.elspWritten ? 1u : 0u, res.submitAccepted ? 1u : 0u);
     IOLog("(FakeIrisXE) [%s] Post-ELSP ring recover: START=0x%08X HEAD=0x%08X TAIL=0x%08X CTL=0x%08X\n",
           kExeclistVersion,
           observations.lastRingStart,
@@ -1335,8 +1390,14 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
         const bool wedged = (gtError & 0x80000000u) != 0;
         const bool statusValid = (execlistStatusLo & (kExecStatusSlot0Valid | kExecStatusSlot1Valid)) != 0;
         const bool statusActive = (execlistStatusLo & (kExecStatusSlot0Active | kExecStatusSlot1Active)) != 0;
+        uint32_t slotValidBits = 0;
+        uint32_t slotActiveBits = 0;
+        const char* queueState = nullptr;
+        decodeExeclistSlots(execlistStatusLo, slotValidBits, slotActiveBits, queueState);
 
         observations.execlistStatusChanged |= (execlistStatusLo != initialStatusLo) || (execlistStatusHi != initialStatusHi);
+        observations.slotValidChanged |= (slotValidBits != 0u);
+        observations.slotActiveChanged |= (slotActiveBits != 0u);
         observations.csbAdvanced |= (csbRead != initialCsbRead);
         observations.ccidChanged |= (ccid != initialCcid);
         observations.contextControlChanged |= (ctxCtrl != initialCtxCtrl);
@@ -1368,13 +1429,15 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
         observations.lastRingTail = rcsTail;
         observations.lastRingStart = rcsStart;
         observations.lastRingCtl = rcsCtl;
+        observations.lastSlotValidBits = slotValidBits;
+        observations.lastSlotActiveBits = slotActiveBits;
         observations.ringCtlEnabled |= (rcsCtl & RING_VALID) != 0u;
         observations.ringCtlMasked |= ((rcsCtl & ~RING_VALID) == (res.ringCtl & ~RING_VALID)) && ((rcsCtl & RING_VALID) == 0u);
 
         if ((poll % 5u) == 0u || scratchValue == res.expectedValue || halted || wedged) {
-            IOLog("(FakeIrisXE) [%s] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X RCS H/T/S=%08X/%08X/%08X\n",
+            IOLog("(FakeIrisXE) [%s] Poll%03u ELSP=%08X/%08X EXE=%08X/%08X slots(valid=0x%X active=0x%X state=%s) RCS H/T/S=%08X/%08X/%08X\n",
                   kExeclistVersion,
-                  poll, elspLo, elspHi, execlistStatusLo, execlistStatusHi, rcsHead, rcsTail, rcsStatus);
+                  poll, elspLo, elspHi, execlistStatusLo, execlistStatusHi, slotValidBits, slotActiveBits, queueState, rcsHead, rcsTail, rcsStatus);
             IOLog("(FakeIrisXE) [%s]         CSB ctrl=%08X addr=%08X%08X rp=%08X wp_alias=%08X CCID=%08X CTXCTL=%08X RING_CTL=%08X\n",
                   kExeclistVersion,
                   csbCtrl, csbAddrHi, csbAddrLo, csbRead, csbWriteAlias, ccid, ctxCtrl, rcsCtl);
@@ -1397,10 +1460,13 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
         }
     }
 
-    IOLog("(FakeIrisXE) [%s] Summary: elsp=%u schedule=%u csb=%u ccid=%u ctxctl=%u ringLoad=%u ringCtl=%u masked=%u batch=%u ringConsume=%u scratch=0x%08X gtErr=0x%08X csbCtrl=0x%08X addr=%08X%08X wp=%08X\n",
+    IOLog("(FakeIrisXE) [%s] Summary: elspWritten=%u accepted=%u schedule=%u slotValid=0x%X slotActive=0x%X csb=%u ccid=%u ctxctl=%u ringLoad=%u ringCtl=%u masked=%u batch=%u ringConsume=%u scratch=0x%08X gtErr=0x%08X csbCtrl=0x%08X addr=%08X%08X wp=%08X\n",
           kExeclistVersion,
+          observations.elspWritten ? 1u : 0u,
           observations.elspAccepted ? 1u : 0u,
           observations.schedulingProgress ? 1u : 0u,
+          observations.lastSlotValidBits,
+          observations.lastSlotActiveBits,
           observations.csbAdvanced ? 1u : 0u,
           observations.ccidChanged ? 1u : 0u,
           observations.contextControlChanged ? 1u : 0u,
@@ -1418,6 +1484,8 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
 
     if (!observations.ringCtlEnabled) {
         failure = RingControlNotEnabled;
+    } else if (observations.elspWritten && !observations.elspAccepted) {
+        failure = ElspVisibleNotAccepted;
     } else if (!observations.elspAccepted) {
         failure = ElspRejected;
     } else if (!observations.schedulingProgress) {
@@ -1527,6 +1595,7 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofBatchStarted", observations.batchStarted);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingCtlEnabled", observations.ringCtlEnabled);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingCtlMasked", observations.ringCtlMasked);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofElspWritten", observations.elspWritten);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
     self->fOwner->setProperty("FakeIrisXERcsProofRingMode", proofRingModeLabel(static_cast<ProofRingProgrammingMode>(observations.attemptedRingMode)));
     self->fOwner->setProperty("FakeIrisXERcsProofSubmitStyle", proofSubmitStyleLabel(static_cast<ProofSubmitStyle>(observations.attemptedSubmitStyle)));
@@ -1544,6 +1613,8 @@ done_release:
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRingHead", observations.lastRingHead, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRingTail", observations.lastRingTail, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRingCtl", observations.lastRingCtl, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastSlotValidBits", observations.lastSlotValidBits, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastSlotActiveBits", observations.lastSlotActiveBits, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastRcsStatus", observations.lastRcsStatus, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastGtError", observations.lastGtError, 32);
     self->fOwner->updateExecutionState(success, success ? "rcs-scratch-writeback" : proofFailureLabel(failure));

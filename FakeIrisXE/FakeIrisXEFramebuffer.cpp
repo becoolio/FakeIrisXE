@@ -616,12 +616,12 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V308] display0 not found under FakeIrisXEFramebuffer yet\n");
+        IOLog("[V309] display0 not found under FakeIrisXEFramebuffer yet\n");
         return false;
     }
 
     applyDisplayMergeOverrides(displayService, fb);
-    IOLog("[V308] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    IOLog("[V309] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
     displayService->release();
     return true;
 }
@@ -633,7 +633,7 @@ void FakeIrisXEFramebuffer::displayIdentityRetryFired(IOTimerEventSource* sender
     }
 
     if (injectDisplayMergeOverridesIfAvailable(this)) {
-        if (displayInjectRetryCount < 2u) {
+        if (displayInjectRetryCount < 4u) {
             ++displayInjectRetryCount;
             displayInjectTimer->setTimeoutMS(1000);
         } else {
@@ -686,7 +686,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V308 - deeper proof matrix          ║\n");
+    IOLog("║       FAKEIRISXE V309 - ELSP and descriptor matrix   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1242,7 +1242,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V308 - deeper proof matrix         ║\n");
+    IOLog("║       FAKEIRISXE V309 - ELSP and descriptor matrix  ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2041,7 +2041,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     
     if (publishDisplayIdentityFromEdid()) {
-        IOLog("[V308] Native panel EDID/identity detected\n");
+        IOLog("[V309] Native panel EDID/identity detected\n");
     } else {
         OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
@@ -2062,7 +2062,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
         applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
-        IOLog("[V308] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+        IOLog("[V309] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
               edidVendorId(fallbackDisplayEDID),
               edidProductId(fallbackDisplayEDID));
     }
@@ -2912,7 +2912,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V308, deeper proof matrix and display retry path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V309, ELSP matrix and stronger display retry path)\n");
     return true;
 
 }
@@ -5741,7 +5741,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     applyBacklightPresetForIdentity(vendorID, productID);
     injectDisplayMergeOverridesIfAvailable(this);
 
-    IOLog("[V308] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V309] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6164,7 +6164,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V308] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V309] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6672,17 +6672,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V308] ============================================\n");
-    IOLog("(FakeIrisXE)[V308] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V308] ============================================\n");
+    IOLog("(FakeIrisXE)[V309] ============================================\n");
+    IOLog("(FakeIrisXE)[V309] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V309] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V308] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V309] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V308] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V309] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V308] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V308] ============================================\n");
+    IOLog("(FakeIrisXE)[V309] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V309] ============================================\n");
     return success;
 }
 

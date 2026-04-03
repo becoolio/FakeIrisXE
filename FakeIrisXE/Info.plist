@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.308</string>
+	<string>1.0.309</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.308</string>
+	<string>1.0.309</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V308 - deeper proof matrix, HWS/CSB ownership checks, and stronger display convergence retries</string>
+	<string>FakeIrisXe V309 - ELSP acceptance split, deeper descriptor matrix, and stronger stale display cleanup</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
