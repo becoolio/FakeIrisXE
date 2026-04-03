@@ -13,6 +13,16 @@
 
 class FakeIrisXELRC {
 public:
+    static bool initializeLRCContextImage(
+           uint8_t*                ctxCpu,
+           size_t                  ctxSize,
+           uint64_t                pageTableRoot,
+           size_t                  ringSize,
+           uint64_t                ringGpuAddr,
+           uint32_t                ringHead,
+           uint32_t                ringTail,
+           uint32_t*               outRingCtl);
+
     // Build an LRC context image (returns a pinned FakeIrisXEGEM containing the context image)
     // pageSize is 4096.
     // The context image layout is simple & legal for Gen11: header + ring state + ring backing pointers.
@@ -23,6 +33,7 @@ public:
            uint64_t               ringGpuAddr,
            uint32_t               ringHead,
            uint32_t               ringTail,
+           uint64_t               pageTableRoot,
            IOReturn*              outErr);
    
     

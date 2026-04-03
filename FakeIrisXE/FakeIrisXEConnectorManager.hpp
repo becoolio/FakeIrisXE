@@ -134,6 +134,8 @@ public:
     bool isOpRegionSignatureValid() const { return m_opregionSignatureValid; }
     uint64_t getOpRegionRvda() const { return m_opregionRvda; }
     uint32_t getOpRegionRvds() const { return m_opregionRvds; }
+    uint32_t getVBTHeaderOffset() const { return m_vbtHeaderOffset; }
+    uint64_t getVBTPhys() const { return m_vbtPhys; }
     bool isRealVBTLoaded() const { return m_vbtLoaded; }
     uint16_t getVBTVersion() const { return m_vbtVersion; }
     uint16_t getBDBVersion() const { return m_bdbVersion; }
@@ -164,6 +166,8 @@ private:
     uint32_t m_opregionRvds;
     bool m_opregionSignatureValid;
     char m_opregionSource[32];
+    uint32_t m_vbtHeaderOffset;
+    uint64_t m_vbtPhys;
     size_t m_vbtLength;
     uint8_t m_vbtStorage[kFakeIrisXEMaxVbtBytes];
     
@@ -260,6 +264,7 @@ private:
     bool loadVBTFromOpRegion();
     bool loadVBTFromRegistry();
     bool validateVBTBlob(const uint8_t* bytes, size_t length, const char* source) const;
+    bool adoptVBTWindow(const uint8_t* bytes, uint32_t length, const char* source, uint64_t physBase, bool updateOpRegionSource);
     bool parseVBTConnectors();
     bool applyVBTChildDevice(const uint8_t* childBytes, uint8_t childSize, uint8_t slotIndex);
     bool decodeChildDeviceToConnector(const uint8_t* childBytes, uint8_t childSize, TGLConnectorDesc& outConn) const;

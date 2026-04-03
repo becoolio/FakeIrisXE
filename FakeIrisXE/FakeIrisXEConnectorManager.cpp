@@ -396,6 +396,22 @@ static uint32_t findOpRegionHeaderOffset(const uint8_t* bytes, uint32_t length)
     return UINT32_MAX;
 }
 
+static uint32_t findVbtHeaderOffset(const uint8_t* bytes, uint32_t length)
+{
+    if (!bytes || length < sizeof(VbtHeader)) {
+        return UINT32_MAX;
+    }
+
+    const uint32_t scanLimit = (length < 0x400u) ? length : 0x400u;
+    for (uint32_t offset = 0; offset + sizeof(VbtHeader) <= scanLimit; ++offset) {
+        if (memcmp(bytes + offset, "$VBT", 4) == 0) {
+            return offset;
+        }
+    }
+
+    return UINT32_MAX;
+}
+
 } // namespace
 
 FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
@@ -414,6 +430,8 @@ FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
       m_opregionRvda(0),
       m_opregionRvds(0),
       m_opregionSignatureValid(false),
+      m_vbtHeaderOffset(0),
+      m_vbtPhys(0),
       m_vbtLength(0)
 {
     bzero(m_connectors, sizeof(m_connectors));
@@ -1293,6 +1311,46 @@ bool FakeIrisXEConnectorManager::loadVBT()
     return loadVBTFromRegistry();
 }
 
+bool FakeIrisXEConnectorManager::adoptVBTWindow(const uint8_t* bytes,
+                                                uint32_t length,
+                                                const char* source,
+                                                uint64_t physBase,
+                                                bool updateOpRegionSource)
+{
+    if (!bytes || length < sizeof(VbtHeader)) {
+        return false;
+    }
+
+    const uint32_t headerOffset = findVbtHeaderOffset(bytes, length);
+    if (headerOffset == UINT32_MAX) {
+        IOLog("[TGL-Connector] %s VBT rejected: missing $VBT signature\n", source ? source : "unknown");
+        return false;
+    }
+
+    if (!validateVBTBlob(bytes + headerOffset, length - headerOffset, source)) {
+        return false;
+    }
+
+    const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes + headerOffset);
+    const uint16_t vbtSize = readLe16(&header->vbtSize);
+    m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
+    memcpy(m_vbtStorage, bytes + headerOffset, m_vbtLength);
+    m_vbtVersion = readLe16(&header->version);
+    m_vbtLoaded = true;
+    m_vbtHeaderOffset = headerOffset;
+    m_vbtPhys = physBase ? (physBase + headerOffset) : 0;
+    if (updateOpRegionSource && source) {
+        strlcpy(m_opregionSource, source, sizeof(m_opregionSource));
+    }
+    IOLog("[TGL-Connector] %s VBT accepted: header_offset=0x%X phys=0x%llX size=0x%X version=%u\n",
+          source ? source : "unknown",
+          headerOffset,
+          static_cast<unsigned long long>(m_vbtPhys),
+          m_vbtLength,
+          m_vbtVersion);
+    return true;
+}
+
 bool FakeIrisXEConnectorManager::validateVBTBlob(const uint8_t* bytes, size_t length, const char* source) const
 {
     if (!bytes || length < sizeof(VbtHeader)) {
@@ -1358,26 +1416,9 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
     m_opregionRvda = 0;
     m_opregionRvds = 0;
     m_opregionSignatureValid = false;
+    m_vbtHeaderOffset = 0;
+    m_vbtPhys = 0;
     bzero(m_opregionSource, sizeof(m_opregionSource));
-
-    auto consumeVbtBlob = [&](const uint8_t* vbtBytes, uint32_t vbtLen, const char* source, uint64_t phys) -> bool {
-        if (!validateVBTBlob(vbtBytes, vbtLen, source)) {
-            return false;
-        }
-        const VbtHeader* header = reinterpret_cast<const VbtHeader*>(vbtBytes);
-        const uint16_t vbtSize = readLe16(&header->vbtSize);
-        m_vbtLength = (vbtSize > kFakeIrisXEMaxVbtBytes) ? kFakeIrisXEMaxVbtBytes : vbtSize;
-        memcpy(m_vbtStorage, vbtBytes, m_vbtLength);
-        m_vbtVersion = readLe16(&header->version);
-        m_vbtLoaded = true;
-        if (source) {
-            strlcpy(m_opregionSource, source, sizeof(m_opregionSource));
-        }
-        if (phys) {
-            m_opregionPhys = phys;
-        }
-        return true;
-    };
 
     auto loadFromMappedOpRegion = [&](const uint8_t* bytes, uint32_t length, const char* source, uint64_t physBase) -> bool {
         if (!bytes || length < sizeof(OpRegionHeader)) {
@@ -1418,23 +1459,43 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
             uint64_t rvda = asle->rvda;
             m_opregionRvds = asle->rvds;
             if (rvda != 0u && m_opregionRvds >= sizeof(VbtHeader)) {
-                if (m_opregionMajor > 2u || (m_opregionMajor == 2u && m_opregionMinor >= 1u)) {
-                    rvda += adjustedPhysBase;
+                uint64_t rvdaCandidates[2] = { 0, 0 };
+                uint32_t rvdaCandidateCount = 0;
+                if (adjustedPhysBase) {
+                    rvdaCandidates[rvdaCandidateCount++] = adjustedPhysBase + rvda;
                 }
-                m_opregionRvda = rvda;
-                IOLog("[TGL-Connector] %s RVDA=0x%llX RVDS=0x%X\n",
-                      source ? source : "opregion",
-                      static_cast<unsigned long long>(m_opregionRvda),
-                      m_opregionRvds);
+                rvdaCandidates[rvdaCandidateCount++] = rvda;
 
-                IOMemoryDescriptor* vbtDesc = IOMemoryDescriptor::withPhysicalAddress(m_opregionRvda, m_opregionRvds, kIODirectionInOut);
-                if (vbtDesc) {
+                for (uint32_t candidateIndex = 0; candidateIndex < rvdaCandidateCount; ++candidateIndex) {
+                    const uint64_t rvdaPhys = rvdaCandidates[candidateIndex];
+                    m_opregionRvda = rvdaPhys;
+                    IOLog("[TGL-Connector] %s RVDA candidate[%u]=0x%llX RVDS=0x%X\n",
+                          source ? source : "opregion",
+                          candidateIndex,
+                          static_cast<unsigned long long>(m_opregionRvda),
+                          m_opregionRvds);
+
+                    IOMemoryDescriptor* vbtDesc = IOMemoryDescriptor::withPhysicalAddress(m_opregionRvda, m_opregionRvds, kIODirectionInOut);
+                    if (!vbtDesc) {
+                        IOLog("[TGL-Connector] %s failed: could not create RVDA descriptor at 0x%llX size=0x%X\n",
+                              source ? source : "opregion",
+                              static_cast<unsigned long long>(m_opregionRvda),
+                              m_opregionRvds);
+                        continue;
+                    }
+
                     IOMemoryMap* vbtMap = vbtDesc->map();
                     if (vbtMap) {
                         const uint8_t* rvdaBytes = reinterpret_cast<const uint8_t*>(vbtMap->getVirtualAddress());
                         const uint32_t rvdaLen = static_cast<uint32_t>(vbtMap->getLength());
-                        logRawBytes("opregion-rvda-vbt", rvdaBytes, rvdaLen);
-                        if (consumeVbtBlob(rvdaBytes, rvdaLen, "opregion-rvda", m_opregionRvda)) {
+                        logRawBytes(candidateIndex == 0 ? "opregion-rvda-vbt-rel" : "opregion-rvda-vbt-raw",
+                                    rvdaBytes,
+                                    rvdaLen > 256u ? 256u : rvdaLen);
+                        if (adoptVBTWindow(rvdaBytes,
+                                           rvdaLen,
+                                           candidateIndex == 0 ? "opregion-rvda-rel" : "opregion-rvda-raw",
+                                           m_opregionRvda,
+                                           true)) {
                             vbtMap->release();
                             vbtDesc->release();
                             return true;
@@ -1447,21 +1508,17 @@ bool FakeIrisXEConnectorManager::loadVBTFromOpRegion()
                               m_opregionRvds);
                     }
                     vbtDesc->release();
-                } else {
-                    IOLog("[TGL-Connector] %s failed: could not create RVDA descriptor at 0x%llX size=0x%X\n",
-                          source ? source : "opregion",
-                          static_cast<unsigned long long>(m_opregionRvda),
-                          m_opregionRvds);
                 }
             }
         }
 
         const uint32_t inlineVbtLimit = ((m_opregionMboxes & kMboxAsleExt) != 0u) ? kOpRegionAsleExtOffset : (length - headerOffset);
         if (inlineVbtLimit > kOpRegionVbtOffset && headerOffset + inlineVbtLimit <= length &&
-            consumeVbtBlob(bytes + headerOffset + kOpRegionVbtOffset,
+            adoptVBTWindow(bytes + headerOffset + kOpRegionVbtOffset,
                            inlineVbtLimit - kOpRegionVbtOffset,
                            "opregion-inline",
-                           adjustedPhysBase ? (adjustedPhysBase + kOpRegionVbtOffset) : 0)) {
+                           adjustedPhysBase ? (adjustedPhysBase + kOpRegionVbtOffset) : 0,
+                           true)) {
             return true;
         }
 
@@ -1583,22 +1640,14 @@ bool FakeIrisXEConnectorManager::loadVBTFromRegistry()
             continue;
         }
 
-        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data->getBytesNoCopy());
-        if (!validateVBTBlob(bytes, data->getLength(), kKeys[i])) {
-            continue;
+        if (adoptVBTWindow(reinterpret_cast<const uint8_t*>(data->getBytesNoCopy()),
+                           static_cast<uint32_t>(data->getLength()),
+                           kKeys[i],
+                           0,
+                           false)) {
+            IOLog("[TGL-Connector] Loaded VBT from provider property %s\n", kKeys[i]);
+            return true;
         }
-
-        const VbtHeader* header = reinterpret_cast<const VbtHeader*>(bytes);
-        const uint16_t vbtSize = readLe16(&header->vbtSize);
-        m_vbtLength = vbtSize > kFakeIrisXEMaxVbtBytes ? kFakeIrisXEMaxVbtBytes : vbtSize;
-        memcpy(m_vbtStorage, bytes, m_vbtLength);
-        m_vbtVersion = readLe16(&header->version);
-        m_vbtLoaded = true;
-        IOLog("[TGL-Connector] Loaded VBT from provider property %s size=%u version=%u\n",
-              kKeys[i],
-              static_cast<unsigned>(m_vbtLength),
-              m_vbtVersion);
-        return true;
     }
 
     return false;

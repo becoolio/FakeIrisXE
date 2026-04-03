@@ -477,15 +477,66 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
         { kScale1280x800,  sizeof(kScale1280x800) },
     };
 
-    uint64_t mergedDisplayProductID = 41008ULL;
-    uint64_t mergedDisplayVendorID = 1552ULL;
+    uint64_t mergedDisplayProductID = 1822ULL;
+    uint64_t mergedDisplayVendorID = 12516ULL;
     static constexpr uint64_t kMergedDisplayGUID = 436849163854938112ULL;
     static constexpr uint64_t kOriginalDisplayProductID = 1815ULL;
     static constexpr uint64_t kOriginalDisplayVendorID = 1970170734ULL;
 
-    uint32_t nativeWidth = 286u;
-    uint32_t nativeHeight = 179u;
+    uint32_t nativeWidth = 340u;
+    uint32_t nativeHeight = 190u;
     const char *mergedDisplayName = "Color LCD";
+
+    auto applyIdentityToNode = [&](IOService *node) {
+        if (!node) {
+            return;
+        }
+
+        setNumberProperty(node, "DisplayProductID", mergedDisplayProductID, 32);
+        setNumberProperty(node, "DisplayVendorID", mergedDisplayVendorID, 32);
+        setNumberProperty(node, "IODisplayProductID", mergedDisplayProductID, 32);
+        setNumberProperty(node, "IODisplayVendorID", mergedDisplayVendorID, 32);
+        setNumberProperty(node, "IODisplayGUID", kMergedDisplayGUID, 64);
+        node->setProperty("DisplayProductName", mergedDisplayName);
+        node->setProperty("IODisplayName", mergedDisplayName);
+        setNumberProperty(node, "IOGFlags", 4, 32);
+        setNumberProperty(node, kDisplayHorizontalImageSize, nativeWidth, 32);
+        setNumberProperty(node, kDisplayVerticalImageSize, nativeHeight, 32);
+        setNumberProperty(node, "DisplayProductIDOld", kOriginalDisplayProductID, 32);
+        setNumberProperty(node, "DisplayVendorIDOld", kOriginalDisplayVendorID, 32);
+        node->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+    };
+
+    auto isDisplayIdentityNode = [&](IOService *node) -> bool {
+        if (!node) {
+            return false;
+        }
+        const char *nodeName = node->getName();
+        if (nodeName && (!strcmp(nodeName, "display0") || !strcmp(nodeName, "AppleDisplay") || !strcmp(nodeName, "AppleBacklightDisplay"))) {
+            return true;
+        }
+        return node->getProperty("DisplayVendorID") ||
+               node->getProperty("IODisplayVendorID") ||
+               node->getProperty("IODisplayEDID");
+    };
+
+    auto applyIdentityToLocalDisplayChildren = [&](IOService *node) {
+        if (!node) {
+            return;
+        }
+
+        OSIterator *children = node->getChildIterator(gIOServicePlane);
+        if (!children) {
+            return;
+        }
+        while (OSObject *obj = children->getNextObject()) {
+            IOService *child = OSDynamicCast(IOService, obj);
+            if (isDisplayIdentityNode(child)) {
+                applyIdentityToNode(child);
+            }
+        }
+        children->release();
+    };
 
     if (fb) {
         OSString *edidSource = OSDynamicCast(OSString, fb->getProperty("FakeIrisXEEdidSource"));
@@ -512,19 +563,7 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
         }
     }
 
-    setNumberProperty(service, "DisplayProductID", mergedDisplayProductID, 32);
-    setNumberProperty(service, "DisplayVendorID", mergedDisplayVendorID, 32);
-    setNumberProperty(service, "IODisplayProductID", mergedDisplayProductID, 32);
-    setNumberProperty(service, "IODisplayVendorID", mergedDisplayVendorID, 32);
-    setNumberProperty(service, "IODisplayGUID", kMergedDisplayGUID, 64);
-    service->setProperty("DisplayProductName", mergedDisplayName);
-    service->setProperty("IODisplayName", mergedDisplayName);
-    setNumberProperty(service, "IOGFlags", 4, 32);
-    setNumberProperty(service, kDisplayHorizontalImageSize, nativeWidth, 32);
-    setNumberProperty(service, kDisplayVerticalImageSize, nativeHeight, 32);
-    setNumberProperty(service, "DisplayProductIDOld", kOriginalDisplayProductID, 32);
-    setNumberProperty(service, "DisplayVendorIDOld", kOriginalDisplayVendorID, 32);
-    service->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+    applyIdentityToNode(service);
 
     OSArray *scaleModes = OSArray::withCapacity(static_cast<unsigned int>(sizeof(kScaleBlobs) / sizeof(kScaleBlobs[0])));
     if (scaleModes) {
@@ -546,20 +585,12 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
 
     IOService *provider = OSDynamicCast(IOService, service->getProvider());
     if (provider) {
-        const char *providerName = provider->getName();
-        if (providerName && !strcmp(providerName, "display0")) {
-            setNumberProperty(provider, "DisplayProductID", mergedDisplayProductID, 32);
-            setNumberProperty(provider, "DisplayVendorID", mergedDisplayVendorID, 32);
-            setNumberProperty(provider, "IODisplayProductID", mergedDisplayProductID, 32);
-            setNumberProperty(provider, "IODisplayVendorID", mergedDisplayVendorID, 32);
-            setNumberProperty(provider, "IODisplayGUID", kMergedDisplayGUID, 64);
-            provider->setProperty("DisplayProductName", mergedDisplayName);
-            setNumberProperty(provider, "IOGFlags", 4, 32);
-            setNumberProperty(provider, kDisplayHorizontalImageSize, nativeWidth, 32);
-            setNumberProperty(provider, kDisplayVerticalImageSize, nativeHeight, 32);
-            provider->setProperty("AppleBacklightDisplay", kOSBooleanTrue);
+        if (isDisplayIdentityNode(provider)) {
+            applyIdentityToNode(provider);
         }
+        applyIdentityToLocalDisplayChildren(provider);
     }
+    applyIdentityToLocalDisplayChildren(service);
 }
 
 static void injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
@@ -570,12 +601,12 @@ static void injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V170] display0 not found under FakeIrisXEFramebuffer yet\n");
+        IOLog("[V305] display0 not found under FakeIrisXEFramebuffer yet\n");
         return;
     }
 
     applyDisplayMergeOverrides(displayService, fb);
-    IOLog("[V170] Applied display merge overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    IOLog("[V305] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
     displayService->release();
 }
 
@@ -589,7 +620,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V302 - aligned opregion + rcs focus   ║\n");
+    IOLog("║       FAKEIRISXE V305 - ring ctl and display cleanup   ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1145,7 +1176,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V302 - aligned opregion + rcs focus  ║\n");
+    IOLog("║       FAKEIRISXE V305 - ring ctl and display cleanup  ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -1922,7 +1953,8 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     }
     
     
-    // === V170: fallback EDID if no Apple internal override is available ===
+    // Native AUX EDID is authoritative. Only use the built-in fallback EDID if
+    // no real panel identity was discovered.
     static const uint8_t fallbackDisplayEDID[128] = {
         0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
         0x30, 0xE4, 0x1E, 0x07, 0x00, 0x00, 0x00, 0x00,
@@ -1942,120 +1974,31 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
     
-    // === V170: Display Identity Injection (Apple internal panel) ===
-    // Use boot-arg: -fakeirisxe-display=mbp16_2, a030, a014, air10_1, pro16_1, pro13_1, or lg
-    {
-        if (publishDisplayIdentityFromEdid()) {
-            IOLog("[V302] Native panel EDID/identity detected - fallback display injection skipped\n");
-        } else {
-        uint32_t displayVendorID = 0x0610;    // Apple internal display vendor
-        uint32_t displayProductID = 0xA030;   // F16Ta030 Color LCD
-        const char* displayName = "Color LCD";
-        uint32_t displaySerial = 0x00000001;
-        
-        char displayArgBuf[32] = {0};
-        if (PE_parse_boot_argn("-fakeirisxe-display", displayArgBuf, sizeof(displayArgBuf))) {
-            IOLog("[V170] Display identity boot-arg: '%s'\n", displayArgBuf);
-            
-            if (strncmp(displayArgBuf, "mbp16_2", 7) == 0 || strncmp(displayArgBuf, "a030", 4) == 0) {
-                displayVendorID = 0x0610;
-                displayProductID = 0xA030;
-                displayName = "Color LCD";
-                displaySerial = 0x00000001;
-                IOLog("[V170] Using MacBookPro16,2 / F16Ta030 display identity\n");
-            } else if (strncmp(displayArgBuf, "a014", 4) == 0) {
-                displayVendorID = 0x0610;
-                displayProductID = 0xA014;
-                displayName = "Color LCD";
-                displaySerial = 0x00000001;
-                IOLog("[V170] Using Apple internal display identity A014\n");
-            } else if (strncmp(displayArgBuf, "air10_1", 7) == 0) {
-                displayVendorID = 0x0610;
-                displayProductID = 0xA030;
-                displayName = "Color LCD";
-                displaySerial = 0x00000001;
-                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Air IDs\n");
-            } else if (strncmp(displayArgBuf, "pro16_1", 7) == 0) {
-                displayVendorID = 0x0610;
-                displayProductID = 0xA030;
-                displayName = "Color LCD";
-                displaySerial = 0x00000001;
-                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Pro 16,1 IDs\n");
-            } else if (strncmp(displayArgBuf, "pro13_1", 7) == 0) {
-                displayVendorID = 0x0610;
-                displayProductID = 0xA014;
-                displayName = "Color LCD";
-                displaySerial = 0x00000001;
-                IOLog("[V170] Using Apple Color LCD identity instead of legacy MacBook Pro 13 IDs\n");
-            } else if (strncmp(displayArgBuf, "lg", 2) == 0) {
-                displayVendorID = 0xE430;
-                displayProductID = 0x071E;
-                displayName = "LG Display";
-                displaySerial = 0x00000000;
-                IOLog("[V170] Using LG Display panel identity\n");
-            } else {
-                IOLog("[V170] Unknown display identity, defaulting to MacBookPro16,2 / F16Ta030\n");
-            }
-        } else {
-            IOLog("[V170] No display identity specified, defaulting to MacBookPro16,2 / F16Ta030\n");
-        }
-        
-        // Apply display properties
-        OSData *edidData = OSDynamicCast(OSData, getProperty("AAPL00,override-no-connect"));
-        if (!edidData) {
-            edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
-        } else {
-            edidData->retain();
-        }
+    if (publishDisplayIdentityFromEdid()) {
+        IOLog("[V305] Native panel EDID/identity detected\n");
+    } else {
+        OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
             setProperty("IODisplayEDID", edidData);
             setProperty("AAPL00,PanelEDID", edidData);
+            setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
             edidData->release();
-            IOLog("[V170] EDID published\n");
         }
-
-        setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
-        OSNumber* _nSer = OSNumber::withNumber((uint64_t)displaySerial, 32);
-        OSNumber* _nVid = OSNumber::withNumber((uint64_t)displayVendorID, 16);
-        OSNumber* _nPid = OSNumber::withNumber((uint64_t)displayProductID, 16);
-        setProperty("IODisplaySerialNumber", _nSer);
-        setProperty("IODisplayVendorID", _nVid);
-        setProperty("IODisplayProductID", _nPid);
-        OSNumber* _nDVid = OSNumber::withNumber((uint64_t)displayVendorID, 32);
-        OSNumber* _nDPid = OSNumber::withNumber((uint64_t)displayProductID, 32);
-        setProperty("DisplayVendorID", _nDVid);
-        setProperty("DisplayProductID", _nDPid);
-        _nSer->release(); _nVid->release(); _nPid->release();
-        _nDVid->release(); _nDPid->release();
-        setProperty("IODisplayName", OSString::withCString(displayName));
-        setProperty("DisplayProductName", OSString::withCString(displayName));
-        setNumberProperty(this, kDisplayHorizontalImageSize, 286, 32);
-        setNumberProperty(this, kDisplayVerticalImageSize, 179, 32);
-        
-        // Set Apple-specific properties for MacBook identity
-        if (displayVendorID == 0x0610) {
-            // Apple display - additional properties
-            OSNumber* _nPID = OSNumber::withNumber((uint64_t)0x0001, 16);
-            setProperty("IODisplayPanelID", _nPID);
-            _nPID->release();
-            OSNumber* _num_4 = OSNumber::withNumber(1ULL, 32);
-            setProperty("AAPL,backlight-control-type", _num_4);
-            _num_4->release();
-            setProperty("AAPL01-internal-panel", kOSBooleanTrue);
-        }
-        
-        // Internal panel properties
-        setProperty("AAPL,slot-name", OSString::withCString("Internal@0,2,0"));
+        setProperty("FakeIrisXEEdidSource", "fallback-edid");
+        setNumberProperty(this, "IODisplayVendorID", edidVendorId(fallbackDisplayEDID), 32);
+        setNumberProperty(this, "IODisplayProductID", edidProductId(fallbackDisplayEDID), 32);
+        setNumberProperty(this, "IODisplaySerialNumber", edidSerialNumber(fallbackDisplayEDID), 32);
+        setNumberProperty(this, "DisplayVendorID", edidVendorId(fallbackDisplayEDID), 32);
+        setNumberProperty(this, "DisplayProductID", edidProductId(fallbackDisplayEDID), 32);
+        setNumberProperty(this, kDisplayHorizontalImageSize, 340, 32);
+        setNumberProperty(this, kDisplayVerticalImageSize, 190, 32);
+        setProperty("IODisplayName", "LG Display");
+        setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
-        applyBacklightPresetForIdentity(displayVendorID, displayProductID);
-        
-        IOLog("[V170] Display identity applied: Vendor=0x%04X, Product=0x%04X\n", displayVendorID, displayProductID);
-        }
-    }
-
-    // === V161: Proper LG Display EDID for Tiger Lake integrated panel (LGD 0x071E) ===
-    {
-        // (Legacy - now handled by V170 block above)
+        applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
+        IOLog("[V305] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+              edidVendorId(fallbackDisplayEDID),
+              edidProductId(fallbackDisplayEDID));
     }
 
     // Display Timing Information
@@ -2901,7 +2844,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V302, aligned opregion and RCS proof path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V305, ring control validation and display cleanup path)\n");
     return true;
 
 }
@@ -5624,6 +5567,8 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         setNumberProperty(this, "FakeIrisXEOpRegionHeaderOffset", fConnectorManager->getOpRegionHeaderOffset(), 32);
         setNumberProperty(this, "FakeIrisXEOpRegionRvda", fConnectorManager->getOpRegionRvda(), 64);
         setNumberProperty(this, "FakeIrisXEOpRegionRvds", fConnectorManager->getOpRegionRvds(), 32);
+        setNumberProperty(this, "FakeIrisXEVbtHeaderOffset", fConnectorManager->getVBTHeaderOffset(), 32);
+        setNumberProperty(this, "FakeIrisXEVbtPhys", fConnectorManager->getVBTPhys(), 64);
         setNumberProperty(this, "FakeIrisXEVBTVersion", fConnectorManager->getVBTVersion(), 32);
         setNumberProperty(this, "FakeIrisXEBDBVersion", fConnectorManager->getBDBVersion(), 32);
     }
@@ -5724,8 +5669,9 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     }
 
     applyBacklightPresetForIdentity(vendorID, productID);
+    injectDisplayMergeOverridesIfAvailable(this);
 
-    IOLog("[V302] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V305] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6148,7 +6094,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V302] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V305] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6656,17 +6602,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V302] ============================================\n");
-    IOLog("(FakeIrisXE)[V302] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V302] ============================================\n");
+    IOLog("(FakeIrisXE)[V305] ============================================\n");
+    IOLog("(FakeIrisXE)[V305] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V305] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V302] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V305] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V302] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V305] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V302] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V302] ============================================\n");
+    IOLog("(FakeIrisXE)[V305] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V305] ============================================\n");
     return success;
 }
 

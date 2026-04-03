@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.302</string>
+	<string>1.0.305</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.302</string>
+	<string>1.0.305</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V302 - aligned OpRegion parsing, native identity convergence, RCS descriptor diagnostics, and quieter GuC polling</string>
+	<string>FakeIrisXe V305 - ring control validation, proof failure classification, and native display convergence cleanup</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
