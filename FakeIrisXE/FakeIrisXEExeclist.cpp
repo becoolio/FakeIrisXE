@@ -85,7 +85,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V305";
+static const char* kExeclistVersion = "V307";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -172,12 +172,45 @@ struct ProofObservations {
     uint32_t lastRingHead = 0;
     uint32_t lastRingTail = 0;
     uint32_t attemptedRingMode = 0;
+    uint32_t attemptedSubmitStyle = 0;
+    uint32_t attemptedCtxCtrl = 0;
+    uint32_t attemptedAddrMode = 0;
+    bool attemptedForceRestore = false;
 };
 
 enum ProofRingProgrammingMode {
     ProofRingModeLrcOnly = 0,
     ProofRingModeLiveOnly = 1,
     ProofRingModeCombined = 2,
+};
+
+enum ProofSubmitStyle {
+    ProofSubmitCurrent = 0,
+    ProofSubmitKickBeforeHi = 1,
+    ProofSubmitKickAfterLo = 2,
+};
+
+struct ProofVariant {
+    const char* label;
+    ProofRingProgrammingMode ringMode;
+    ProofSubmitStyle submitStyle;
+    uint32_t ctxCtrl;
+    uint32_t addrMode;
+    bool forceRestore;
+    uint32_t execlistControlKick;
+    uint32_t arbControl;
+};
+
+static const ProofVariant kProofVariants[] = {
+    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "no-force-restore",     ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, 0x00000001u, 0x00020001u },
+    { "ctxctrl-0x9",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "addrmode-0",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  0x00000001u, 0x00020001u },
+    { "kick-before-hi",       ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "kick-after-lo",        ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00020001u },
+    { "arb-alt",              ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  0x00000001u, 0x00000001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -189,6 +222,20 @@ static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
             return "live-ring-only";
         case ProofRingModeCombined:
             return "combined";
+        default:
+            return "unknown";
+    }
+}
+
+static const char* proofSubmitStyleLabel(ProofSubmitStyle style)
+{
+    switch (style) {
+        case ProofSubmitCurrent:
+            return "current";
+        case ProofSubmitKickBeforeHi:
+            return "kick-before-hi";
+        case ProofSubmitKickAfterLo:
+            return "kick-after-lo";
         default:
             return "unknown";
     }
@@ -221,6 +268,23 @@ static void patchProofLrcRingBlock(const RcsProofResources& res, ProofRingProgra
     proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x08u, startLo);
     proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x0Cu, startHi);
     proofWriteLe32(lrcCpu + kProofLrcRingStateOffset + 0x10u, ctl);
+    OSSynchronizeIO();
+}
+
+static void patchProofLrcContextControl(const RcsProofResources& res, uint32_t ctxCtrl)
+{
+    if (!res.lrcGem) {
+        return;
+    }
+    IOBufferMemoryDescriptor* md = res.lrcGem->memoryDescriptor();
+    if (!md) {
+        return;
+    }
+    uint8_t* lrcCpu = reinterpret_cast<uint8_t*>(md->getBytesNoCopy());
+    if (!lrcCpu) {
+        return;
+    }
+    proofWriteLe32(lrcCpu + 0x2Cu, ctxCtrl);
     OSSynchronizeIO();
 }
 
@@ -372,6 +436,75 @@ static volatile uint64_t* csbCpuBase(IOBufferMemoryDescriptor* md)
     }
 
     return (volatile uint64_t*)(bytes + kExecCsbOffsetBytes);
+}
+
+static void logProofSharedBacking(FakeIrisXEExeclist* self, const char* phase)
+{
+    if (!self || !self->fCsbGem) {
+        return;
+    }
+
+    IOBufferMemoryDescriptor* md = self->fCsbGem->memoryDescriptor();
+    if (!md) {
+        return;
+    }
+
+    const uint64_t* hws = reinterpret_cast<const uint64_t*>(md->getBytesNoCopy());
+    const volatile uint64_t* csb = csbCpuBase(md);
+    if (!hws || !csb) {
+        return;
+    }
+
+    IOLog("(FakeIrisXE) [%s] %s HWS[0]=0x%016llX HWS[1]=0x%016llX HWS[2]=0x%016llX HWS[3]=0x%016llX\n",
+          kExeclistVersion,
+          phase ? phase : "backing",
+          static_cast<unsigned long long>(hws[0]),
+          static_cast<unsigned long long>(hws[1]),
+          static_cast<unsigned long long>(hws[2]),
+          static_cast<unsigned long long>(hws[3]));
+    IOLog("(FakeIrisXE) [%s] %s CSB[0]=0x%016llX CSB[1]=0x%016llX CSB[2]=0x%016llX CSB[3]=0x%016llX\n",
+          kExeclistVersion,
+          phase ? phase : "backing",
+          static_cast<unsigned long long>(csb[0]),
+          static_cast<unsigned long long>(csb[1]),
+          static_cast<unsigned long long>(csb[2]),
+          static_cast<unsigned long long>(csb[3]));
+}
+
+static void logProofRingGating(FakeIrisXEExeclist* self, const char* phase)
+{
+    if (!self) {
+        return;
+    }
+
+    const uint32_t rcsStatus = self->mmioRead32(kExecRcsStatusReg);
+    const uint32_t ringCtl = self->mmioRead32(kExecRingCtlReg);
+    const uint32_t ringHead = self->mmioRead32(kExecRingHeadReg);
+    const uint32_t ringTail = self->mmioRead32(kExecRingTailReg);
+    const uint32_t execlistCtl = self->mmioRead32(RCS0_EXECLIST_CONTROL);
+    const uint32_t execlistArb = self->mmioRead32(RCS0_EXECLIST_ARB_CTL);
+    const uint32_t ctxCtl = self->mmioRead32(kExecContextControlReg);
+    const uint32_t miMode = self->mmioRead32(0x209Cu);
+    const uint32_t cmdBufCctl = self->mmioRead32(kProofRcsCmdBufCctlMmio);
+    const uint32_t debugMode2 = self->mmioRead32(kProofGen12CsDebugMode2Mmio);
+    const bool halted = (rcsStatus & 0xE000u) == 0xE000u;
+    const bool idle = (rcsStatus & 0x1u) != 0u;
+
+    IOLog("(FakeIrisXE) [%s] %s gating: RCS_STATUS=0x%08X halted=%u idle=%u RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXECLIST_CTL=0x%08X ARB=0x%08X CTXCTL=0x%08X MI_MODE=0x%08X CCTL=0x%08X DEBUG2=0x%08X\n",
+          kExeclistVersion,
+          phase ? phase : "gating",
+          rcsStatus,
+          halted ? 1u : 0u,
+          idle ? 1u : 0u,
+          ringCtl,
+          ringHead,
+          ringTail,
+          execlistCtl,
+          execlistArb,
+          ctxCtl,
+          miMode,
+          cmdBufCctl,
+          debugMode2);
 }
 
 static uint32_t buildProofIndirectCtxCommands(const RcsProofResources& res, uint32_t* indirectCtx)
@@ -884,18 +1017,24 @@ static bool buildProofLrc(FakeIrisXEExeclist* self, RcsProofResources& res)
     return true;
 }
 
-static void buildProofDescriptor(RcsProofResources& res)
+static void buildProofDescriptor(RcsProofResources& res, const ProofVariant& variant)
 {
     res.descLo = ((uint32_t)(res.lrcGpuAddr & 0xFFFFF000ULL)) |
                  kCtxDescValid |
                  kCtxDescPrivilege |
-                 kCtxDescForceRestore |
-                 (kCtxDescLegacy64B << kCtxDescAddressingModeShift);
+                 (variant.forceRestore ? kCtxDescForceRestore : 0u) |
+                 ((variant.addrMode & 0x3u) << kCtxDescAddressingModeShift);
     res.descHi = ((res.swContextId & 0x7FFu) << kCtxDescSwCtxIdShiftInHi) |
                  ((kCtxDescRenderInstance & 0x3Fu) << kCtxDescEngineInstanceShiftInHi) |
                  ((kCtxDescRenderClass & 0x7u) << kCtxDescEngineClassShiftInHi);
 
     IOLog("(FakeIrisXE) [%s] ========== CONTEXT DESCRIPTOR ==========\n", kExeclistVersion);
+    IOLog("(FakeIrisXE) [%s]   Variant: %s ring=%s submit=%s ctxCtrl=0x%08X\n",
+          kExeclistVersion,
+          variant.label,
+          proofRingModeLabel(variant.ringMode),
+          proofSubmitStyleLabel(variant.submitStyle),
+          variant.ctxCtrl);
     IOLog("(FakeIrisXE) [%s]   DWord0: 0x%08X\n", kExeclistVersion, res.descLo);
     IOLog("(FakeIrisXE) [%s]   DWord1: 0x%08X\n", kExeclistVersion, res.descHi);
     IOLog("(FakeIrisXE) [%s]   Address field: 0x%08X -> GPU VA 0x%016llX\n",
@@ -976,6 +1115,7 @@ static bool singleResetAttemptIfNeeded(FakeIrisXEExeclist* self)
 
 static bool submitProofDescriptor(FakeIrisXEExeclist* self,
                                   RcsProofResources& res,
+                                  const ProofVariant& variant,
                                   ProofFailureType& failure,
                                   ProofObservations& observations)
 {
@@ -993,6 +1133,11 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const uint32_t preCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
     const uint32_t preCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
     const uint32_t preCtxCtrl = self->mmioRead32(kExecContextControlReg);
+    observations.attemptedRingMode = static_cast<uint32_t>(variant.ringMode);
+    observations.attemptedSubmitStyle = static_cast<uint32_t>(variant.submitStyle);
+    observations.attemptedCtxCtrl = variant.ctxCtrl;
+    observations.attemptedAddrMode = variant.addrMode;
+    observations.attemptedForceRestore = variant.forceRestore;
 
     IOLog("(FakeIrisXE) [%s] Submit preflight: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X DESC=%08X/%08X ring=0x%llX tail=0x%X\n",
           kExeclistVersion,
@@ -1026,54 +1171,61 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     }
 
     self->fOwner->forcewakeRenderHold();
-    static const ProofRingProgrammingMode kModes[] = {
-        ProofRingModeLrcOnly,
-        ProofRingModeLiveOnly,
-        ProofRingModeCombined,
-    };
-    bool ringProgrammingReady = false;
-    for (uint32_t i = 0; i < sizeof(kModes) / sizeof(kModes[0]); ++i) {
-        const ProofRingProgrammingMode mode = kModes[i];
-        observations.attemptedRingMode = static_cast<uint32_t>(mode);
-        patchProofLrcRingBlock(res, mode);
-        logProofLrcImage(res);
+    patchProofLrcContextControl(res, variant.ctxCtrl);
+    patchProofLrcRingBlock(res, variant.ringMode);
+    logProofLrcImage(res);
+    logProofSharedBacking(self, "pre-submit");
+    logProofRingGating(self, "pre-submit");
 
-        if (mode == ProofRingModeLrcOnly) {
-            observations.ringCtlEnabled = true;
-            observations.ringCtlMasked = false;
-            observations.lastRingStart = 0u;
-            observations.lastRingHead = 0u;
-            observations.lastRingTail = 0u;
-            observations.lastRingCtl = 0u;
-            IOLog("(FakeIrisXE) [%s] Ring program mode=%s: skipping live ring register programming\n",
-                  kExeclistVersion,
-                  proofRingModeLabel(mode));
-            ringProgrammingReady = true;
-            break;
-        }
-
-        if (programProofRingState(self, res, &observations)) {
-            IOLog("(FakeIrisXE) [%s] Ring program mode=%s accepted live RING_CTL=0x%08X\n",
-                  kExeclistVersion,
-                  proofRingModeLabel(mode),
-                  observations.lastRingCtl);
-            ringProgrammingReady = true;
-            break;
-        }
-    }
-
-    if (!ringProgrammingReady) {
+    if (variant.ringMode == ProofRingModeLrcOnly) {
+        observations.ringCtlEnabled = true;
+        observations.ringCtlMasked = false;
+        observations.lastRingStart = 0u;
+        observations.lastRingHead = 0u;
+        observations.lastRingTail = 0u;
+        observations.lastRingCtl = 0u;
+        IOLog("(FakeIrisXE) [%s] Ring program mode=%s: skipping live ring register programming\n",
+              kExeclistVersion,
+              proofRingModeLabel(variant.ringMode));
+    } else if (!programProofRingState(self, res, &observations)) {
         self->fOwner->forcewakeRenderRelease();
         failure = RingControlNotEnabled;
         return false;
     }
-    self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, 0x00020001u);
+
+    if (variant.ringMode != ProofRingModeLrcOnly) {
+        IOLog("(FakeIrisXE) [%s] Ring program mode=%s accepted live RING_CTL=0x%08X\n",
+              kExeclistVersion,
+              proofRingModeLabel(variant.ringMode),
+              observations.lastRingCtl);
+    }
+
+    self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, variant.arbControl);
     IOSleep(1);
-    self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
-    IOSleep(1);
-    self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
-    IOSleep(1);
-    self->mmioWrite32(RCS0_EXECLIST_CONTROL, 0x00000001u);
+    switch (variant.submitStyle) {
+        case ProofSubmitKickBeforeHi:
+            self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            break;
+        case ProofSubmitKickAfterLo:
+            self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            break;
+        case ProofSubmitCurrent:
+        default:
+            self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            IOSleep(1);
+            self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
+            break;
+    }
     IOSleep(1);
     const uint32_t postLo = self->mmioRead32(kExecElspPrimaryLo);
     const uint32_t postHi = self->mmioRead32(kExecElspPrimaryHi);
@@ -1090,6 +1242,9 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     res.submitAccepted =
         (postLo != preLo) || (postHi != preHi) ||
         (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
+
+    logProofSharedBacking(self, "post-submit");
+    logProofRingGating(self, "post-submit");
 
     IOLog("(FakeIrisXE) [%s] Submit postwrite: ELSP=%08X/%08X STATUS=%08X/%08X CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X latched=%u\n",
           kExeclistVersion,
@@ -1301,16 +1456,43 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
         goto done_release;
     }
 
-    buildProofDescriptor(res);
-
-    if (!submitProofDescriptor(self, res, failure, observations)) {
-        if (failure == None) {
-            failure = DescriptorWrong;
+    for (uint32_t variantIndex = 0; variantIndex < sizeof(kProofVariants) / sizeof(kProofVariants[0]); ++variantIndex) {
+        const ProofVariant& variant = kProofVariants[variantIndex];
+        observations = {};
+        observations.lastScratchValue = kProofScratchInitial;
+        if (volatile uint32_t* scratchCpu = (volatile uint32_t*)self->fOwner->ggttGetCPUAddr(res.scratchGem)) {
+            *scratchCpu = kProofScratchInitial;
+            OSSynchronizeIO();
         }
-        goto done_release;
-    }
 
-    success = pollProofProgress(self, res, failure, observations);
+        IOLog("(FakeIrisXE) [%s] ---------- Variant %u/%llu: %s ----------\n",
+              kExeclistVersion,
+              variantIndex + 1u,
+              static_cast<unsigned long long>(sizeof(kProofVariants) / sizeof(kProofVariants[0])),
+              variant.label);
+
+        if (!singleResetAttemptIfNeeded(self)) {
+            IOLog("(FakeIrisXE) [%s] Variant %s starts from non-ideal engine state; continuing for classification\n",
+                  kExeclistVersion,
+                  variant.label);
+        }
+
+        buildProofDescriptor(res, variant);
+        if (!submitProofDescriptor(self, res, variant, failure, observations)) {
+            if (failure == RingControlNotEnabled) {
+                continue;
+            }
+            if (failure == None) {
+                failure = DescriptorWrong;
+            }
+            goto done_release;
+        }
+
+        success = pollProofProgress(self, res, failure, observations);
+        if (success || failure != RingControlNotEnabled) {
+            break;
+        }
+    }
 
 done_release:
     self->fOwner->forcewakeRenderRelease();
@@ -1328,6 +1510,10 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingCtlMasked", observations.ringCtlMasked);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
     self->fOwner->setProperty("FakeIrisXERcsProofRingMode", proofRingModeLabel(static_cast<ProofRingProgrammingMode>(observations.attemptedRingMode)));
+    self->fOwner->setProperty("FakeIrisXERcsProofSubmitStyle", proofSubmitStyleLabel(static_cast<ProofSubmitStyle>(observations.attemptedSubmitStyle)));
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofAttemptedCtxCtrl", observations.attemptedCtxCtrl, 32);
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofAttemptedAddrMode", observations.attemptedAddrMode, 32);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofAttemptedForceRestore", observations.attemptedForceRestore);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastScratch", observations.lastScratchValue, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastStatusLo", observations.lastExeclistStatusLo, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbCtrl", observations.lastCsbCtrl, 32);
