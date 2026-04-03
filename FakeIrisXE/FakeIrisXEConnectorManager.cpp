@@ -38,6 +38,7 @@ static const uint32_t kMboxAsleExt = (1u << 4);
 static const uint8_t kVbtBlockGeneralDefinitions = 2;
 static const uint8_t kVbtBlockEdp = 27;
 static const uint8_t kVbtBlockLfpOptions = 40;
+static const uint8_t kVbtBlockPowerSeq = 42;
 
 static const uint16_t kDeviceHandleLfp1 = 0x0008;
 static const uint16_t kDeviceHandleLfp2 = 0x0080;
@@ -432,7 +433,12 @@ FakeIrisXEConnectorManager::FakeIrisXEConnectorManager()
       m_opregionSignatureValid(false),
       m_vbtHeaderOffset(0),
       m_vbtPhys(0),
-      m_vbtLength(0)
+      m_vbtLength(0),
+      m_strictVbtMode(false),
+      m_panelPowerOnDelay(0),
+      m_panelPowerOffDelay(0),
+      m_dpcdBacklightCaps(0),
+      m_displayTreeReady(false)
 {
     bzero(m_connectors, sizeof(m_connectors));
     bzero(m_vbtStorage, sizeof(m_vbtStorage));
@@ -469,12 +475,20 @@ void FakeIrisXEConnectorManager::discoverConnectors()
     logDDIRegisters();
 
     bool haveVbtMap = loadVBT() && parseVBTConnectors();
-    if (!haveVbtMap) {
+    if (haveVbtMap) {
+        m_strictVbtMode = true;
+        IOLog("[TGL-Connector] Strict VBT mode enabled - fallback map disabled\n");
+    } else {
         IOLog("[TGL-Connector] No valid VBT connector map found, using fallback map\n");
         initDefaultConnectorMap();
     }
 
     probeConnectors();
+
+    if (m_internalPanel && m_internalPanel->present) {
+        checkDpcdBacklightCaps(*m_internalPanel);
+    }
+
     logConnectorInfo();
 }
 
@@ -547,7 +561,14 @@ void FakeIrisXEConnectorManager::probeConnectors()
         bzero(conn.dpcd, sizeof(conn.dpcd));
         bzero(conn.edid, sizeof(conn.edid));
 
-        bool hpdPresent = conn.isInternal ? isEDPPanelPowered() : checkHPD(conn);
+    bool hpdPresent = false;
+    for (uint32_t hpdPoll = 0; hpdPoll < 3; ++hpdPoll) {
+        hpdPresent = conn.isInternal ? isEDPPanelPowered() : checkHPD(conn);
+        if (hpdPresent) {
+            break;
+        }
+        IOSleep(50);
+    }
         bool auxCandidate = conn.isInternal || hpdPresent;
 
         if (conn.type == TGLConnectorType::HDMI) {
@@ -580,6 +601,13 @@ void FakeIrisXEConnectorManager::probeConnectors()
                   dpcdRev & 0x0Fu,
                   conn.dpcd[1],
                   conn.dpcd[2]);
+            uint8_t mstCaps = 0;
+            if (auxNativeRead(conn.auxChannel, 0x021u, &mstCaps, 1u)) {
+                IOLog("[TGL-Connector] Connector %u %s MST caps=0x%02X\n",
+                      i,
+                      connectorTypeName(conn.type),
+                      mstCaps);
+            }
         } else if (conn.isInternal && isEDPPanelPowered()) {
             conn.present = true;
         }
@@ -599,6 +627,40 @@ void FakeIrisXEConnectorManager::probeConnectors()
                   i,
                   connectorTypeName(conn.type));
         }
+    }
+
+    for (uint8_t i = 0; i < m_connectorCount; ++i) {
+        TGLConnectorDesc& conn = m_connectors[i];
+        if (conn.hasDpcd && conn.discoveredFromVbt) {
+            bool vbtMatchesDpcd = true;
+            if (conn.maxLanes > 0 && conn.maxLanes != (conn.dpcd[2] & 0x1Fu)) {
+                vbtMatchesDpcd = false;
+            }
+            IOLog("[TGL-Connector] VBT vs DPCD cross-check con%u: lanes_match=%u dpcd_lanes=%u vbt_lanes=%u\n",
+                  i,
+                  vbtMatchesDpcd ? 1u : 0u,
+                  conn.dpcd[2] & 0x1Fu,
+                  conn.maxLanes);
+        }
+    }
+}
+
+void FakeIrisXEConnectorManager::checkDpcdBacklightCaps(TGLConnectorDesc& conn)
+{
+    if (!conn.isInternal || !conn.present) {
+        m_dpcdBacklightCaps = 0;
+        return;
+    }
+
+    uint8_t caps = 0;
+    if (auxNativeRead(conn.auxChannel, 0x700u, &caps, 1)) {
+        m_dpcdBacklightCaps = caps;
+        IOLog("[TGL-Connector] DPCD backlight caps=0x%02X (AUX backlight %ssupported)\n",
+              caps,
+              (caps & 0x1u) ? "" : "not ");
+    } else {
+        m_dpcdBacklightCaps = 0;
+        IOLog("[TGL-Connector] DPCD backlight read failed, assuming PWM only\n");
     }
 }
 
@@ -840,16 +902,32 @@ bool FakeIrisXEConnectorManager::isTranscoderEnabled(uint8_t transcoder)
 
 bool FakeIrisXEConnectorManager::powerUpEDPPanel()
 {
-    IOLog("[TGL-Connector] Powering up eDP panel...\n");
-    writeReg(PCH_PP_CONTROL, readReg(PCH_PP_CONTROL) | (1u << 0));
+    const uint32_t onDelayUs = m_panelPowerOnDelay ? m_panelPowerOnDelay : 100000u;
+    const uint32_t offDelayUs = m_panelPowerOffDelay ? m_panelPowerOffDelay : 100000u;
+    IOLog("[TGL-Connector] Powering up eDP panel (t_on=%uus t_off=%uus)...\n", onDelayUs, offDelayUs);
+
+    uint32_t ppCtrl = readReg(PCH_PP_CONTROL);
+    uint32_t ppStatus = readReg(PCH_PP_STATUS);
+    if ((ppStatus & (1u << 30)) == 0u) {
+        writeReg(PCH_PP_CONTROL, ppCtrl & ~(1u << 0));
+        IOSleep((offDelayUs + 999u) / 1000u);
+    }
+
+    writeReg(PCH_PP_CONTROL, ppCtrl | (1u << 0));
+    const uint32_t pollDelayUs = onDelayUs ? onDelayUs / 10u : 1000u;
     for (uint32_t timeout = 0; timeout < 100u; ++timeout) {
-        uint32_t ppStatus = readReg(PCH_PP_STATUS);
+        ppStatus = readReg(PCH_PP_STATUS);
         if ((ppStatus & (1u << 31)) == 0u) {
+            IOLog("[TGL-Connector] eDP panel power sequence complete PP_CONTROL=0x%08X PP_STATUS=0x%08X\n",
+                  readReg(PCH_PP_CONTROL),
+                  ppStatus);
             return true;
         }
-        IODelay(100);
+        IODelay(pollDelayUs ? pollDelayUs : 1000u);
     }
-    IOLog("[TGL-Connector] eDP power up timed out\n");
+    IOLog("[TGL-Connector] eDP power up timed out PP_CONTROL=0x%08X PP_STATUS=0x%08X\n",
+          readReg(PCH_PP_CONTROL),
+          readReg(PCH_PP_STATUS));
     return false;
 }
 
@@ -2062,6 +2140,19 @@ bool FakeIrisXEConnectorManager::parseVBTConnectors()
                 default:
                     break;
             }
+        }
+    }
+
+    uint16_t powerSeqSize = 0;
+    const EdpPowerSeq* powerSeq = reinterpret_cast<const EdpPowerSeq*>(findBDBSection(kVbtBlockPowerSeq, &powerSeqSize));
+    if (m_internalPanel && powerSeq && powerSeqSize >= sizeof(EdpPowerSeq)) {
+        uint8_t panelType = m_internalPanel->panelType;
+        if (panelType < 16u) {
+            const EdpPowerSeq& seq = powerSeq[panelType];
+            m_panelPowerOnDelay = seq.t1t3;
+            m_panelPowerOffDelay = seq.t8;
+            IOLog("[TGL-Connector] VBT panel timing: T1+T3=%uus T8=%uus T9=%uus T10=%uus T11+T12=%uus\n",
+                  seq.t1t3, seq.t8, seq.t9, seq.t10, seq.t11t12);
         }
     }
 

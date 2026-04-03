@@ -59,12 +59,22 @@ bool FakeIrisXEGEM::allocate() {
 void FakeIrisXEGEM::pin() {
     IOLockLock(fLock);
     fPinCount++;
+    IOLog("(FakeIrisXE) GEM pin gem=%p count=%u gpu=0x%llx phys=0x%llx\n",
+          this,
+          fPinCount,
+          static_cast<unsigned long long>(fGpuAddress),
+          static_cast<unsigned long long>(fPhysAddr));
     IOLockUnlock(fLock);
 }
 
 void FakeIrisXEGEM::unpin() {
     IOLockLock(fLock);
     if (fPinCount > 0) fPinCount--;
+    IOLog("(FakeIrisXE) GEM unpin gem=%p count=%u gpu=0x%llx phys=0x%llx\n",
+          this,
+          fPinCount,
+          static_cast<unsigned long long>(fGpuAddress),
+          static_cast<unsigned long long>(fPhysAddr));
     IOLockUnlock(fLock);
 }
 

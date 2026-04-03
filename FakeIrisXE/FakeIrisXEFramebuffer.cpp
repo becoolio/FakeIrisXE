@@ -616,12 +616,12 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V310] display0 not found under FakeIrisXEFramebuffer yet\n");
+        IOLog("[V312] display0 not found under FakeIrisXEFramebuffer yet\n");
         return false;
     }
 
     applyDisplayMergeOverrides(displayService, fb);
-    IOLog("[V310] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    IOLog("[V312] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
     displayService->release();
     return true;
 }
@@ -686,7 +686,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V310 - forced descriptor matrix     ║\n");
+    IOLog("║       FAKEIRISXE V312 - deeper platform diagnostics  ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1242,7 +1242,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V310 - forced descriptor matrix    ║\n");
+    IOLog("║       FAKEIRISXE V312 - deeper platform diagnostics ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2041,7 +2041,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     
     if (publishDisplayIdentityFromEdid()) {
-        IOLog("[V310] Native panel EDID/identity detected\n");
+        IOLog("[V312] Native panel EDID/identity detected\n");
     } else {
         OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
@@ -2062,7 +2062,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
         applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
-        IOLog("[V310] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+        IOLog("[V312] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
               edidVendorId(fallbackDisplayEDID),
               edidProductId(fallbackDisplayEDID));
     }
@@ -2912,7 +2912,37 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V310, forced descriptor matrix and stronger display retry path)\n");
+    uint16_t linkStatus = pciDevice ? pciDevice->configRead16(0x92) : 0;
+    uint16_t linkSpeed = linkStatus & 0xFu;
+    uint16_t linkWidth = (linkStatus >> 4) & 0x3Fu;
+    uint32_t gtPerf = safeMMIORead(0xA070);
+    uint32_t gtStatus = safeMMIORead(0xA000);
+    setNumberProperty(this, "FakeIrisXEPCIeLinkStatus", linkStatus, 16);
+    setNumberProperty(this, "FakeIrisXEPCIeLinkSpeed", linkSpeed, 16);
+    setNumberProperty(this, "FakeIrisXEPCIeLinkWidth", linkWidth, 16);
+    setNumberProperty(this, "FakeIrisXEGtPerfStatus", gtPerf, 32);
+    setNumberProperty(this, "FakeIrisXEGtStatus", gtStatus, 32);
+    setNumberProperty(this, "FakeIrisXEPMCSR", pciDevice ? pciDevice->configRead16(0x84) : 0, 16);
+    setNumberProperty(this, "FakeIrisXEBar0Low", pciDevice ? pciDevice->configRead32(kIOPCIConfigBaseAddress0) : 0, 32);
+    setNumberProperty(this, "FakeIrisXEBar2Low", pciDevice ? pciDevice->configRead32(kIOPCIConfigBaseAddress2) : 0, 32);
+    setProperty("FakeIrisXEAudioLinkReady", getProperty("FakeIrisXEAudioLinkReady") ? kOSBooleanTrue : kOSBooleanFalse);
+    IOLog("(FakeIrisXE) [BOOT-SUMMARY] VBT=%u BDB=%u EDID=%s DisplayTreeReady=%u BacklightPWM=0x%04X DPCD_BL=0x%02X PCIeSpeed=%u PCIeWidth=x%u GT_PERF=0x%08X GT_STATUS=0x%08X ProofReady=%u\n",
+          fConnectorManager ? fConnectorManager->getVBTVersion() : 0u,
+          fConnectorManager ? fConnectorManager->getBDBVersion() : 0u,
+          OSDynamicCast(OSString, getProperty("FakeIrisXEEdidSource")) ? OSDynamicCast(OSString, getProperty("FakeIrisXEEdidSource"))->getCStringNoCopy() : "none",
+          getProperty("FakeIrisXEDisplayTreeReady") == kOSBooleanTrue ? 1u : 0u,
+          fPwmMax,
+          fConnectorManager ? fConnectorManager->getDpcdBacklightCaps() : 0u,
+          linkSpeed,
+          linkWidth,
+          gtPerf,
+          gtStatus,
+          fCommandSubmissionReady ? 1u : 0u);
+    IOLog("(FakeIrisXE) [BOOT-SUMMARY] PMCSR=0x%04X AudioLink=%u StrictVBT=%u\n",
+          pciDevice ? pciDevice->configRead16(0x84) : 0,
+          getProperty("FakeIrisXEAudioLinkReady") == kOSBooleanTrue ? 1u : 0u,
+          getProperty("FakeIrisXEStrictVBT") == kOSBooleanTrue ? 1u : 0u);
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V312, deeper platform diagnostics path)\n");
     return true;
 
 }
@@ -5489,6 +5519,14 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
 {
     auto rd = [&](uint32_t off) { return safeMMIORead(off); };
     auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
+    uint32_t panelOnDelayUs = 0;
+    uint32_t panelOffDelayUs = 0;
+    uint32_t dpcdBacklightCaps = 0;
+    if (fConnectorManager) {
+        panelOnDelayUs = fConnectorManager->getPanelPowerOnDelay();
+        panelOffDelayUs = fConnectorManager->getPanelPowerOffDelay();
+        dpcdBacklightCaps = fConnectorManager->getDpcdBacklightCaps();
+    }
 
     uint32_t statusNew = rd(PP_STATUS_NEW);
     uint32_t statusOld = rd(PP_STATUS_OLD);
@@ -5498,8 +5536,9 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
         wr(PP_CONTROL_NEW, rd(PP_CONTROL_NEW) | (1u << 31) | (1u << 30) | 0x8u);
         wr(PP_CONTROL_OLD, rd(PP_CONTROL_OLD) | (1u << 31) | (1u << 30));
 
+        const uint32_t pollDelayMs = panelOnDelayUs ? ((panelOnDelayUs + 999u) / 1000u) : 10u;
         for (int i = 0; i < 20; ++i) {
-            IOSleep(10);
+            IOSleep(pollDelayMs ? pollDelayMs : 1u);
             statusNew = rd(PP_STATUS_NEW);
             statusOld = rd(PP_STATUS_OLD);
             panelReady = ((statusNew | statusOld) & (1u << 31)) != 0;
@@ -5515,6 +5554,10 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
         wr(BXT_BLC_PWM_FREQ1, freq);
     }
     fPwmMax = freq;
+    setNumberProperty(this, "FakeIrisXEBacklightPwmFreq", freq & 0xFFFFu, 32);
+    setNumberProperty(this, "FakeIrisXEPanelPowerOnDelayUs", panelOnDelayUs, 32);
+    setNumberProperty(this, "FakeIrisXEPanelPowerOffDelayUs", panelOffDelayUs, 32);
+    setNumberProperty(this, "FakeIrisXEDpcdBacklightCaps", dpcdBacklightCaps, 32);
 
     uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
     if (!(ctl & (1u << 31))) {
@@ -5523,12 +5566,15 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
         ctl = rd(BXT_BLC_PWM_CTL1);
     }
 
-    IOLog("[BLTX] ensure reason=%s pp_new=0x%08X pp_old=0x%08X pwm_ctl=0x%08X pwm_freq=0x%04X\n",
+    IOLog("[BLTX] ensure reason=%s pp_new=0x%08X pp_old=0x%08X pwm_ctl=0x%08X pwm_freq=0x%04X t_on=%uus t_off=%uus dpcd_bl=0x%02X\n",
           reason ? reason : "unknown",
           statusNew,
           statusOld,
           ctl,
-          freq & 0xFFFFu);
+          freq & 0xFFFFu,
+          panelOnDelayUs,
+          panelOffDelayUs,
+          dpcdBacklightCaps);
 }
 
 void FakeIrisXEFramebuffer::applyBacklightPresetForIdentity(uint32_t vendorID, uint32_t productID)
@@ -5641,6 +5687,10 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         setNumberProperty(this, "FakeIrisXEVbtPhys", fConnectorManager->getVBTPhys(), 64);
         setNumberProperty(this, "FakeIrisXEVBTVersion", fConnectorManager->getVBTVersion(), 32);
         setNumberProperty(this, "FakeIrisXEBDBVersion", fConnectorManager->getBDBVersion(), 32);
+        setNumberProperty(this, "FakeIrisXEPanelPowerOnDelayUs", fConnectorManager->getPanelPowerOnDelay(), 32);
+        setNumberProperty(this, "FakeIrisXEPanelPowerOffDelayUs", fConnectorManager->getPanelPowerOffDelay(), 32);
+        setNumberProperty(this, "FakeIrisXEDpcdBacklightCaps", fConnectorManager->getDpcdBacklightCaps(), 32);
+        setProperty("FakeIrisXEStrictVBT", fConnectorManager->isRealVBTLoaded() ? kOSBooleanTrue : kOSBooleanFalse);
     }
 
     if (fConnectorManager) {
@@ -5736,12 +5786,20 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
                 slotName->release();
             }
         }
+        if (edidConnector->supportsAudio) {
+            setProperty("hda-gfx", "onboard-1");
+            setProperty("FakeIrisXEAudioLinkReady", kOSBooleanTrue);
+        }
     }
 
     applyBacklightPresetForIdentity(vendorID, productID);
-    injectDisplayMergeOverridesIfAvailable(this);
+    const bool displayTreeReady = injectDisplayMergeOverridesIfAvailable(this);
+    setProperty("FakeIrisXEDisplayTreeReady", displayTreeReady ? kOSBooleanTrue : kOSBooleanFalse);
+    if (fConnectorManager) {
+        fConnectorManager->setDisplayTreeReady(displayTreeReady);
+    }
 
-    IOLog("[V310] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V312] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -6022,7 +6080,11 @@ uint64_t FakeIrisXEFramebuffer::ggttMap(FakeIrisXEGEM* gem) {
     uint64_t ret = gpuAddr;
     fNextGGTTOffset += ((uint64_t)pages << 12);
     gem->setGpuAddress(ret);
-    IOLog("FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x%llx pages=%u (TGL PTEs)\n", (unsigned long long)ret, pages);
+    IOLog("FakeIrisXEFramebuffer: ggttMap -> GPU VA 0x%llx pages=%u pinCount=%u ggttNext=0x%llx (TGL PTEs)\n",
+          (unsigned long long)ret,
+          pages,
+          gem->pinCount(),
+          (unsigned long long)fNextGGTTOffset);
     return ret;
 }
 
@@ -6164,7 +6226,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V310] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V312] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6672,17 +6734,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V310] ============================================\n");
-    IOLog("(FakeIrisXE)[V310] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V310] ============================================\n");
+    IOLog("(FakeIrisXE)[V311] ============================================\n");
+    IOLog("(FakeIrisXE)[V311] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V311] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V310] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V311] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V310] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V311] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V310] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V310] ============================================\n");
+    IOLog("(FakeIrisXE)[V311] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V311] ============================================\n");
     return success;
 }
 
@@ -7668,6 +7730,7 @@ bool FakeIrisXEFramebuffer::forcewakeRenderHold(uint32_t timeoutMs)
     // V209: Enable BOTH RENDER (bits 0-3) AND GT (bits 4-7)
     const uint32_t FW_MASK  = 0x00FF00FF; // All 8 bits - both RENDER and GT
     
+    IOLog("(FakeIrisXE) forcewakeRenderHold(): req=0x%08X ackReg=0x%08X\n", FW_MASK, FW_ACK);
     safeMMIOWrite(FW_REQ, FW_MASK);
     (void)safeMMIORead(FW_REQ);
 
@@ -7699,8 +7762,10 @@ bool FakeIrisXEFramebuffer::forcewakeRenderHold(uint32_t timeoutMs)
 void FakeIrisXEFramebuffer::forcewakeRenderRelease()
 {
     const uint32_t FW_REQ = 0xA188;
+    const uint32_t FW_ACK = 0x130044;
     safeMMIOWrite(FW_REQ, 0x0);
     (void)safeMMIORead(FW_REQ);
+    IOLog("(FakeIrisXE) forcewakeRenderRelease(): ack=0x%08X\n", safeMMIORead(FW_ACK));
     IOSleep(1);
 }
 

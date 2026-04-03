@@ -22,6 +22,7 @@ public:
     bool allocate();
     void pin();
     void unpin();
+    uint32_t pinCount() const { return fPinCount; }
 
     uint64_t physicalAddress() const { return fPhysAddr; }
     IOBufferMemoryDescriptor* memoryDescriptor() const { return fBuffer; }

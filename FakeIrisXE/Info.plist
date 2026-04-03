@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.310</string>
+	<string>1.0.312</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.310</string>
+	<string>1.0.312</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V310 - forced descriptor progression, slot outcome classification, and stronger stale display cleanup</string>
+	<string>FakeIrisXe V312 - native panel state machine, published PCIe/GT state, descriptor validation, and extended boot diagnostics</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

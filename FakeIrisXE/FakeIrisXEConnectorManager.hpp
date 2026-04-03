@@ -139,6 +139,11 @@ public:
     bool isRealVBTLoaded() const { return m_vbtLoaded; }
     uint16_t getVBTVersion() const { return m_vbtVersion; }
     uint16_t getBDBVersion() const { return m_bdbVersion; }
+    uint32_t getPanelPowerOnDelay() const { return m_panelPowerOnDelay; }
+    uint32_t getPanelPowerOffDelay() const { return m_panelPowerOffDelay; }
+    uint8_t getDpcdBacklightCaps() const { return m_dpcdBacklightCaps; }
+    bool isDisplayTreeReady() const { return m_displayTreeReady; }
+    void setDisplayTreeReady(bool ready) { m_displayTreeReady = ready; }
     
     // Publish connector properties to IORegistry (for compatibility)
     void publishConnectorProperties();
@@ -155,6 +160,7 @@ private:
     uint8_t m_connectorCount;
     TGLConnectorDesc* m_internalPanel;
     bool m_vbtLoaded;
+    bool m_strictVbtMode;
     uint16_t m_vbtVersion;
     uint16_t m_bdbVersion;
     uint8_t m_opregionMajor;
@@ -170,6 +176,10 @@ private:
     uint64_t m_vbtPhys;
     size_t m_vbtLength;
     uint8_t m_vbtStorage[kFakeIrisXEMaxVbtBytes];
+    uint32_t m_panelPowerOnDelay;
+    uint32_t m_panelPowerOffDelay;
+    uint8_t m_dpcdBacklightCaps;
+    bool m_displayTreeReady;
     
     // Register helpers
     uint32_t readReg(uint32_t offset);
@@ -258,6 +268,7 @@ private:
     bool auxI2CRead(TGLAUXChannel aux, uint8_t address, uint8_t* data, uint32_t size, bool mot);
     bool readDPCD(TGLConnectorDesc& conn, uint32_t address, uint8_t* data, uint32_t size);
     bool readEDID(TGLConnectorDesc& conn);
+    void checkDpcdBacklightCaps(TGLConnectorDesc& conn);
 
     // VBT discovery helpers
     bool loadVBT();

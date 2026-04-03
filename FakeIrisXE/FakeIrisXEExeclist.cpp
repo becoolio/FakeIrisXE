@@ -85,7 +85,8 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V310";
+static const char* kExeclistVersion = "V312";
+
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -211,6 +212,30 @@ struct ProofVariant {
     uint32_t execlistControlKick;
     uint32_t arbControl;
 };
+
+static bool validateProofDescriptorShape(const RcsProofResources& res,
+                                        const ProofVariant& variant,
+                                        ProofFailureType& failure)
+{
+    if ((res.lrcGpuAddr & 0xFFFu) != 0u || (res.descLo & 0xFFFFF000u) != static_cast<uint32_t>(res.lrcGpuAddr & 0xFFFFF000ULL)) {
+        IOLog("(FakeIrisXE) [%s] Descriptor validation failed: LRC address mismatch desc=0x%08X lrc=0x%016llX\n",
+              kExeclistVersion,
+              res.descLo,
+              static_cast<unsigned long long>(res.lrcGpuAddr));
+        failure = DescriptorWrong;
+        return false;
+    }
+    if (variant.engineClass > 7u || variant.engineInstance > 63u || variant.swContextId > 0x7FFu) {
+        IOLog("(FakeIrisXE) [%s] Descriptor validation failed: swctx=%u class=%u inst=%u out of range\n",
+              kExeclistVersion,
+              variant.swContextId,
+              variant.engineClass,
+              variant.engineInstance);
+        failure = DescriptorWrong;
+        return false;
+    }
+    return true;
+}
 
 static const ProofVariant kProofVariants[] = {
     { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
@@ -1577,6 +1602,12 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
         }
 
         buildProofDescriptor(res, variant);
+        if (!validateProofDescriptorShape(res, variant, failure)) {
+            if (shouldTryNextProofVariant(failure)) {
+                continue;
+            }
+            goto done_release;
+        }
         if (!submitProofDescriptor(self, res, variant, failure, observations)) {
             if (shouldTryNextProofVariant(failure)) {
                 continue;

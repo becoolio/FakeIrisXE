@@ -790,6 +790,12 @@ FakeIrisXEGuC* FakeIrisXEGuC::withOwner(FakeIrisXEFramebuffer* owner)
 bool FakeIrisXEGuC::initGuC()
 {
     fFirmwareMode = selectFirmwareMode();
+    if (fOwner) {
+        fOwner->setProperty("FakeIrisXEGuCFirmwareMode", firmwareModeName(fFirmwareMode));
+        fOwner->setProperty("FakeIrisXEGuCContainmentMode", kOSBooleanTrue);
+        fOwner->setProperty("FakeIrisXEGuCLastStage", "IDLE");
+        fOwner->setProperty("FakeIrisXEGuCStatusBlockReady", kOSBooleanTrue);
+    }
     IOLog("(FakeIrisXE) [GuC] Initializing deterministic GuC pre-flight (mode=%s)\n",
           firmwareModeName(fFirmwareMode));
 
@@ -842,6 +848,10 @@ bool FakeIrisXEGuC::initGuC()
         IOLog("(FakeIrisXE) [GuC] DMC load failed, continuing with GuC path\n");
     }
 
+    if (fOwner) {
+        uint32_t gucStatus = fOwner->safeMMIORead(GUC_STATUS_V137);
+        fOwner->setProperty("FakeIrisXEGuCPreflightStatus", gucStatus, 32);
+    }
     IOLog("(FakeIrisXE) [GuC][V298] Pre-flight keeps DMC/power setup only; main framebuffer stage owns the single GuC firmware boot attempt\n");
     IOLog("(FakeIrisXE) [GuC] Pre-flight complete\n");
     return true;
@@ -1749,6 +1759,15 @@ void FakeIrisXEGuC::emitStageReport(GuCStage stage, uint64_t startNs, uint32_t r
           report.decoded_status.mia,
           report.decoded_status.authStatus,
           report.decoded_status.valid ? 1U : 0U);
+
+    if (fOwner) {
+        fOwner->setProperty("FakeIrisXEGuCLastStage", stageName);
+        fOwner->setProperty("FakeIrisXEGuCLastStatus", report.raw_status, 32);
+        fOwner->setProperty("FakeIrisXEGuCLastBootrom", report.decoded_status.bootrom, 32);
+        fOwner->setProperty("FakeIrisXEGuCLastUKernel", report.decoded_status.ukernel, 32);
+        fOwner->setProperty("FakeIrisXEGuCLastMIA", report.decoded_status.mia, 32);
+        fOwner->setProperty("FakeIrisXEGuCLastAuth", report.decoded_status.authStatus, 32);
+    }
 
     fLastReportedStage = stage;
 }
