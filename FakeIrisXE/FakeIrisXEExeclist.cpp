@@ -85,7 +85,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V309";
+static const char* kExeclistVersion = "V310";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -205,24 +205,29 @@ struct ProofVariant {
     uint32_t addrMode;
     bool forceRestore;
     bool privilege;
+    uint32_t swContextId;
+    uint32_t engineClass;
+    uint32_t engineInstance;
     uint32_t execlistControlKick;
     uint32_t arbControl;
 };
 
 static const ProofVariant kProofVariants[] = {
-    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "no-force-restore",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, true,  0x00000001u, 0x00020001u },
-    { "ctxctrl-0x9",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "ctxctrl-0x1",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "addrmode-0",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  true,  0x00000001u, 0x00020001u },
-    { "addrmode-1",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 1u,                true,  true,  0x00000001u, 0x00020001u },
-    { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, 0x00000001u, 0x00020001u },
-    { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, 0x00000001u, 0x00020001u },
-    { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00020001u },
-    { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  0x00000001u, 0x00000001u },
+    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "no-force-restore",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "ctxctrl-0x9",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "ctxctrl-0x1",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "addrmode-0",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "addrmode-1",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 1u,                true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "alt-swctxid",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  2u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "alt-engine-inst1",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 1u, 0x00000001u, 0x00020001u },
+    { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00000001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -556,6 +561,7 @@ static bool shouldTryNextProofVariant(ProofFailureType failure)
     switch (failure) {
         case RingControlNotEnabled:
         case ElspRejected:
+        case ElspVisibleNotAccepted:
         case CsbNoProgress:
         case NoSchedulingProgress:
         case ContextStateNotLoaded:
@@ -1082,20 +1088,26 @@ static void buildProofDescriptor(RcsProofResources& res, const ProofVariant& var
 {
     res.descLo = ((uint32_t)(res.lrcGpuAddr & 0xFFFFF000ULL)) |
                  kCtxDescValid |
-                 kCtxDescPrivilege |
+                 (variant.privilege ? kCtxDescPrivilege : 0u) |
                  (variant.forceRestore ? kCtxDescForceRestore : 0u) |
                  ((variant.addrMode & 0x3u) << kCtxDescAddressingModeShift);
-    res.descHi = ((res.swContextId & 0x7FFu) << kCtxDescSwCtxIdShiftInHi) |
-                 ((kCtxDescRenderInstance & 0x3Fu) << kCtxDescEngineInstanceShiftInHi) |
-                 ((kCtxDescRenderClass & 0x7u) << kCtxDescEngineClassShiftInHi);
+    res.descHi = ((variant.swContextId & 0x7FFu) << kCtxDescSwCtxIdShiftInHi) |
+                 ((variant.engineInstance & 0x3Fu) << kCtxDescEngineInstanceShiftInHi) |
+                 ((variant.engineClass & 0x7u) << kCtxDescEngineClassShiftInHi);
 
     IOLog("(FakeIrisXE) [%s] ========== CONTEXT DESCRIPTOR ==========\n", kExeclistVersion);
-    IOLog("(FakeIrisXE) [%s]   Variant: %s ring=%s submit=%s ctxCtrl=0x%08X\n",
+    IOLog("(FakeIrisXE) [%s]   Variant: %s ring=%s submit=%s ctxCtrl=0x%08X priv=%u force=%u addr=%u swctx=%u class=%u inst=%u\n",
           kExeclistVersion,
           variant.label,
           proofRingModeLabel(variant.ringMode),
           proofSubmitStyleLabel(variant.submitStyle),
-          variant.ctxCtrl);
+          variant.ctxCtrl,
+          variant.privilege ? 1u : 0u,
+          variant.forceRestore ? 1u : 0u,
+          variant.addrMode,
+          variant.swContextId,
+          variant.engineClass,
+          variant.engineInstance);
     IOLog("(FakeIrisXE) [%s]   DWord0: 0x%08X\n", kExeclistVersion, res.descLo);
     IOLog("(FakeIrisXE) [%s]   DWord1: 0x%08X\n", kExeclistVersion, res.descHi);
     IOLog("(FakeIrisXE) [%s]   Address field: 0x%08X -> GPU VA 0x%016llX\n",
@@ -1599,9 +1611,19 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
     self->fOwner->setProperty("FakeIrisXERcsProofRingMode", proofRingModeLabel(static_cast<ProofRingProgrammingMode>(observations.attemptedRingMode)));
     self->fOwner->setProperty("FakeIrisXERcsProofSubmitStyle", proofSubmitStyleLabel(static_cast<ProofSubmitStyle>(observations.attemptedSubmitStyle)));
+    if (!observations.elspWritten) {
+        self->fOwner->setProperty("FakeIrisXERcsProofSlotOutcome", "elsp-not-written");
+    } else if (observations.lastSlotActiveBits != 0u) {
+        self->fOwner->setProperty("FakeIrisXERcsProofSlotOutcome", "slot-active");
+    } else if (observations.lastSlotValidBits != 0u) {
+        self->fOwner->setProperty("FakeIrisXERcsProofSlotOutcome", "slot-queued");
+    } else {
+        self->fOwner->setProperty("FakeIrisXERcsProofSlotOutcome", "slot-empty");
+    }
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofAttemptedCtxCtrl", observations.attemptedCtxCtrl, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofAttemptedAddrMode", observations.attemptedAddrMode, 32);
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofAttemptedForceRestore", observations.attemptedForceRestore);
+    setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofAttemptedPrivilege", observations.attemptedPrivilege);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastScratch", observations.lastScratchValue, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastStatusLo", observations.lastExeclistStatusLo, 32);
     setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastCsbCtrl", observations.lastCsbCtrl, 32);
