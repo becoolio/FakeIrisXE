@@ -85,7 +85,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V307";
+static const char* kExeclistVersion = "V308";
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
@@ -487,10 +487,12 @@ static void logProofRingGating(FakeIrisXEExeclist* self, const char* phase)
     const uint32_t miMode = self->mmioRead32(0x209Cu);
     const uint32_t cmdBufCctl = self->mmioRead32(kProofRcsCmdBufCctlMmio);
     const uint32_t debugMode2 = self->mmioRead32(kProofGen12CsDebugMode2Mmio);
+    const uint32_t hwsPga = self->mmioRead32(kExecHwsPgaReg);
+    const uint64_t expectedHws = self->fCsbGGTT & ~0xFFFULL;
     const bool halted = (rcsStatus & 0xE000u) == 0xE000u;
     const bool idle = (rcsStatus & 0x1u) != 0u;
 
-    IOLog("(FakeIrisXE) [%s] %s gating: RCS_STATUS=0x%08X halted=%u idle=%u RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXECLIST_CTL=0x%08X ARB=0x%08X CTXCTL=0x%08X MI_MODE=0x%08X CCTL=0x%08X DEBUG2=0x%08X\n",
+    IOLog("(FakeIrisXE) [%s] %s gating: RCS_STATUS=0x%08X halted=%u idle=%u RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXECLIST_CTL=0x%08X ARB=0x%08X CTXCTL=0x%08X MI_MODE=0x%08X CCTL=0x%08X DEBUG2=0x%08X HWS_PGA=0x%08X expectedHws=0x%08X\n",
           kExeclistVersion,
           phase ? phase : "gating",
           rcsStatus,
@@ -504,7 +506,24 @@ static void logProofRingGating(FakeIrisXEExeclist* self, const char* phase)
           ctxCtl,
           miMode,
           cmdBufCctl,
-          debugMode2);
+          debugMode2,
+          hwsPga,
+          static_cast<uint32_t>(expectedHws & 0xFFFFFFFFULL));
+}
+
+static bool shouldTryNextProofVariant(ProofFailureType failure)
+{
+    switch (failure) {
+        case RingControlNotEnabled:
+        case ElspRejected:
+        case CsbNoProgress:
+        case NoSchedulingProgress:
+        case ContextStateNotLoaded:
+        case BatchNeverStarted:
+            return true;
+        default:
+            return false;
+    }
 }
 
 static uint32_t buildProofIndirectCtxCommands(const RcsProofResources& res, uint32_t* indirectCtx)
@@ -1479,7 +1498,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
 
         buildProofDescriptor(res, variant);
         if (!submitProofDescriptor(self, res, variant, failure, observations)) {
-            if (failure == RingControlNotEnabled) {
+            if (shouldTryNextProofVariant(failure)) {
                 continue;
             }
             if (failure == None) {
@@ -1489,7 +1508,7 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
         }
 
         success = pollProofProgress(self, res, failure, observations);
-        if (success || failure != RingControlNotEnabled) {
+        if (success || !shouldTryNextProofVariant(failure)) {
             break;
         }
     }
