@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.317</string>
+	<string>1.0.318</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.317</string>
+	<string>1.0.318</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V317 - Apple Tiger Lake register addresses (0x120B0, 0x120C0, etc.)</string>
+	<string>FakeIrisXe V318 - Apple register addresses + Apple SQ_CONTENTS kick (0x10001) + CSB config</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

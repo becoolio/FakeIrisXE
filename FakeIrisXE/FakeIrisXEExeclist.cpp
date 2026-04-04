@@ -26,17 +26,18 @@ static const uint32_t kExecRingHeadReg  = TGL_RCS0_BASE + 0x34u;
 static const uint32_t kExecRingStartReg = TGL_RCS0_BASE + 0x38u;
 static const uint32_t kExecRingCtlReg   = TGL_RCS0_BASE + 0x3Cu;
 
-// V317: Apple-style Gen12 register addresses - ACTUAL Tiger Lake hardware addresses
-static const uint32_t kExecElspPrimaryLo = 0x120B0;
-static const uint32_t kExecElspPrimaryHi = 0x120B4;
-static const uint32_t kExecElspLegacyLo  = 0x120A0;
-static const uint32_t kExecElspLegacyHi  = 0x120A4;
-static const uint32_t kExecStatusPrimaryLo = 0x120C0;
-static const uint32_t kExecStatusPrimaryHi = 0x120C4;
-static const uint32_t kExecStatusLegacyLo  = 0x120C0;
-static const uint32_t kExecStatusLegacyHi  = 0x120C4;
-static const uint32_t kExecSqContents = 0x120B8;
-static const uint32_t kExecCsbCtrl = 0x120C8;
+static const uint32_t kExecElspPrimaryLo = 0x120B0;  // RCS0_EXECLIST_SUBMITPORT_LO
+static const uint32_t kExecElspPrimaryHi = 0x120B4;  // RCS0_EXECLIST_SUBMITPORT_HI
+static const uint32_t kExecElspLegacyLo  = 0x120A0;  // RCS0_ELSP1_LO
+static const uint32_t kExecElspLegacyHi  = 0x120A4;  // RCS0_ELSP1_HI
+static const uint32_t kExecStatusPrimaryLo = 0x120C0;  // RCS0_EXECLIST_STATUS_LO
+static const uint32_t kExecStatusPrimaryHi = 0x120C4;  // RCS0_EXECLIST_STATUS_HI
+static const uint32_t kExecStatusLegacyLo  = 0x2230;
+static const uint32_t kExecStatusLegacyHi  = 0x2234;
+static const uint32_t kExecSqContents = 0x120B8;  // SQ_CONTENTS kick register
+static const uint32_t kExecCsbCtrl = 0x120C8;  // RCS0_EXECLIST_CONTROL
+static const uint32_t kExecCsbHead = 0x120CC;  // CSB head pointer
+static const uint32_t kExecCsbTail = 0x120D0;  // CSB tail pointer
 
 namespace {
 
@@ -89,7 +90,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V317";
+static const char* kExeclistVersion = "V318";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -261,6 +262,12 @@ static const ProofVariant kProofVariants[] = {
     { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00000001u },
+    // V318: Apple-style submission with 0x10001 SQ_CONTENTS kick
+    { "apple-sq1",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq1-ctx9",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq1-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq3",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010003u },
+    { "apple-sq1-alt",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -1412,6 +1419,14 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const uint32_t postCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
     const uint32_t postCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
     const uint32_t postCtxCtrl = self->mmioRead32(kExecContextControlReg);
+
+    // V318: Also read from Apple-style CSB registers for comparison
+    const uint32_t appleCsbCtrl = self->mmioRead32(kExecCsbCtrl);
+    const uint32_t appleCsbHead = self->mmioRead32(kExecCsbHead);
+    const uint32_t appleCsbTail = self->mmioRead32(kExecCsbTail);
+    IOLog("(FakeIrisXE) [%s] Apple CSB regs: CTRL=0x%08X HEAD=0x%08X TAIL=0x%08X\n",
+          kExeclistVersion,
+          appleCsbCtrl, appleCsbHead, appleCsbTail);
 
     // V315: Verify CSB pointer is correctly configured before polling
     const uint32_t csbCtrlVerify = self->mmioRead32(RCS0_CSB_CTRL);
