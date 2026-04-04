@@ -442,6 +442,67 @@ static IOService *findDisplayServiceUnderFramebuffer(IOService *fb)
     return result;
 }
 
+static uint8_t findPcieCapabilityOffset(IOPCIDevice *pci)
+{
+    if (!pci) {
+        return 0;
+    }
+
+    uint8_t capPtr = static_cast<uint8_t>(pci->configRead8(0x34));
+    for (uint32_t walk = 0; capPtr >= 0x40 && walk < 48; ++walk) {
+        uint32_t cap = pci->configRead32(capPtr);
+        uint8_t capId = static_cast<uint8_t>(cap & 0xFFu);
+        uint8_t next = static_cast<uint8_t>((cap >> 8) & 0xFFu);
+        if (capId == 0x10u) {
+            return capPtr;
+        }
+        if (next == capPtr) {
+            break;
+        }
+        capPtr = next;
+    }
+
+    return 0;
+}
+
+static uint32_t countStaleDisplayNodes(IOService *root)
+{
+    if (!root) {
+        return 0;
+    }
+
+    uint32_t stale = 0;
+    auto recurse = [&](auto&& self, IOService *node, uint32_t depth) -> void {
+        if (!node || depth > 8u) {
+            return;
+        }
+
+        auto staleProp = [&](const char *key, uint64_t value) -> bool {
+            OSNumber *n = OSDynamicCast(OSNumber, node->getProperty(key));
+            return n && n->unsigned64BitValue() == value;
+        };
+
+        if (staleProp("DisplayVendorID", 1552ULL) || staleProp("DisplayProductID", 41008ULL) ||
+            staleProp("IODisplayVendorID", 1552ULL) || staleProp("IODisplayProductID", 41008ULL)) {
+            ++stale;
+        }
+
+        OSIterator *children = node->getChildIterator(gIOServicePlane);
+        if (!children) {
+            return;
+        }
+        while (OSObject *obj = children->getNextObject()) {
+            if (IOService *child = OSDynamicCast(IOService, obj)) {
+                self(self, child, depth + 1u);
+            }
+        }
+        children->release();
+    };
+
+    recurse(recurse, root, 0u);
+    return stale;
+}
+
 static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer *fb)
 {
     if (!service) {
@@ -616,14 +677,19 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V312] display0 not found under FakeIrisXEFramebuffer yet\n");
+        IOLog("[V313] display0 not found under FakeIrisXEFramebuffer yet\n");
         return false;
     }
 
     applyDisplayMergeOverrides(displayService, fb);
-    IOLog("[V312] Applied native display identity overrides on %s\n", displayService->getName() ? displayService->getName() : "<unknown>");
+    uint32_t staleNodes = countStaleDisplayNodes(fb);
+    setNumberProperty(fb, "FakeIrisXEStaleDisplayNodeCount", staleNodes, 32);
+    fb->setProperty("FakeIrisXEDisplayTreeReady", staleNodes == 0 ? kOSBooleanTrue : kOSBooleanFalse);
+    IOLog("[V313] Applied native display identity overrides on %s staleNodes=%u\n",
+          displayService->getName() ? displayService->getName() : "<unknown>",
+          staleNodes);
     displayService->release();
-    return true;
+    return staleNodes == 0;
 }
 
 void FakeIrisXEFramebuffer::displayIdentityRetryFired(IOTimerEventSource* sender)
@@ -686,7 +752,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V312 - deeper platform diagnostics  ║\n");
+    IOLog("║       FAKEIRISXE V313 - cap walk and finalizer       ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1242,7 +1308,7 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V312 - deeper platform diagnostics ║\n");
+    IOLog("║       FAKEIRISXE V313 - cap walk and finalizer      ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
@@ -2041,7 +2107,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     
     if (publishDisplayIdentityFromEdid()) {
-        IOLog("[V312] Native panel EDID/identity detected\n");
+        IOLog("[V313] Native panel EDID/identity detected\n");
     } else {
         OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
@@ -2062,7 +2128,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
         applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
-        IOLog("[V312] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+        IOLog("[V313] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
               edidVendorId(fallbackDisplayEDID),
               edidProductId(fallbackDisplayEDID));
     }
@@ -2912,11 +2978,13 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("(FakeIrisXE) start timing: total=%llu us softFails=%u\n",
           static_cast<unsigned long long>(totalStartUs),
           softFailCount);
-    uint16_t linkStatus = pciDevice ? pciDevice->configRead16(0x92) : 0;
+    uint8_t pcieCap = findPcieCapabilityOffset(pciDevice);
+    uint16_t linkStatus = (pciDevice && pcieCap) ? pciDevice->configRead16(pcieCap + 0x12) : 0;
     uint16_t linkSpeed = linkStatus & 0xFu;
     uint16_t linkWidth = (linkStatus >> 4) & 0x3Fu;
     uint32_t gtPerf = safeMMIORead(0xA070);
     uint32_t gtStatus = safeMMIORead(0xA000);
+    setNumberProperty(this, "FakeIrisXEPCIeCapOffset", pcieCap, 8);
     setNumberProperty(this, "FakeIrisXEPCIeLinkStatus", linkStatus, 16);
     setNumberProperty(this, "FakeIrisXEPCIeLinkSpeed", linkSpeed, 16);
     setNumberProperty(this, "FakeIrisXEPCIeLinkWidth", linkWidth, 16);
@@ -2942,7 +3010,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
           pciDevice ? pciDevice->configRead16(0x84) : 0,
           getProperty("FakeIrisXEAudioLinkReady") == kOSBooleanTrue ? 1u : 0u,
           getProperty("FakeIrisXEStrictVBT") == kOSBooleanTrue ? 1u : 0u);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V312, deeper platform diagnostics path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V313, PCIe cap walk and display finalizer path)\n");
     return true;
 
 }
@@ -5799,7 +5867,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         fConnectorManager->setDisplayTreeReady(displayTreeReady);
     }
 
-    IOLog("[V312] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V313] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,
@@ -5864,6 +5932,11 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         }
 
         publishBrightnessProperties(this, percent, rawLevel);
+        setNumberProperty(this, "FakeIrisXEBacklightDuty", duty, 32);
+        setNumberProperty(this, "FakeIrisXEBacklightRaw", rawLevel, 32);
+        setNumberProperty(this, "FakeIrisXEBacklightPercent", percent, 32);
+        setProperty("FakeIrisXEBacklightPanelReady", ((rd(PP_STATUS_NEW) | rd(PP_STATUS_OLD)) & (1u << 31)) ? kOSBooleanTrue : kOSBooleanFalse);
+        setProperty("FakeIrisXEBacklightPwmEnabled", (ctl & (1u << 31)) ? kOSBooleanTrue : kOSBooleanFalse);
         
         IOLog("[BLTX] apply source=%s percent=%u raw=0x%04x duty=0x%04x vblm=0x%05x pp_new=0x%08X pp_old=0x%08X ctl=0x%08X\n",
               source ? source : "direct",
@@ -6226,7 +6299,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V312] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V313] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
