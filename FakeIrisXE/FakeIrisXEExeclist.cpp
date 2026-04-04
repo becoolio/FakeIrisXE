@@ -90,18 +90,20 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V318";
+static const char* kExeclistVersion = "V319";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
 static const uint32_t kCtxDescForceRestore = (1u << 2);
 static const uint32_t kCtxDescAddressingModeShift = 3u;
 static const uint32_t kCtxDescLegacy64B = 3u;
+static const uint32_t kCtxDescAddressingMode48b = 4u;  // V319: Apple uses 48-bit addressing
 static const uint32_t kCtxDescSwCtxIdShiftInHi = 5u;
 static const uint32_t kCtxDescEngineInstanceShiftInHi = 16u;
 static const uint32_t kCtxDescEngineClassShiftInHi = 29u;
-static const uint32_t kCtxDescRenderClass = 0u;
+static const uint32_t kCtxDescEngineClassRender = 0u;
 static const uint32_t kCtxDescRenderInstance = 0u;
+static const uint32_t kCtxDescActive = (1u << 1);  // V319: ACTIVE bit
 
 enum ProofFailureType {
     None,
@@ -213,6 +215,7 @@ struct ProofVariant {
     uint32_t addrMode;
     bool forceRestore;
     bool privilege;
+    bool active;  // V319: Include ACTIVE bit in descriptor
     uint32_t swContextId;
     uint32_t engineClass;
     uint32_t engineInstance;
@@ -245,29 +248,34 @@ static bool validateProofDescriptorShape(const RcsProofResources& res,
 }
 
 static const ProofVariant kProofVariants[] = {
-    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "no-force-restore",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "ctxctrl-0x9",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "ctxctrl-0x1",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "addrmode-0",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "addrmode-1",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 1u,                true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "alt-swctxid",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  2u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "alt-engine-inst1",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 1u, 0x00000001u, 0x00020001u },
-    { "alt-engine-class1",     ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 1u, 0u, 0x00000001u, 0x00020001u },
-    { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "double-kick-current",   ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000003u, 0x00020001u },
-    { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
-    { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00000001u },
+    { "baseline-lrc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "baseline-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "baseline-live",         ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "no-force-restore",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, false, true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "ctxctrl-0x9",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "ctxctrl-0x1",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "addrmode-0",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 0u,                true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "addrmode-1",            ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, 1u,                true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "alt-swctxid",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 2u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "alt-engine-inst1",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 1u, 0x00000001u, 0x00020001u },
+    { "alt-engine-class1",     ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 1u, 0u, 0x00000001u, 0x00020001u },
+    { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "double-kick-current",   ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000003u, 0x00020001u },
+    { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00000001u },
     // V318: Apple-style submission with 0x10001 SQ_CONTENTS kick
-    { "apple-sq1",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
-    { "apple-sq1-ctx9",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
-    { "apple-sq1-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010001u },
-    { "apple-sq3",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00010003u },
-    { "apple-sq1-alt",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "apple-sq1",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq1-ctx9",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq1-combined",     ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-sq3",             ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010003u },
+    { "apple-sq1-alt",         ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    // V319: Apple-style 48-bit addressing + ACTIVE bit
+    { "apple-48bit",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-48bit-active",    ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  true, 1u, 0u, 0u, 0x00010001u, 0x00010001u },
+    { "apple-48b-ctx9",        ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "apple-48b-combined",    ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -1128,6 +1136,7 @@ static void buildProofDescriptor(RcsProofResources& res, const ProofVariant& var
 {
     res.descLo = ((uint32_t)(res.lrcGpuAddr & 0xFFFFF000ULL)) |
                  kCtxDescValid |
+                 (variant.active ? kCtxDescActive : 0u) |  // V319: Include ACTIVE bit
                  (variant.privilege ? kCtxDescPrivilege : 0u) |
                  (variant.forceRestore ? kCtxDescForceRestore : 0u) |
                  ((variant.addrMode & 0x3u) << kCtxDescAddressingModeShift);
@@ -1136,7 +1145,7 @@ static void buildProofDescriptor(RcsProofResources& res, const ProofVariant& var
                  ((variant.engineClass & 0x7u) << kCtxDescEngineClassShiftInHi);
 
     IOLog("(FakeIrisXE) [%s] ========== CONTEXT DESCRIPTOR ==========\n", kExeclistVersion);
-    IOLog("(FakeIrisXE) [%s]   Variant: %s ring=%s submit=%s ctxCtrl=0x%08X priv=%u force=%u addr=%u swctx=%u class=%u inst=%u\n",
+    IOLog("(FakeIrisXE) [%s]   Variant: %s ring=%s submit=%s ctxCtrl=0x%08X priv=%u force=%u active=%u addr=%u swctx=%u class=%u inst=%u\n",
           kExeclistVersion,
           variant.label,
           proofRingModeLabel(variant.ringMode),
@@ -1144,6 +1153,7 @@ static void buildProofDescriptor(RcsProofResources& res, const ProofVariant& var
           variant.ctxCtrl,
           variant.privilege ? 1u : 0u,
           variant.forceRestore ? 1u : 0u,
+          variant.active ? 1u : 0u,  // V319
           variant.addrMode,
           variant.swContextId,
           variant.engineClass,
@@ -1293,16 +1303,21 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
 
     self->fOwner->forcewakeRenderHold();
     
+    // V319: Apple-style ForceWake write before submission (write to 0xA188)
+    self->fOwner->safeMMIOWrite(0xA188, 0x000F000F);
+    IOSleep(5);
+    
     // V316: Enhanced RCS diagnostics and reset attempt before submission
     const uint32_t preResetRcsStatus = self->mmioRead32(kExecRcsStatusReg);
     const uint32_t preResetGtError = self->fOwner->safeMMIORead(kExecGtErrorReg);
     const uint32_t preResetRingCtl = self->mmioRead32(kExecRingCtlReg);
     const uint32_t preResetRingHead = self->mmioRead32(kExecRingHeadReg);
     const uint32_t preResetRingTail = self->mmioRead32(kExecRingTailReg);
-    const uint32_t preResetExeclistCtl = self->mmioRead32(RCS0_EXECLIST_CONTROL);
+    const uint32_t preResetExeclistCtl = self->mmioRead32(kExecCsbCtrl);  // V319: Use Apple CSB ctrl reg
     const uint32_t preResetCtxCtrl = self->mmioRead32(kExecContextControlReg);
     const uint32_t preResetCcid = self->mmioRead32(kExecCcidReg);
-    IOLog("(FakeIrisXE) [%s] Pre-submit RCS diagnostics: STATUS=0x%08X GT_ERR=0x%08X RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXEC_CTL=0x%08X CTXCTL=0x%08X CCID=0x%08X\n",
+    const uint32_t preFirmwareStatus = self->fOwner->safeMMIORead(0xA188);  // V319: Read back ForceWake
+    IOLog("(FakeIrisXE) [%s] Pre-submit RCS diagnostics: STATUS=0x%08X GT_ERR=0x%08X RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXEC_CTL=0x%08X CTXCTL=0x%08X CCID=0x%08X FW=0x%08X\n",
           kExeclistVersion,
           preResetRcsStatus,
           preResetGtError,
@@ -1311,7 +1326,8 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
           preResetRingTail,
           preResetExeclistCtl,
           preResetCtxCtrl,
-          preResetCcid);
+          preResetCcid,
+          preFirmwareStatus);
     
     // V316: Try explicit RCS reset toggle if engine appears stuck
     const bool engineStuck = (preResetRcsStatus & 0x0F) == 0x0F ||
