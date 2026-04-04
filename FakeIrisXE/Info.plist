@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.319</string>
+	<string>1.0.320</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.319</string>
+	<string>1.0.320</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V319 - Apple 48-bit addressing + ACTIVE bit in context descriptor</string>
+	<string>FakeIrisXe V320 - Apple LRC header format (PDP0-3, ctxCtrl=0x109)</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

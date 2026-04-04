@@ -29,22 +29,31 @@ bool FakeIrisXELRC::initializeLRCContextImage(
 
     bzero(ctxCpu, ctxSize);
 
-    write_le64(ctxCpu + 0x00, pageTableRoot & ~0xFFFULL);
-    write_le64(ctxCpu + 0x08, 0);
-    write_le64(ctxCpu + 0x10, 0);
-    write_le64(ctxCpu + 0x18, 0);
-    write_le32(ctxCpu + 0x30, 0x00010000);
+    // V320: Apple-style LRC header initialization
+    // PDP0 descriptor (0x2270-0x2274) - page table root
+    write_le32(ctxCpu + 0x00, (uint32_t)(pageTableRoot & 0xFFFFFFFFu));
+    write_le32(ctxCpu + 0x04, (uint32_t)(pageTableRoot >> 32));
+    // PDP1-3 (0x2278-0x228C) - typically zero for single-level PPGTT
+    write_le32(ctxCpu + 0x08, 0);
+    write_le32(ctxCpu + 0x0C, 0);
+    write_le32(ctxCpu + 0x10, 0);
+    write_le32(ctxCpu + 0x14, 0);
+    write_le32(ctxCpu + 0x18, 0);
+    write_le32(ctxCpu + 0x1C, 0);
 
-    const uint32_t ctxCtrl = (1u << 0) | (1u << 3) | (1u << 8);
+    // Context control (0x22C) - VALID + legacy mode + privilege
+    // Apple uses: (1<<0) VALID | (1<<3) legacy | (1<<8) privilege = 0x109
+    const uint32_t ctxCtrl = 0x109u;
     write_le32(ctxCpu + 0x2C, ctxCtrl);
 
     const uint32_t ringStateOff = 0x100u;
+    // Ring head at 0x100, tail at 0x104, start at 0x108, ctl at 0x10C (Apple-style)
     const uint32_t headBytes = ringHead & (uint32_t)(ringSize - 1u);
     const uint32_t tailBytes = ringTail & (uint32_t)(ringSize - 1u);
-    write_le32(ctxCpu + ringStateOff + 0x00, headBytes);
-    write_le32(ctxCpu + ringStateOff + 0x04, tailBytes);
-    write_le32(ctxCpu + ringStateOff + 0x08, (uint32_t)(ringGpuAddr & 0xFFFFFFFFu));
-    write_le32(ctxCpu + ringStateOff + 0x0C, (uint32_t)(ringGpuAddr >> 32));
+    write_le32(ctxCpu + ringStateOff + 0x00, headBytes);  // HEAD
+    write_le32(ctxCpu + ringStateOff + 0x04, tailBytes);  // TAIL
+    write_le32(ctxCpu + ringStateOff + 0x08, (uint32_t)(ringGpuAddr & 0xFFFFFFFFu));  // START_LO
+    write_le32(ctxCpu + ringStateOff + 0x0C, (uint32_t)(ringGpuAddr >> 32));  // START_HI
 
     uint32_t pages = (uint32_t)(ringSize / 4096u);
     if (!pages) {
