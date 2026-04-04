@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.313</string>
+	<string>1.0.315</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.313</string>
+	<string>1.0.315</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V313 - PCIe capability walk, display tree finalizer, richer backlight runtime state, and descriptor matrix continuation</string>
+	<string>FakeIrisXe V315 - enhanced execlist submission diagnostics, CSB pointer verification, and GT power management check</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

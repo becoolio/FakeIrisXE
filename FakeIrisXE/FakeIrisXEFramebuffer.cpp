@@ -465,6 +465,24 @@ static uint8_t findPcieCapabilityOffset(IOPCIDevice *pci)
     return 0;
 }
 
+static uint8_t decodePcieCapVersion(IOPCIDevice *pci, uint8_t capOffset)
+{
+    if (!pci || !capOffset) {
+        return 0;
+    }
+    uint16_t pcieCaps = pci->configRead16(capOffset + 0x02);
+    return static_cast<uint8_t>(pcieCaps & 0xFu);
+}
+
+static uint8_t decodePcieDevicePortType(IOPCIDevice *pci, uint8_t capOffset)
+{
+    if (!pci || !capOffset) {
+        return 0;
+    }
+    uint16_t pcieCaps = pci->configRead16(capOffset + 0x02);
+    return static_cast<uint8_t>((pcieCaps >> 4) & 0xFu);
+}
+
 static uint32_t countStaleDisplayNodes(IOService *root)
 {
     if (!root) {
@@ -677,7 +695,7 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
 
     IOService *displayService = findDisplayServiceUnderFramebuffer(fb);
     if (!displayService) {
-        IOLog("[V313] display0 not found under FakeIrisXEFramebuffer yet\n");
+        IOLog("[V314] display0 not found under FakeIrisXEFramebuffer yet\n");
         return false;
     }
 
@@ -685,7 +703,7 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
     uint32_t staleNodes = countStaleDisplayNodes(fb);
     setNumberProperty(fb, "FakeIrisXEStaleDisplayNodeCount", staleNodes, 32);
     fb->setProperty("FakeIrisXEDisplayTreeReady", staleNodes == 0 ? kOSBooleanTrue : kOSBooleanFalse);
-    IOLog("[V313] Applied native display identity overrides on %s staleNodes=%u\n",
+    IOLog("[V314] Applied native display identity overrides on %s staleNodes=%u\n",
           displayService->getName() ? displayService->getName() : "<unknown>",
           staleNodes);
     displayService->release();
@@ -699,7 +717,7 @@ void FakeIrisXEFramebuffer::displayIdentityRetryFired(IOTimerEventSource* sender
     }
 
     if (injectDisplayMergeOverridesIfAvailable(this)) {
-        if (displayInjectRetryCount < 4u) {
+        if (displayInjectRetryCount < 6u) {
             ++displayInjectRetryCount;
             displayInjectTimer->setTimeoutMS(1000);
         } else {
@@ -2107,7 +2125,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     };
     
     if (publishDisplayIdentityFromEdid()) {
-        IOLog("[V313] Native panel EDID/identity detected\n");
+        IOLog("[V314] Native panel EDID/identity detected\n");
     } else {
         OSData *edidData = OSData::withBytes(fallbackDisplayEDID, sizeof(fallbackDisplayEDID));
         if (edidData) {
@@ -2128,7 +2146,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
         setProperty("DisplayProductName", "LG Display");
         setProperty("built-in", kOSBooleanTrue);
         applyBacklightPresetForIdentity(edidVendorId(fallbackDisplayEDID), edidProductId(fallbackDisplayEDID));
-        IOLog("[V313] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
+        IOLog("[V314] Fallback panel EDID applied vendor=0x%04X product=0x%04X\n",
               edidVendorId(fallbackDisplayEDID),
               edidProductId(fallbackDisplayEDID));
     }
@@ -2980,14 +2998,21 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
           softFailCount);
     uint8_t pcieCap = findPcieCapabilityOffset(pciDevice);
     uint16_t linkStatus = (pciDevice && pcieCap) ? pciDevice->configRead16(pcieCap + 0x12) : 0;
+    uint32_t linkCaps = (pciDevice && pcieCap) ? pciDevice->configRead32(pcieCap + 0x0C) : 0;
     uint16_t linkSpeed = linkStatus & 0xFu;
     uint16_t linkWidth = (linkStatus >> 4) & 0x3Fu;
+    uint16_t maxLinkSpeed = linkCaps & 0xFu;
+    uint16_t maxLinkWidth = (linkCaps >> 4) & 0x3Fu;
     uint32_t gtPerf = safeMMIORead(0xA070);
     uint32_t gtStatus = safeMMIORead(0xA000);
     setNumberProperty(this, "FakeIrisXEPCIeCapOffset", pcieCap, 8);
+    setNumberProperty(this, "FakeIrisXEPCIeCapVersion", decodePcieCapVersion(pciDevice, pcieCap), 8);
+    setNumberProperty(this, "FakeIrisXEPCIePortType", decodePcieDevicePortType(pciDevice, pcieCap), 8);
     setNumberProperty(this, "FakeIrisXEPCIeLinkStatus", linkStatus, 16);
     setNumberProperty(this, "FakeIrisXEPCIeLinkSpeed", linkSpeed, 16);
     setNumberProperty(this, "FakeIrisXEPCIeLinkWidth", linkWidth, 16);
+    setNumberProperty(this, "FakeIrisXEPCIeMaxLinkSpeed", maxLinkSpeed, 16);
+    setNumberProperty(this, "FakeIrisXEPCIeMaxLinkWidth", maxLinkWidth, 16);
     setNumberProperty(this, "FakeIrisXEGtPerfStatus", gtPerf, 32);
     setNumberProperty(this, "FakeIrisXEGtStatus", gtStatus, 32);
     setNumberProperty(this, "FakeIrisXEPMCSR", pciDevice ? pciDevice->configRead16(0x84) : 0, 16);

@@ -85,7 +85,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V313";
+static const char* kExeclistVersion = "V315";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -184,6 +184,8 @@ struct ProofObservations {
     bool attemptedPrivilege = true;
     uint32_t lastSlotValidBits = 0;
     uint32_t lastSlotActiveBits = 0;
+    uint32_t attemptedVariantIndex = 0;
+    const char* attemptedVariantLabel = nullptr;
 };
 
 enum ProofRingProgrammingMode {
@@ -249,7 +251,9 @@ static const ProofVariant kProofVariants[] = {
     { "no-privilege",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "alt-swctxid",           ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  2u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "alt-engine-inst1",      ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 1u, 0x00000001u, 0x00020001u },
+    { "alt-engine-class1",     ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 1u, 0u, 0x00000001u, 0x00020001u },
     { "minimal-desc",          ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000001u, 0u,                false, false, 1u, 0u, 0u, 0x00000001u, 0x00020001u },
+    { "double-kick-current",   ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000003u, 0x00020001u },
     { "kick-before-hi",        ProofRingModeLrcOnly,    ProofSubmitKickBeforeHi, 0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "kick-after-lo",         ProofRingModeLrcOnly,    ProofSubmitKickAfterLo,  0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00020001u },
     { "arb-alt",               ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescLegacy64B, true,  true,  1u, 0u, 0u, 0x00000001u, 0x00000001u },
@@ -1240,6 +1244,7 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     observations.attemptedCtxCtrl = variant.ctxCtrl;
     observations.attemptedAddrMode = variant.addrMode;
     observations.attemptedForceRestore = variant.forceRestore;
+    observations.attemptedPrivilege = variant.privilege;
 
     IOLog("(FakeIrisXE) [%s] Submit preflight: ELSP=%08X/%08X STATUS=%08X/%08X slots(valid=0x%X active=0x%X state=%s) CSB=%08X addr=%08X%08X rp=%08X wp=%08X CTXCTL=%08X DESC=%08X/%08X ring=0x%llX tail=0x%X\n",
           kExeclistVersion,
@@ -1342,6 +1347,36 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const uint32_t postCsbRead = self->mmioRead32(RCS0_CSB_READ_PTR);
     const uint32_t postCsbWrite = self->mmioRead32(RCS0_CSB_WRITE_PTR);
     const uint32_t postCtxCtrl = self->mmioRead32(kExecContextControlReg);
+
+    // V315: Verify CSB pointer is correctly configured before polling
+    const uint32_t csbCtrlVerify = self->mmioRead32(RCS0_CSB_CTRL);
+    const uint32_t csbAddrLoVerify = self->mmioRead32(RCS0_CSB_ADDR_LO);
+    const uint32_t csbAddrHiVerify = self->mmioRead32(RCS0_CSB_ADDR_HI);
+    const uint64_t expectedCsbGpu = (self->fCsbGGTT & ~0xFFFULL) + kExecCsbOffsetBytes;
+    const uint64_t actualCsbGpu = (static_cast<uint64_t>(csbAddrHiVerify) << 32) | csbAddrLoVerify;
+    const bool csbPointerValid = (actualCsbGpu == expectedCsbGpu);
+    IOLog("(FakeIrisXE) [%s] CSB pointer verification: CTRL=0x%08X ADDR=0x%016llX expected=0x%016llX match=%u\n",
+          kExeclistVersion,
+          csbCtrlVerify,
+          static_cast<unsigned long long>(actualCsbGpu),
+          static_cast<unsigned long long>(expectedCsbGpu),
+          csbPointerValid ? 1u : 0u);
+
+    // V315: Check GT power management status before polling
+    const uint32_t gtPerfStatus = self->fOwner->safeMMIORead(0x138124);
+    const uint32_t gtStatus = self->fOwner->safeMMIORead(0x13812C);
+    IOLog("(FakeIrisXE) [%s] GT power state before polling: PERF=0x%08X STATUS=0x%08X\n",
+          kExeclistVersion,
+          gtPerfStatus,
+          gtStatus);
+
+    IOSleep(5);
+    const uint32_t delayedStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
+    const uint32_t delayedStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+    uint32_t delayedValidBits = 0;
+    uint32_t delayedActiveBits = 0;
+    const char* delayedQueueState = nullptr;
+    decodeExeclistSlots(delayedStatusLo, delayedValidBits, delayedActiveBits, delayedQueueState);
     uint32_t postValidBits = 0;
     uint32_t postActiveBits = 0;
     const char* postQueueState = nullptr;
@@ -1351,6 +1386,18 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     observations.elspWritten = (postLo == res.descLo) || (postHi == res.descHi);
     observations.slotValidChanged = (postValidBits != preValidBits);
     observations.slotActiveChanged = (postActiveBits != preActiveBits);
+    if (!observations.slotValidChanged && delayedValidBits != preValidBits) {
+        observations.slotValidChanged = true;
+        postValidBits = delayedValidBits;
+        postActiveBits = delayedActiveBits;
+        postQueueState = delayedQueueState;
+    }
+    if (!observations.slotActiveChanged && delayedActiveBits != preActiveBits) {
+        observations.slotActiveChanged = true;
+        postValidBits = delayedValidBits;
+        postActiveBits = delayedActiveBits;
+        postQueueState = delayedQueueState;
+    }
     res.submitAccepted = observations.slotValidChanged || observations.slotActiveChanged ||
                          (postStatusLo != preStatusLo) || (postStatusHi != preStatusHi);
 
@@ -1583,6 +1630,8 @@ static bool runRcsScratchWriteProof(FakeIrisXEExeclist* self, const char* label)
     for (uint32_t variantIndex = 0; variantIndex < sizeof(kProofVariants) / sizeof(kProofVariants[0]); ++variantIndex) {
         const ProofVariant& variant = kProofVariants[variantIndex];
         observations = {};
+        observations.attemptedVariantIndex = variantIndex + 1u;
+        observations.attemptedVariantLabel = variant.label;
         observations.lastScratchValue = kProofScratchInitial;
         if (volatile uint32_t* scratchCpu = (volatile uint32_t*)self->fOwner->ggttGetCPUAddr(res.scratchGem)) {
             *scratchCpu = kProofScratchInitial;
@@ -1642,6 +1691,8 @@ done_release:
     setProofBoolProperty(self->fOwner, "FakeIrisXERcsProofRingConsumed", observations.ringConsumed);
     self->fOwner->setProperty("FakeIrisXERcsProofRingMode", proofRingModeLabel(static_cast<ProofRingProgrammingMode>(observations.attemptedRingMode)));
     self->fOwner->setProperty("FakeIrisXERcsProofSubmitStyle", proofSubmitStyleLabel(static_cast<ProofSubmitStyle>(observations.attemptedSubmitStyle)));
+    self->fOwner->setProperty("FakeIrisXERcsProofLastVariantLabel", observations.attemptedVariantLabel ? observations.attemptedVariantLabel : "unknown");
+    setProofNumberProperty(self->fOwner, "FakeIrisXERcsProofLastVariantIndex", observations.attemptedVariantIndex, 32);
     if (!observations.elspWritten) {
         self->fOwner->setProperty("FakeIrisXERcsProofSlotOutcome", "elsp-not-written");
     } else if (observations.lastSlotActiveBits != 0u) {
