@@ -1169,12 +1169,13 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 // -----------------------------
 #define TGL_RCS0_BASE                0x2000
 
-// Tiger Lake modern execlist ring regs (absolute offsets from RCS0 base)
-#define RCS0_RING_HEAD               (TGL_RCS0_BASE + 0x2510)   // head
-#define RCS0_RING_TAIL               (TGL_RCS0_BASE + 0x2514)   // tail
-#define RCS0_RING_START              (TGL_RCS0_BASE + 0x2518)   // start/base
-#define RCS0_RING_CTL                (TGL_RCS0_BASE + 0x251C)   // ctl
-#define RCS0_RING_STATUS             (TGL_RCS0_BASE + 0x2524)   // status
+// V321: CORRECTED Tiger Lake ring regs - Apple uses 0x2030/0x2034, NOT 0x2510/0x2514
+// These are absolute addresses (not offsets from base)
+#define RCS0_RING_HEAD               0x2034   // head - CORRECTED
+#define RCS0_RING_TAIL               0x2030   // tail - CORRECTED
+#define RCS0_RING_START              0x2038   // start/base
+#define RCS0_RING_CTL                0x203C   // ctl
+#define RCS0_RING_STATUS            0x2024   // status - CORRECTED from 0x2524
 #define RCS0_RING_MODE               (TGL_RCS0_BASE + 0x9C)   // ring mode
 #define RCS0_RESET_CTRL              (TGL_RCS0_BASE + 0xD0)  // reset/control
 
