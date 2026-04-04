@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.315</string>
+	<string>1.0.317</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.315</string>
+	<string>1.0.317</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V315 - enhanced execlist submission diagnostics, CSB pointer verification, and GT power management check</string>
+	<string>FakeIrisXe V317 - Apple Tiger Lake register addresses (0x120B0, 0x120C0, etc.)</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

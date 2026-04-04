@@ -37,7 +37,7 @@
       "indexPCHPath" : "/Users/becoolio/Library/Developer/Xcode/DerivedData/FakeIrisXE-amtkrugmhltqjxfmrkzggpunmuzv/Index.noindex/PrecompiledHeaders",
       "pchPath" : ""
     },
-    "configurationName" : "Release",
+    "configurationName" : "Debug",
     "overrides" : {
       "commandLine" : {
         "table" : {

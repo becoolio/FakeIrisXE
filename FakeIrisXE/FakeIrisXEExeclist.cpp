@@ -25,14 +25,18 @@ static const uint32_t kExecRingTailReg  = TGL_RCS0_BASE + 0x30u;
 static const uint32_t kExecRingHeadReg  = TGL_RCS0_BASE + 0x34u;
 static const uint32_t kExecRingStartReg = TGL_RCS0_BASE + 0x38u;
 static const uint32_t kExecRingCtlReg   = TGL_RCS0_BASE + 0x3Cu;
-static const uint32_t kExecElspPrimaryLo = RCS0_EXECLIST_SUBMITPORT_LO;
-static const uint32_t kExecElspPrimaryHi = RCS0_EXECLIST_SUBMITPORT_HI;
-static const uint32_t kExecElspLegacyLo  = RCS0_ELSP1_LO;
-static const uint32_t kExecElspLegacyHi  = RCS0_ELSP1_HI;
-static const uint32_t kExecStatusPrimaryLo = RCS0_EXECLIST_STATUS_LO;
-static const uint32_t kExecStatusPrimaryHi = RCS0_EXECLIST_STATUS_HI;
-static const uint32_t kExecStatusLegacyLo  = 0x2230;
-static const uint32_t kExecStatusLegacyHi  = 0x2234;
+
+// V317: Apple-style Gen12 register addresses - ACTUAL Tiger Lake hardware addresses
+static const uint32_t kExecElspPrimaryLo = 0x120B0;
+static const uint32_t kExecElspPrimaryHi = 0x120B4;
+static const uint32_t kExecElspLegacyLo  = 0x120A0;
+static const uint32_t kExecElspLegacyHi  = 0x120A4;
+static const uint32_t kExecStatusPrimaryLo = 0x120C0;
+static const uint32_t kExecStatusPrimaryHi = 0x120C4;
+static const uint32_t kExecStatusLegacyLo  = 0x120C0;
+static const uint32_t kExecStatusLegacyHi  = 0x120C4;
+static const uint32_t kExecSqContents = 0x120B8;
+static const uint32_t kExecCsbCtrl = 0x120C8;
 
 namespace {
 
@@ -85,7 +89,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V315";
+static const char* kExeclistVersion = "V317";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -1281,6 +1285,46 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     }
 
     self->fOwner->forcewakeRenderHold();
+    
+    // V316: Enhanced RCS diagnostics and reset attempt before submission
+    const uint32_t preResetRcsStatus = self->mmioRead32(kExecRcsStatusReg);
+    const uint32_t preResetGtError = self->fOwner->safeMMIORead(kExecGtErrorReg);
+    const uint32_t preResetRingCtl = self->mmioRead32(kExecRingCtlReg);
+    const uint32_t preResetRingHead = self->mmioRead32(kExecRingHeadReg);
+    const uint32_t preResetRingTail = self->mmioRead32(kExecRingTailReg);
+    const uint32_t preResetExeclistCtl = self->mmioRead32(RCS0_EXECLIST_CONTROL);
+    const uint32_t preResetCtxCtrl = self->mmioRead32(kExecContextControlReg);
+    const uint32_t preResetCcid = self->mmioRead32(kExecCcidReg);
+    IOLog("(FakeIrisXE) [%s] Pre-submit RCS diagnostics: STATUS=0x%08X GT_ERR=0x%08X RING_CTL=0x%08X HEAD=0x%08X TAIL=0x%08X EXEC_CTL=0x%08X CTXCTL=0x%08X CCID=0x%08X\n",
+          kExeclistVersion,
+          preResetRcsStatus,
+          preResetGtError,
+          preResetRingCtl,
+          preResetRingHead,
+          preResetRingTail,
+          preResetExeclistCtl,
+          preResetCtxCtrl,
+          preResetCcid);
+    
+    // V316: Try explicit RCS reset toggle if engine appears stuck
+    const bool engineStuck = (preResetRcsStatus & 0x0F) == 0x0F ||
+                             (preResetRingCtl & RING_VALID) == 0 ||
+                             (preResetExeclistCtl & 0x3) != 0x3;
+    if (engineStuck) {
+        IOLog("(FakeIrisXE) [%s] Engine appears stuck, attempting RCS reset sequence...\n", kExeclistVersion);
+        // Toggle RCS reset via power management
+        self->mmioWrite32(0x20A0, 0x1); // Request reset
+        IOSleep(2);
+        self->mmioWrite32(0x20A0, 0x0); // Release reset
+        IOSleep(5);
+        const uint32_t postResetRcsStatus = self->mmioRead32(kExecRcsStatusReg);
+        const uint32_t postResetRingCtl = self->mmioRead32(kExecRingCtlReg);
+        IOLog("(FakeIrisXE) [%s] Post-reset attempt: STATUS=0x%08X RING_CTL=0x%08X\n",
+              kExeclistVersion,
+              postResetRcsStatus,
+              postResetRingCtl);
+    }
+    
     patchProofLrcContextControl(res, variant.ctxCtrl);
     patchProofLrcRingBlock(res, variant.ringMode);
     logProofLrcImage(res);
@@ -1312,13 +1356,22 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
 
     self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, variant.arbControl);
     IOSleep(1);
+    
+    // V316: Apple-style submission - write to BOTH primary AND legacy ports
+    // This is what Apple's TGL driver actually does
     switch (variant.submitStyle) {
         case ProofSubmitKickBeforeHi:
+            // Primary port
             self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
             IOSleep(1);
             self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
             IOSleep(1);
             self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            // Legacy port
+            IOSleep(1);
+            self->mmioWrite32(kExecElspLegacyLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspLegacyHi, res.descHi);
             break;
         case ProofSubmitKickAfterLo:
             self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
@@ -1326,17 +1379,29 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
             self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
             IOSleep(1);
             self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            // Legacy port
+            IOSleep(1);
+            self->mmioWrite32(kExecElspLegacyLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspLegacyHi, res.descHi);
             break;
         case ProofSubmitCurrent:
         default:
+            // Primary port
             self->mmioWrite32(kExecElspPrimaryLo, res.descLo);
             IOSleep(1);
             self->mmioWrite32(kExecElspPrimaryHi, res.descHi);
+            // Legacy port (Apple style)
             IOSleep(1);
-            self->mmioWrite32(RCS0_EXECLIST_CONTROL, variant.execlistControlKick);
+            self->mmioWrite32(kExecElspLegacyLo, res.descLo);
+            IOSleep(1);
+            self->mmioWrite32(kExecElspLegacyHi, res.descHi);
+            // SQ_CONTENTS kick (Apple style: write to 0x120B8)
+            IOSleep(1);
+            self->mmioWrite32(0x120B8, variant.execlistControlKick);
             break;
     }
-    IOSleep(1);
+    IOSleep(2);
     const uint32_t postLo = self->mmioRead32(kExecElspPrimaryLo);
     const uint32_t postHi = self->mmioRead32(kExecElspPrimaryHi);
     const uint32_t postStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
