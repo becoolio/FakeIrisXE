@@ -7,19 +7,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V321 - Apple ring register addresses (0x2030/0x2034) corrected</string>
+	<string>FakeIrisXe V322 - ALWAYS program live ring registers (fixes RING_CTL_NOT_ENABLED)</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.321</string>
+	<string>1.0.322</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.321</string>
+	<string>1.0.322</string>
 	<key>DTCompiler</key>
 	<string>com.apple.compilers.llvm.clang.1_0</string>
 	<key>DTPlatformBuild</key>

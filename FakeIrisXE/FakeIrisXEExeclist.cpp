@@ -90,7 +90,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V321";
+static const char* kExeclistVersion = "V322";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -276,6 +276,11 @@ static const ProofVariant kProofVariants[] = {
     { "apple-48bit-active",    ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  true, 1u, 0u, 0u, 0x00010001u, 0x00010001u },
     { "apple-48b-ctx9",        ProofRingModeLrcOnly,    ProofSubmitCurrent,      0x00000009u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
     { "apple-48b-combined",    ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    // V322: ALWAYS program live ring registers regardless of LRC mode
+    // The problem is ring registers were never being enabled in hardware
+    { "combined-forcelive",    ProofRingModeCombined,   ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "live-only",            ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, kCtxDescAddressingMode48b, true,  true,  false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
+    { "live-noctx",           ProofRingModeLiveOnly,   ProofSubmitCurrent,      0x00000109u, 0u,                false, false, false, 1u, 0u, 0u, 0x00000001u, 0x00010001u },
 };
 
 static const char* proofRingModeLabel(ProofRingProgrammingMode mode)
@@ -1354,28 +1359,20 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     logProofSharedBacking(self, "pre-submit");
     logProofRingGating(self, "pre-submit");
 
-    if (variant.ringMode == ProofRingModeLrcOnly) {
-        observations.ringCtlEnabled = true;
-        observations.ringCtlMasked = false;
-        observations.lastRingStart = 0u;
-        observations.lastRingHead = 0u;
-        observations.lastRingTail = 0u;
-        observations.lastRingCtl = 0u;
-        IOLog("(FakeIrisXE) [%s] Ring program mode=%s: skipping live ring register programming\n",
-              kExeclistVersion,
-              proofRingModeLabel(variant.ringMode));
-    } else if (!programProofRingState(self, res, &observations)) {
+    // V322: ALWAYS program live ring registers - this was the bug!
+    // Previously lrc-only mode skipped live ring programming, but the GPU
+    // needs ring registers enabled in hardware to execute commands.
+    // The LRC image stores ring state, but hardware registers must also be enabled.
+    if (!programProofRingState(self, res, &observations)) {
         self->fOwner->forcewakeRenderRelease();
         failure = RingControlNotEnabled;
         return false;
     }
 
-    if (variant.ringMode != ProofRingModeLrcOnly) {
-        IOLog("(FakeIrisXE) [%s] Ring program mode=%s accepted live RING_CTL=0x%08X\n",
-              kExeclistVersion,
-              proofRingModeLabel(variant.ringMode),
-              observations.lastRingCtl);
-    }
+    IOLog("(FakeIrisXE) [%s] Ring program mode=%s: RING_CTL=0x%08X enabled\n",
+          kExeclistVersion,
+          proofRingModeLabel(variant.ringMode),
+          observations.lastRingCtl);
 
     self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, variant.arbControl);
     IOSleep(1);
