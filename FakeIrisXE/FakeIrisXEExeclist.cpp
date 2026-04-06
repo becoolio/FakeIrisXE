@@ -90,10 +90,11 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V329";
+static const char* kExeclistVersion = "V330";
 
 static const uint32_t kExecRingProgrammingRcsCtl = 0x31;  // V329: BCS0-style CTL
 static const uint32_t kExecRingProgrammingRcsMode = 0x33;  // V329: BCS0-style MODE
+static const uint32_t kExecRingModeExeclistEnable = 0x00000001u;  // V330: Enable execlist mode bit
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -1380,7 +1381,7 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     logProofSharedBacking(self, "pre-submit");
     logProofRingGating(self, "pre-submit");
 
-    // V322: ALWAYS program live ring registers - this was the bug!
+    // V330: ALWAYS program live ring registers - this was the bug!
     // Previously lrc-only mode skipped live ring programming, but the GPU
     // needs ring registers enabled in hardware to execute commands.
     // The LRC image stores ring state, but hardware registers must also be enabled.
@@ -1394,6 +1395,21 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
           kExeclistVersion,
           proofRingModeLabel(variant.ringMode),
           observations.lastRingCtl);
+
+    // V330: CRITICAL - Program RING_MODE with execlist enable bit BEFORE submission
+    // This is what was missing! The RING_MODE execlist_enable_bit (bit 0) must be set
+    // before the GPU will accept execlist submissions.
+    const uint32_t preSubmissionRingMode = self->mmioRead32(RCS0_RING_MODE);
+    uint32_t newRingMode = preSubmissionRingMode | kExecRingModeExeclistEnable | kExecRingModeDisableLegacy | kExecRingModePpgttEnable | kExecRingModePpgtt48b;
+    self->mmioWrite32(RCS0_RING_MODE, newRingMode);
+    IOSleep(2);
+    const uint32_t verifyRingMode = self->mmioRead32(RCS0_RING_MODE);
+    IOLog("(FakeIrisXE) [%s] V330 RING_MODE programming: pre=0x%08X written=0x%08X verify=0x%08X execlist_bit=%u\n",
+          kExeclistVersion,
+          preSubmissionRingMode,
+          newRingMode,
+          verifyRingMode,
+          (verifyRingMode & 0x1) ? 1u : 0u);
 
     self->mmioWrite32(RCS0_EXECLIST_ARB_CTL, variant.arbControl);
     IOSleep(1);
@@ -1461,6 +1477,13 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     IOLog("(FakeIrisXE) [%s] Apple CSB regs: CTRL=0x%08X HEAD=0x%08X TAIL=0x%08X\n",
           kExeclistVersion,
           appleCsbCtrl, appleCsbHead, appleCsbTail);
+
+    // V330: Enhanced submission diagnostics - log exactly what happened with ELSP
+    const uint32_t elspPostWrite = self->mmioRead32(kExecElspPrimaryLo);
+    IOLog("(FakeIrisXE) [%s] V330 ELSP post-write diagnostic: ELSP_LO=0x%08X expected=0x%08X match=%u\n",
+          kExeclistVersion,
+          elspPostWrite, res.descLo,
+          (elspPostWrite == res.descLo) ? 1u : 0u);
 
     // V315: Verify CSB pointer is correctly configured before polling
     const uint32_t csbCtrlVerify = self->mmioRead32(RCS0_CSB_CTRL);
