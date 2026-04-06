@@ -1209,11 +1209,14 @@ static constexpr uint32_t RING_CTL     = 0x2020;
 #define RCS0_EXECLIST_CONTEXT_CONTROL 0x244C
 
 // CSB (Command Streamer Buffer) registers - Tiger Lake
+// NOTE: RCS0_CSB_WRITE_PTR at 0x2290 overlaps RCS0_EXECLIST_SUBMITPORT_LO
+// This is intentional per Apple/TGL register mapping - reads from 0x2290 return CSB write pointer,
+// writes go to ELSP submit port. Diagnostic code should read both and compare.
 #define RCS0_CSB_CTRL              0x2288  // CSB control
 #define RCS0_CSB_ADDR_LO           0x2280  // CSB address low
 #define RCS0_CSB_ADDR_HI           0x2284  // CSB address high
 #define RCS0_CSB_READ_PTR          0x228C  // CSB read pointer
-#define RCS0_CSB_WRITE_PTR         0x2290  // CSB write pointer
+#define RCS0_CSB_WRITE_PTR         0x2290  // CSB write pointer (OVERLAPS with ELSP!)
 
 // Forcewake registers (needed by GuC)
 #define GEN11_FORCEWAKE_RENDER       0xA278

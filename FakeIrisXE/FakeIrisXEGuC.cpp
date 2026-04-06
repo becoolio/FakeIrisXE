@@ -505,6 +505,14 @@ extern "C" void OSSynchronizeIO(void);
 // Bit 16 = WOPCM space (0x10000)
 #define DMA_ADDRESS_SPACE_WOPCM_V137 (0x00010000U)  // Was 0x70000 - WRONG!
 #endif
+
+// V327: Apple-specific DMA destination high - DIFFERENT from Linux!
+// Based on Apple reference: uses 0x00070000 instead of 0x00010000
+// This was the key fix from the Apple GuC DMA analysis
+#ifndef DMA_ADDRESS_SPACE_WOPCM_APPLE
+#define DMA_ADDRESS_SPACE_WOPCM_APPLE  (0x00070000U)  // Apple uses 0x70000, Linux uses 0x10000
+#endif
+
 #ifndef DMA_ADDRESS_SPACE_GTT_V137
 #define DMA_ADDRESS_SPACE_GTT_V137   (8u << 16)  // 0x80000
 #endif
@@ -8454,7 +8462,8 @@ bool FakeIrisXEGuC::dmaCopyGttToWopcm(uint64_t sourceGpuAddr, uint32_t destOffse
     fOwner->safeMMIOWrite(DMA_ADDR_0_HIGH_V137, srcHigh);
 
     uint32_t dstLow = destOffset;
-    uint32_t dstHigh = DMA_ADDRESS_SPACE_WOPCM_V137;
+    // V327: Use Apple-specific destination high for Apple boot path
+    uint32_t dstHigh = DMA_ADDRESS_SPACE_WOPCM_APPLE;
 
     fOwner->safeMMIOWrite(DMA_ADDR_1_LOW_V137, dstLow);
     fOwner->safeMMIOWrite(DMA_ADDR_1_HIGH_V137, dstHigh);
@@ -8882,7 +8891,8 @@ bool FakeIrisXEGuC::dmaCopyHeaderUcodeToWopcmV139(uint64_t fwGgttAddr, const GuC
     IOLog("(FakeIrisXE) [V139] SRC=0x%016llX (LO=0x%08X HI=0x%08X - no addr-space!)\n", srcAddr, srcLow, srcHigh);
     
     fOwner->safeMMIOWrite(DMA_ADDR_1_LOW_V137, 0x2000);
-    fOwner->safeMMIOWrite(DMA_ADDR_1_HIGH_V137, DMA_ADDRESS_SPACE_WOPCM_V137);
+    // V327: Use Apple-specific destination high (0x00070000) for Apple boot path
+    fOwner->safeMMIOWrite(DMA_ADDR_1_HIGH_V137, DMA_ADDRESS_SPACE_WOPCM_APPLE);
     
     uint32_t ctrl = MASKED_BIT_ENABLE_V294(START_DMA_V137 | UOS_MOVE_V137);
     fOwner->safeMMIOWrite(DMA_CTRL_V137, ctrl);

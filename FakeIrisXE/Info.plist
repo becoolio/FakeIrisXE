@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.325</string>
+	<string>1.0.327</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.325</string>
+	<string>1.0.327</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V325 - Framebuffer ring validation sync with execlist masked-but-stable</string>
+	<string>FakeIrisXe V327 - Apple GuC DMA fix (0x00070000) + execlist enhancements</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>

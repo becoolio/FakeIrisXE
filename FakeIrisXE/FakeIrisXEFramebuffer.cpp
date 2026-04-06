@@ -770,7 +770,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V313 - cap walk and finalizer       ║\n");
+    IOLog("║       FAKEIRISXE V327 - cap walk and finalizer       ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1326,15 +1326,15 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V323 - ring-ctl relaxed, execlist       ║\n");
+    IOLog("║       FAKEIRISXE V327 - ring-ctl relaxed, execlist       ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
     if (!super::start(provider)) {
-        IOLog("❌ [V323] super::start() failed\n");
+        IOLog("❌ [V327] super::start() failed\n");
         return false;
     }
-    IOLog("✅ [V323] super::start() succeeded\n");
+    IOLog("✅ [V327] super::start() succeeded\n");
 
     // V149: Add GEM/GTT Diagnostics
     IOLog("(FakeIrisXE)[V149] ============================================\n");
@@ -3035,7 +3035,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
           pciDevice ? pciDevice->configRead16(0x84) : 0,
           getProperty("FakeIrisXEAudioLinkReady") == kOSBooleanTrue ? 1u : 0u,
           getProperty("FakeIrisXEStrictVBT") == kOSBooleanTrue ? 1u : 0u);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V325, PCIe cap walk and display finalizer path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V327, PCIe cap walk and display finalizer path)\n");
     return true;
 
 }
@@ -6324,7 +6324,7 @@ void FakeIrisXEFramebuffer::updateExecutionState(bool ready, const char* reason)
     setProperty("FakeIrisXEAccelContractReady", ready ? kOSBooleanTrue : kOSBooleanFalse);
     setProperty("MetalSupported", kOSBooleanFalse);
     setProperty("MetalDevice", kOSBooleanFalse);
-    IOLog("(FakeIrisXE) [V313] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
+    IOLog("(FakeIrisXE) [V326] Execution state: ready=%u reason=%s ringValidated=%u execlist=%p ring=%p\n",
           ready ? 1U : 0U,
           reason ? reason : "unknown",
           fRcsRingValidated ? 1U : 0U,
@@ -6845,17 +6845,17 @@ FakeIrisXERing* FakeIrisXEFramebuffer::createRcsRing(size_t ringBytes)
 // V151: Enhanced GPU Execution Test with comprehensive diagnostics
 bool FakeIrisXEFramebuffer::testGPUExecution()
 {
-    IOLog("(FakeIrisXE)[V311] ============================================\n");
-    IOLog("(FakeIrisXE)[V311] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
-    IOLog("(FakeIrisXE)[V311] ============================================\n");
+    IOLog("(FakeIrisXE)[V326] ============================================\n");
+    IOLog("(FakeIrisXE)[V326] GPU EXECUTION TEST - DIRECT EXECLIST PROOF\n");
+    IOLog("(FakeIrisXE)[V326] ============================================\n");
     if (!fExeclist) {
-        IOLog("(FakeIrisXE)[V311] No EXECLIST owner available\n");
+        IOLog("(FakeIrisXE)[V326] No EXECLIST owner available\n");
         return false;
     }
-    IOLog("(FakeIrisXE)[V311] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
+    IOLog("(FakeIrisXE)[V326] Running one-shot scratch writeback proof on plain -fakeirisxe boot...\n");
     bool success = fExeclist->testBatchSubmission();
-    IOLog("(FakeIrisXE)[V311] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
-    IOLog("(FakeIrisXE)[V311] ============================================\n");
+    IOLog("(FakeIrisXE)[V326] Direct Execlist proof result: %s\n", success ? "PASS" : "FAIL");
+    IOLog("(FakeIrisXE)[V326] ============================================\n");
     return success;
 }
 

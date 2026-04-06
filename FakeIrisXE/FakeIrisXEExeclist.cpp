@@ -90,7 +90,7 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V325";
+static const char* kExeclistVersion = "V327";
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -121,6 +121,13 @@ enum ProofFailureType {
     ContextStateNotLoaded,
     BatchNeverStarted,
     ScratchWritebackMissing,
+    // V326: Enhanced failure taxonomy
+    MaskedRingStableNoSubmitVisibility,
+    SubmitVisibleNoSlotAccept,
+    SlotAcceptNoContextLoad,
+    ContextLoadNoExecution,
+    ExecutionNoScratchWrite,
+    CsBobservationUntrusted,
 };
 
 struct RcsProofResources {
@@ -696,6 +703,19 @@ static const char* proofFailureLabel(ProofFailureType type)
             return "M_CSB_NO_PROGRESS";
         case NoSchedulingProgress:
             return "N_NO_SCHEDULING_PROGRESS";
+        // V326: Enhanced failure taxonomy
+        case MaskedRingStableNoSubmitVisibility:
+            return "O_MASKED_RING_STABLE_NO_SUBMIT";
+        case SubmitVisibleNoSlotAccept:
+            return "P_SUBMIT_VISIBLE_NO_SLOT_ACCEPT";
+        case SlotAcceptNoContextLoad:
+            return "Q_SLOT_ACCEPT_NO_CONTEXT_LOAD";
+        case ContextLoadNoExecution:
+            return "R_CONTEXT_LOAD_NO_EXECUTION";
+        case ExecutionNoScratchWrite:
+            return "S_EXECUTION_NO_SCRATCH_WRITE";
+        case CsBobservationUntrusted:
+            return "T_CSB_OBSERVATION_UNTRUSTED";
         default:
             return "NONE";
     }
@@ -1303,7 +1323,14 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     self->fOwner->safeMMIOWrite(0xA188, 0x000F000F);
     IOSleep(5);
     
-    // V316: Enhanced RCS diagnostics and reset attempt before submission
+    // V326: Read RING_MODE register to check execlist enable bit before submission
+    const uint32_t preRingMode = self->mmioRead32(RCS0_RING_MODE);
+    IOLog("(FakeIrisXE) [%s] Pre-submit RING_MODE: 0x%08X (execlist_enable_bit=%u)\n",
+          kExeclistVersion,
+          preRingMode,
+          (preRingMode & 0x1) ? 1u : 0u);
+    
+    // V326: Enhanced RCS diagnostics and reset attempt before submission
     const uint32_t preResetRcsStatus = self->mmioRead32(kExecRcsStatusReg);
     const uint32_t preResetGtError = self->fOwner->safeMMIORead(kExecGtErrorReg);
     const uint32_t preResetRingCtl = self->mmioRead32(kExecRingCtlReg);
@@ -1457,6 +1484,8 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     IOSleep(5);
     const uint32_t delayedStatusLo = self->mmioRead32(kExecStatusPrimaryLo);
     const uint32_t delayedStatusHi = self->mmioRead32(kExecStatusPrimaryHi);
+    // V326: Read RING_MODE after submission to verify execlist state
+    const uint32_t postRingMode = self->mmioRead32(RCS0_RING_MODE);
     uint32_t delayedValidBits = 0;
     uint32_t delayedActiveBits = 0;
     const char* delayedQueueState = nullptr;
@@ -1466,6 +1495,19 @@ static bool submitProofDescriptor(FakeIrisXEExeclist* self,
     const char* postQueueState = nullptr;
     decodeExeclistSlots(postStatusLo, postValidBits, postActiveBits, postQueueState);
     self->fOwner->forcewakeRenderRelease();
+
+    // V326: Log post-submit RING_MODE to see if execlist enable bit changed
+    IOLog("(FakeIrisXE) [%s] Post-submit RING_MODE: 0x%08X (execlist_enable_bit=%u)\n",
+          kExeclistVersion,
+          postRingMode,
+          (postRingMode & 0x1) ? 1u : 0u);
+    
+    // V326: Enhanced post-submit register dump - include ACTHD
+    const uint32_t postActhdLo = self->mmioRead32(kExecActhdLo);
+    const uint32_t postActhdHi = self->mmioRead32(kExecActhdHi);
+    IOLog("(FakeIrisXE) [%s] Post-submit ACTHD: 0x%08X%08X\n",
+          kExeclistVersion,
+          postActhdHi, postActhdLo);
 
     observations.elspWritten = (postLo == res.descLo) || (postHi == res.descHi);
     observations.slotValidChanged = (postValidBits != preValidBits);
@@ -1650,7 +1692,23 @@ static bool pollProofProgress(FakeIrisXEExeclist* self,
           observations.lastCsbAddrLo,
           observations.lastCsbWriteAlias);
 
-    if (!observations.ringCtlEnabled) {
+    // V326: Use enhanced failure taxonomy
+    if (!observations.ringCtlEnabled && observations.ringCtlMasked) {
+        // Ring is masked but stable - this is the key diagnostic point
+        if (!observations.elspWritten) {
+            failure = MaskedRingStableNoSubmitVisibility;
+        } else if (!observations.slotValidChanged && !observations.slotActiveChanged) {
+            failure = SubmitVisibleNoSlotAccept;
+        } else if (!observations.ccidChanged && !observations.contextControlChanged) {
+            failure = SlotAcceptNoContextLoad;
+        } else if (!observations.acthdObserved) {
+            failure = ContextLoadNoExecution;
+        } else if (observations.lastScratchValue == kProofScratchInitial) {
+            failure = ExecutionNoScratchWrite;
+        } else {
+            failure = CsBobservationUntrusted;
+        }
+    } else if (!observations.ringCtlEnabled) {
         failure = RingControlNotEnabled;
     } else if (observations.elspWritten && !observations.elspAccepted) {
         failure = ElspVisibleNotAccepted;
