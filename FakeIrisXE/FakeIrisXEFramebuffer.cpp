@@ -770,7 +770,7 @@ IOService *FakeIrisXEFramebuffer::probe(IOService *provider, SInt32 *score) {
     
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V327 - cap walk and finalizer       ║\n");
+    IOLog("║       FAKEIRISXE V329 - cap walk and finalizer       ║\n");
     IOLog("║         FakeIrisXEFramebuffer::probe()                   ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
@@ -1326,15 +1326,15 @@ bool FakeIrisXEFramebuffer::initPowerManagement() {
 bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("\n");
     IOLog("╔══════════════════════════════════════════════════════════════╗\n");
-    IOLog("║       FAKEIRISXE V327 - ring-ctl relaxed, execlist       ║\n");
+    IOLog("║       FAKEIRISXE V329 - ring-ctl relaxed, execlist       ║\n");
     IOLog("╚══════════════════════════════════════════════════════════════╝\n");
     IOLog("\n");
 
     if (!super::start(provider)) {
-        IOLog("❌ [V327] super::start() failed\n");
+        IOLog("❌ [V329] super::start() failed\n");
         return false;
     }
-    IOLog("✅ [V327] super::start() succeeded\n");
+    IOLog("✅ [V329] super::start() succeeded\n");
 
     // V149: Add GEM/GTT Diagnostics
     IOLog("(FakeIrisXE)[V149] ============================================\n");
@@ -3035,7 +3035,7 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
           pciDevice ? pciDevice->configRead16(0x84) : 0,
           getProperty("FakeIrisXEAudioLinkReady") == kOSBooleanTrue ? 1u : 0u,
           getProperty("FakeIrisXEStrictVBT") == kOSBooleanTrue ? 1u : 0u);
-    IOLog("FakeIrisXEFramebuffer::start() - Completed (V327, PCIe cap walk and display finalizer path)\n");
+    IOLog("FakeIrisXEFramebuffer::start() - Completed (V329, PCIe cap walk and display finalizer path)\n");
     return true;
 
 }
@@ -3565,17 +3565,32 @@ void FakeIrisXEFramebuffer::scheduleFlushFromAccelerator()
 #define PP_ON_DELAYS_NEW    0xC7208
 #define PP_OFF_DELAYS_NEW   0xC720C
 
-// Backlight
-#define BXT_BLC_PWM_CTL1    0xC8250
-#define BXT_BLC_PWM_FREQ_REG 0xC8254
-#define BXT_BLC_PWM_DUTY_REG 0xC8258
+// Backlight - Tiger Lake uses different PWM block than Broxton
+// BXT/CNL: 0xC8250/4/8 (old)
+// TGL/EHL: 0x184000-0x18400C (new PWM controller in display engine)
+
+// Tiger Lake PWM registers (newer platform)
+static constexpr uint32_t TGL_BLC_PWM_CTL1    = 0x184000;
+static constexpr uint32_t TGL_BLC_PWM_CTL2    = 0x184004;
+static constexpr uint32_t TGL_BLC_PWM_FREQ1  = 0x184008;
+static constexpr uint32_t TGL_BLC_PWM_DUTY1  = 0x18400C;
+
+static constexpr uint32_t BXT_BLC_PWM_CTL1   = 0xC8250;
+static constexpr uint32_t BXT_BLC_PWM_FREQ1   = 0xC8254;
+static constexpr uint32_t BXT_BLC_PWM_DUTY1   = 0xC8258;
+
+struct BacklightPWMConfig {
+    uint32_t mode;
+    uint32_t ctlReg;
+    uint32_t freqReg;
+    uint32_t dutyReg;
+    uint32_t maxFreq;
+    uint32_t currentFreq;
+    bool initialized;
+};
 
 #define PLANE_OFFSET_1_A 0x00000000
 #define PIPECONF_A      0x70008
-
-// Tiger Lake / Apple backlight PWM registers from DTK traces.
-static constexpr uint32_t BXT_BLC_PWM_FREQ1 = 0x000C8254;
-static constexpr uint32_t BXT_BLC_PWM_DUTY1 = 0x000C8258;
 
 
 
@@ -5583,29 +5598,69 @@ static bool extractBrightnessPercent(OSObject* object,
 }
 
 // Initialize backlight PWM hardware (call once from enableController)
+// V329: Enhanced with platform detection and dynamic PWM register selection
 void FakeIrisXEFramebuffer::initBacklightHardware()
 {
     auto rd = [&](uint32_t off) { return safeMMIORead(off); };
     auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
 
-    // Write a sane period (max value) and start duty at 50%
-    // If you already do these writes in enableController, this is safe to call again.
-    const uint32_t period = 0x0000FFFFu;      // suggested period / pwmMax
+    // V329: Detect platform and select appropriate PWM registers
+    // Try Tiger Lake PWM first (0x184000), fall back to BXT (0xC8250)
+    uint32_t tglCtl = rd(TGL_BLC_PWM_CTL1);
+    uint32_t bxtCtl = rd(BXT_BLC_PWM_CTL1);
+    
+    if (tglCtl != 0xFFFFFFFF) {
+        fPwmMode = BacklightPWMModeTGL;
+        fPwmCtlReg = TGL_BLC_PWM_CTL1;
+        fPwmFreqReg = TGL_BLC_PWM_FREQ1;
+        fPwmDutyReg = TGL_BLC_PWM_DUTY1;
+        IOLog("[FB] initBacklightHardware: Using TGL PWM (0x184000)\n");
+    } else {
+        fPwmMode = BacklightPWMModeBXT;
+        fPwmCtlReg = BXT_BLC_PWM_CTL1;
+        fPwmFreqReg = BXT_BLC_PWM_FREQ1;
+        fPwmDutyReg = BXT_BLC_PWM_DUTY1;
+        IOLog("[FB] initBacklightHardware: Using BXT PWM (0xC8250)\n");
+    }
+
+    // Use a sane period (max value) and start duty at 50%
+    const uint32_t period = 0x0000FFFFu;
     const uint32_t duty50 = (period / 2) & 0xFFFFu;
 
-    // Set PWM period (low 16 bits typically)
-    wr(BXT_BLC_PWM_FREQ1, period);
+    // Set PWM period
+    wr(fPwmFreqReg, period);
     fPwmMax = period & 0xFFFFu;
 
-    // Set initial duty (low 16 bits)
-    wr(BXT_BLC_PWM_DUTY1, duty50);
+    // Set initial duty
+    wr(fPwmDutyReg, duty50);
 
-    // Enable PWM: set MSB (bit31) of CTL register (your snippet used 0x80000000)
-    uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
+    // Enable PWM: set MSB (bit31) of CTL register
+    uint32_t ctl = rd(fPwmCtlReg);
     ctl |= (1u << 31);
-    wr(BXT_BLC_PWM_CTL1, ctl);
+    wr(fPwmCtlReg, ctl);
 
-    IOLog("[FB] initBacklightHardware: period=0x%04x duty=0x%04x CTL=0x%08x\n", period & 0xFFFFu, duty50, ctl);
+    fPwmInitialized = true;
+    IOLog("[FB] initBacklightHardware: period=0x%04x duty=0x%04x CTL=0x%08X mode=%d\n", 
+          period & 0xFFFFu, duty50, ctl, fPwmMode);
+}
+
+// V329: Set PWM frequency based on panel requirements
+void FakeIrisXEFramebuffer::setBacklightFrequency(uint32_t freqHz)
+{
+    auto wr = [&](uint32_t off, uint32_t val) { safeMMIOWrite(off, val); };
+    
+    // Convert Hz to period register value
+    // PWM clock is typically 19.2MHz / (period + 1)
+    // For desired Hz: period = (19200000 / freqHz) - 1
+    uint32_t period = 0;
+    if (freqHz > 0 && freqHz < 19200000) {
+        period = (19200000 / freqHz) - 1;
+        if (period > 0xFFFF) period = 0xFFFF;
+    }
+    
+    wr(fPwmFreqReg, period & 0xFFFFu);
+    fPwmMax = period & 0xFFFFu;
+    IOLog("[FB] setBacklightFrequency: %u Hz -> period=0x%04X\n", freqHz, period);
 }
 
 void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
@@ -5641,10 +5696,11 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
         }
     }
 
-    uint32_t freq = rd(BXT_BLC_PWM_FREQ1) & 0xFFFFu;
+    // V329: Use dynamic PWM registers based on detected platform
+    uint32_t freq = rd(fPwmFreqReg) & 0xFFFFu;
     if (!freq) {
         freq = fPwmMax ? fPwmMax : 0xFFFFu;
-        wr(BXT_BLC_PWM_FREQ1, freq);
+        wr(fPwmFreqReg, freq);
     }
     fPwmMax = freq;
     setNumberProperty(this, "FakeIrisXEBacklightPwmFreq", freq & 0xFFFFu, 32);
@@ -5652,19 +5708,20 @@ void FakeIrisXEFramebuffer::ensureBacklightHardwareState(const char* reason)
     setNumberProperty(this, "FakeIrisXEPanelPowerOffDelayUs", panelOffDelayUs, 32);
     setNumberProperty(this, "FakeIrisXEDpcdBacklightCaps", dpcdBacklightCaps, 32);
 
-    uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
+    uint32_t ctl = rd(fPwmCtlReg);
     if (!(ctl & (1u << 31))) {
         ctl |= (1u << 31);
-        wr(BXT_BLC_PWM_CTL1, ctl);
-        ctl = rd(BXT_BLC_PWM_CTL1);
+        wr(fPwmCtlReg, ctl);
+        ctl = rd(fPwmCtlReg);
     }
 
-    IOLog("[BLTX] ensure reason=%s pp_new=0x%08X pp_old=0x%08X pwm_ctl=0x%08X pwm_freq=0x%04X t_on=%uus t_off=%uus dpcd_bl=0x%02X\n",
+    IOLog("[BLTX] ensure reason=%s pp_new=0x%08X pp_old=0x%08X pwm_ctl=0x%08X pwm_freq=0x%04X pwm_mode=%d t_on=%uus t_off=%uus dpcd_bl=0x%02X\n",
           reason ? reason : "unknown",
           statusNew,
           statusOld,
           ctl,
           freq & 0xFFFFu,
+          fPwmMode,
           panelOnDelayUs,
           panelOffDelayUs,
           dpcdBacklightCaps);
@@ -5912,8 +5969,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         percent = clamp_u32(percent, 0, 100);
         ensureBacklightHardwareState(source);
         
-        // Read period / max from FREQ1 low 16 bits if available
-        uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
+        uint32_t freq = rd(fPwmFreqReg);
         uint32_t pwmMax = freq & 0xFFFFu;
         if (pwmMax == 0) {
             pwmMax = fPwmMax ? fPwmMax : 0xFFFFu;
@@ -5946,14 +6002,14 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         
         duty &= 0xFFFFu;   // Ensure we are within 16 bits
         
-        wr(BXT_BLC_PWM_DUTY1, duty);
+        wr(fPwmDutyReg, duty);
 
         // Ensure PWM enabled
-        uint32_t ctl = rd(BXT_BLC_PWM_CTL1);
+        uint32_t ctl = rd(fPwmCtlReg);
         if (!(ctl & (1u << 31))) {
             ctl |= (1u << 31);
-            wr(BXT_BLC_PWM_CTL1, ctl);
-            ctl = rd(BXT_BLC_PWM_CTL1);
+            wr(fPwmCtlReg, ctl);
+            ctl = rd(fPwmCtlReg);
         }
 
         publishBrightnessProperties(this, percent, rawLevel);
@@ -5982,7 +6038,7 @@ uint32_t FakeIrisXEFramebuffer::getBacklightPercent()
     uint32_t freq = rd(BXT_BLC_PWM_FREQ1);
     uint32_t pwmMax = freq & 0xFFFFu;
     if (pwmMax == 0) pwmMax = 0xFFFFu;
-    uint32_t duty = rd(BXT_BLC_PWM_DUTY1) & 0xFFFFu;
+    uint32_t duty = rd(fPwmDutyReg) & 0xFFFFu;
 
     uint32_t percent = static_cast<uint32_t>((static_cast<uint64_t>(duty) * 100u) / pwmMax);
     return clamp_u32(percent, 0, 100);

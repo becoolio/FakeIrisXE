@@ -90,7 +90,10 @@ static const uint32_t kProofLrcRingStateOffset = 0x100u;
 static const uint32_t kProofContextControl = 0x00090008u;
 static const uint64_t kProofPpgttScratchVa = 0x0000000000001000ULL;
 
-static const char* kExeclistVersion = "V327";
+static const char* kExeclistVersion = "V329";
+
+static const uint32_t kExecRingProgrammingRcsCtl = 0x31;  // V329: BCS0-style CTL
+static const uint32_t kExecRingProgrammingRcsMode = 0x33;  // V329: BCS0-style MODE
 
 static const uint32_t kCtxDescValid = (1u << 0);
 static const uint32_t kCtxDescPrivilege = (1u << 8);
@@ -2332,13 +2335,29 @@ bool FakeIrisXEExeclist::setupExeclistPorts()
     const uint32_t csbLo = (uint32_t)(csbGpuAddr & 0xFFFFFFFFULL);
     const uint32_t csbHi = (uint32_t)(csbGpuAddr >> 32);
 
-    const uint32_t ringModeEnableMask =
-        kExecRingModeDisableLegacy |
-        kExecRingModePpgttEnable |
-        kExecRingModePpgtt48b;
+    // V329: BCS0-style RCS programming (matching V219's initV219RCSFix)
+    // BCS0 uses MODE=0x33, CTL=0x31, HEAD=0x34, TAIL=0x38
+    IOLog("(FakeIrisXE) [V329] setupExeclistPorts: Applying BCS0-style RCS programming\n");
 
-    mmioWrite32(kExecRingModeGen7Reg, maskedBitsEnable(ringModeEnableMask));
+    // Set RCS HEAD/TAIL to non-zero like BCS0 (HEAD=0x34, TAIL=0x38)
+    mmioWrite32(kExecRingHeadReg, 0x34);
+    IOSleep(1);
+    mmioWrite32(kExecRingTailReg, 0x38);
+    IOSleep(1);
+
+    // Program RCS CTL with BCS0-style value (0x31)
+    mmioWrite32(kExecRingCtlReg, kExecRingProgrammingRcsCtl);
+    IOSleep(1);
+
+    // Program RCS MODE with BCS0-style value (0x33 instead of legacy style)
+    mmioWrite32(kExecRingModeGen7Reg, kExecRingProgrammingRcsMode);
+    IOSleep(1);
+
+    // Also set RCS MI_MODE for command streamer
     mmioWrite32(kExecRingMiModeReg, maskedBitDisable(kExecRingMiModeStopRing));
+    IOSleep(1);
+
+    // Set HWS pointer
     mmioWrite32(kExecHwsPgaReg, (uint32_t)(hwsGpuAddr & 0xFFFFFFFFULL));
     mmioWrite32(kExecHwstamReg, 0xFFFFFFFFu);
     (void)mmioRead32(kExecHwsPgaReg);
@@ -2346,6 +2365,14 @@ bool FakeIrisXEExeclist::setupExeclistPorts()
     mmioWrite32(RCS0_CSB_ADDR_LO, csbLo);
     mmioWrite32(RCS0_CSB_ADDR_HI, csbHi);
     mmioWrite32(RCS0_CSB_CTRL, 0x1u);
+
+    // Verify BCS0-style programming
+    const uint32_t rcsHead = mmioRead32(kExecRingHeadReg);
+    const uint32_t rcsTail = mmioRead32(kExecRingTailReg);
+    const uint32_t rcsCtl = mmioRead32(kExecRingCtlReg);
+    const uint32_t rcsMode = mmioRead32(kExecRingModeGen7Reg);
+    IOLog("(FakeIrisXE) [V329] setupExeclistPorts: BCS0-style verified: HEAD=0x%08X TAIL=0x%08X CTL=0x%08X MODE=0x%08X\n",
+          rcsHead, rcsTail, rcsCtl, rcsMode);
 
     const uint32_t csbReadbackLo = mmioRead32(RCS0_CSB_ADDR_LO);
     const uint32_t csbReadbackHi = mmioRead32(RCS0_CSB_ADDR_HI);

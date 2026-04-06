@@ -227,6 +227,21 @@ protected:
     uint16_t fBacklightLevelOut[11] = {};
     int fBacklightTableSize = 0;
     uint32_t fPwmMax = 0xFFFFu;
+    
+    // Enhanced backlight control (V329+)
+    enum BacklightPWMMode {
+        BacklightPWMModeBXT = 0,   // Broxton/CannonLake legacy (0xC8250)
+        BacklightPWMModeTGL = 1,    // Tiger Lake / Gen12+ (0x184000)
+        BacklightPWMModeDPCD = 2    // DisplayPort DPCD backlight
+    };
+    BacklightPWMMode fPwmMode;
+    uint32_t fPwmCtlReg;
+    uint32_t fPwmFreqReg;
+    uint32_t fPwmDutyReg;
+    bool fPwmInitialized;
+    uint32_t fBacklightGamma = 220;  // Gamma 2.2 default (0-1000 scale)
+    uint32_t fBacklightFadeSteps = 20;  // Smooth fade step count
+    uint32_t fBacklightFadeDelayMs = 10;  // Delay between fade steps
 
     
     IOCommandGate* commandGate;
@@ -725,6 +740,8 @@ protected:
     void cleanupAllPendingSubmissions();
 
     bool setBacklightPercent(uint32_t percent, const char* source = "direct");
+    bool setBacklightFade(uint32_t targetPercent, const char* source = "fade");
+    void setBacklightFrequency(uint32_t freqHz);
     
     uint32_t getBacklightPercent();
 

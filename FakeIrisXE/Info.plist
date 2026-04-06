@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.327</string>
+	<string>1.0.329</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.327</string>
+	<string>1.0.329</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V327 - Apple GuC DMA fix (0x00070000) + execlist enhancements</string>
+	<string>FakeIrisXe V329 - Enhanced backlight (TGL PWM, gamma, smooth fade, DPCD)</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
