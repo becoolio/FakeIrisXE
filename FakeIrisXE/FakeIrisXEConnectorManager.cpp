@@ -2178,3 +2178,421 @@ bool FakeIrisXEConnectorManager::parseVBTConnectors()
           m_bdbVersion);
     return true;
 }
+
+// Link training and configuration
+bool FakeIrisXEConnectorManager::performLinkTraining(TGLConnectorDesc& conn, uint32_t maxRate, uint8_t maxLanes) {
+    IOLog("[TGL-Connector] performLinkTraining: conn=%u maxRate=%u maxLanes=%u\n", conn.index, maxRate, maxLanes);
+    
+    uint8_t linkStatus[6] = {0};
+    uint8_t laneCount = maxLanes;
+    uint32_t linkRate = maxRate;
+    
+    for (int attempt = 0; attempt < 5; attempt++) {
+        IOLog("[TGL-Connector] Link training attempt %d: rate=%u lanes=%u\n", attempt + 1, linkRate, laneCount);
+        
+        uint8_t trainingPattern = 0x01;
+        if (!writeDPCD_training(&trainingPattern, 1)) {
+            IOLog("[TGL-Connector] Failed to set training pattern\n");
+            return false;
+        }
+        
+        uint8_t adjustRequest = 0;
+        for (uint8_t i = 0; i < laneCount; i++) {
+            uint8_t laneSet = (i < laneCount) ? (0x21 | (i << 3)) : 0;
+            uint8_t trainingLaneSet[2] = {static_cast<uint8_t>(0x102 + i), laneSet};
+            if (!writeDPCD_training(trainingLaneSet, 2)) {
+                IOLog("[TGL-Connector] Failed to set lane %u\n", i);
+                return false;
+            }
+        }
+        
+        IOSleep(10);
+        
+        if (readDPCD_training(linkStatus, 6)) {
+            bool allLanesOK = true;
+            for (uint8_t i = 0; i < laneCount; i++) {
+                uint8_t laneStatus = linkStatus[i];
+                if ((laneStatus & 0x0C) != 0x0C) {
+                    allLanesOK = false;
+                    IOLog("[TGL-Connector] Lane %u not ready: status=0x%02X\n", i, laneStatus);
+                }
+            }
+            
+            if (allLanesOK) {
+                IOLog("[TGL-Connector] Link training SUCCESS on attempt %d\n", attempt + 1);
+                trainingPattern = 0x02;
+                writeDPCD_training(&trainingPattern, 1);
+                return true;
+            }
+        }
+        
+        laneCount >>= 1;
+        if (laneCount < 1) laneCount = 1;
+    }
+    
+    IOLog("[TGL-Connector] Link training FAILED after all attempts\n");
+    return false;
+}
+
+bool FakeIrisXEConnectorManager::configureLinkRate(TGLConnectorDesc& conn, uint32_t rate) {
+    IOLog("[TGL-Connector] configureLinkRate: conn=%u rate=%u\n", conn.index, rate);
+    
+    uint8_t rateSelect = 0;
+    switch (rate) {
+        case 162000: rateSelect = 0x06; break;
+        case 270000: rateSelect = 0x0A; break;
+        case 540000: rateSelect = 0x14; break;
+        case 810000: rateSelect = 0x1E; break;
+        default: rateSelect = 0x14; break;
+    }
+    
+    return writeDPCD_training(&rateSelect, 1);
+}
+
+bool FakeIrisXEConnectorManager::configureLinkLanes(TGLConnectorDesc& conn, uint8_t lanes) {
+    IOLog("[TGL-Connector] configureLinkLanes: conn=%u lanes=%u\n", conn.index, lanes);
+    
+    uint8_t laneCountSet = 0x01;
+    if (lanes == 2) laneCountSet = 0x02;
+    if (lanes == 4) laneCountSet = 0x04;
+    
+    return writeDPCD_training(&laneCountSet, 1);
+}
+
+uint32_t FakeIrisXEConnectorManager::getSupportedLinkRate(const TGLConnectorDesc& conn) const {
+    if (!conn.hasDpcd) return 540000;
+    
+    uint8_t rate = conn.dpcd[0];
+    switch (rate & 0x3F) {
+        case 0x06: return 162000;
+        case 0x0A: return 270000;
+        case 0x14: return 540000;
+        case 0x1E: return 810000;
+        default: return 540000;
+    }
+}
+
+uint8_t FakeIrisXEConnectorManager::getSupportedLinkLanes(const TGLConnectorDesc& conn) const {
+    if (!conn.hasDpcd) return 4;
+    return (conn.dpcd[2] & 0x0F);
+}
+
+// DPCD extended reads
+bool FakeIrisXEConnectorManager::readDPCDLaneCount(uint8_t* laneCount) const {
+    if (!laneCount) return false;
+    *laneCount = 4;
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::readDPCDLinkRate(uint32_t* rate) const {
+    if (!rate) return false;
+    *rate = 540000;
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::readDPCDDownstreamPortCount(uint8_t* count) const {
+    if (!count) return false;
+    *count = 1;
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::readDPCDReceivePort(uint8_t* count) const {
+    if (!count) return false;
+    *count = 1;
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::readDPCD_training(uint8_t* data, uint8_t size) const {
+    if (!data || size == 0) return false;
+    for (uint8_t i = 0; i < size && i < kFakeIrisXEMaxDpcdBytes; i++) {
+        data[i] = 0xFF;
+    }
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::writeDPCD_training(const uint8_t* data, uint8_t size) {
+    if (!data || size == 0) return false;
+    IOLog("[TGL-Connector] writeDPCD_training: size=%u\n", size);
+    return true;
+}
+
+// HPD event handling
+void FakeIrisXEConnectorManager::handleHPDEvent(TGLConnectorDesc& conn) {
+    IOLog("[TGL-Connector] handleHPDEvent: conn=%u\n", conn.index);
+    
+    if (!checkHPD(conn)) {
+        IOLog("[TGL-Connector] HPD lost for connector %u\n", conn.index);
+        conn.present = false;
+        return;
+    }
+    
+    conn.present = true;
+    IOLog("[TGL-Connector] HPD detected for connector %u\n", conn.index);
+    
+    if (conn.type == TGLConnectorType::DP || conn.type == TGLConnectorType::eDP) {
+        readDPCD(conn, 0x0, conn.dpcd, kFakeIrisXEMaxDpcdBytes);
+        conn.hasDpcd = true;
+        checkDpcdBacklightCaps(conn);
+    }
+    
+    if (conn.type != TGLConnectorType::eDP) {
+        readEDID(conn);
+        conn.hasEdid = true;
+    }
+}
+
+void FakeIrisXEConnectorManager::clearHPDStatus(TGLConnectorDesc& conn) {
+    IOLog("[TGL-Connector] clearHPDStatus: conn=%u\n", conn.index);
+    uint32_t hpdStatus = readReg(PCH_PORT_HPDSTS);
+    (void)hpdStatus;
+}
+
+uint32_t FakeIrisXEConnectorManager::getHPDStatusBits() {
+    return readReg(PCH_PORT_HPDSTS);
+}
+
+void FakeIrisXEConnectorManager::enableHPDInterrupts(TGLConnectorDesc& conn) {
+    IOLog("[TGL-Connector] enableHPDInterrupts: conn=%u\n", conn.index);
+    uint32_t reg = readReg(PCH_PORT_HPDEN);
+    writeReg(PCH_PORT_HPDEN, reg | (1u << conn.hdpBit));
+}
+
+void FakeIrisXEConnectorManager::disableHPDInterrupts(TGLConnectorDesc& conn) {
+    IOLog("[TGL-Connector] disableHPDInterrupts: conn=%u\n", conn.index);
+    uint32_t reg = readReg(PCH_PORT_HPDEN);
+    writeReg(PCH_PORT_HPDEN, reg & ~(1u << conn.hdpBit));
+}
+
+// Display port configuration
+bool FakeIrisXEConnectorManager::configureDPPort(TGLConnectorDesc& conn, uint32_t linkRate, uint8_t lanes) {
+    IOLog("[TGL-Connector] configureDPPort: conn=%u rate=%u lanes=%u\n", conn.index, linkRate, lanes);
+    
+    uint32_t ddiReg = getDDIBufferControl(conn.ddiPort);
+    uint32_t ddiConfig = readReg(ddiReg);
+    
+    ddiConfig |= (1u << 31);
+    ddiConfig &= ~0xFu;
+    ddiConfig |= (lanes & 0xF);
+    
+    uint8_t rateSelect = 0x14;
+    if (linkRate <= 162000) rateSelect = 0x06;
+    else if (linkRate <= 270000) rateSelect = 0x0A;
+    else if (linkRate <= 540000) rateSelect = 0x14;
+    else rateSelect = 0x1E;
+    
+    ddiConfig &= ~0x1F00u;
+    ddiConfig |= (rateSelect << 8);
+    
+    writeReg(ddiReg, ddiConfig);
+    
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::configureEDP(TGLConnectorDesc& conn, uint32_t linkRate, uint8_t lanes) {
+    IOLog("[TGL-Connector] configureEDP: conn=%u rate=%u lanes=%u\n", conn.index, linkRate, lanes);
+    
+    if (!powerUpEDPPanel()) {
+        IOLog("[TGL-Connector] Failed to power up eDP panel\n");
+        return false;
+    }
+    
+    return configureDPPort(conn, linkRate, lanes);
+}
+
+bool FakeIrisXEConnectorManager::setDPPowerState(TGLConnectorDesc& conn, bool powered) {
+    IOLog("[TGL-Connector] setDPPowerState: conn=%u powered=%u\n", conn.index, powered ? 1u : 0u);
+    
+    if (conn.type == TGLConnectorType::eDP) {
+        if (powered) return powerUpEDPPanel();
+        else return powerDownEDPPanel();
+    }
+    
+    return true;
+}
+
+// HDMI configuration
+bool FakeIrisXEConnectorManager::configureHDMI(TGLConnectorDesc& conn, uint32_t pixelClock) {
+    IOLog("[TGL-Connector] configureHDMI: conn=%u pixelClock=%u\n", conn.index, pixelClock);
+    
+    uint32_t transFunc = getTranscoderFunctionControl(conn.ddiPort);
+    uint32_t config = readReg(transFunc);
+    
+    config &= ~0xFu;
+    config |= 0x8;
+    
+    if (pixelClock > 165000) {
+        config |= (1u << 4);
+    }
+    
+    writeReg(transFunc, config);
+    
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::setHDMIVideoEnabled(bool enabled) {
+    IOLog("[TGL-Connector] setHDMIVideoEnabled: %u\n", enabled ? 1u : 0u);
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::setHDMIAudioEnabled(bool enabled) {
+    IOLog("[TGL-Connector] setHDMIAudioEnabled: %u\n", enabled ? 1u : 0u);
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::getHDMIAudioCaps(bool* hasAudio) const {
+    if (!hasAudio) return false;
+    *hasAudio = true;
+    return true;
+}
+
+// DDI buffer and clock management
+bool FakeIrisXEConnectorManager::setDDIBufferEnable(TGLDDIPort port, bool enable) {
+    IOLog("[TGL-Connector] setDDIBufferEnable: port=%u enabled=%u\n", port, enable ? 1u : 0u);
+    
+    uint32_t ddiReg = getDDIBufferControl(port);
+    uint32_t config = readReg(ddiReg);
+    
+    if (enable) config |= (1u << 31);
+    else config &= ~(1u << 31);
+    
+    writeReg(ddiReg, config);
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::setDDIClockSelect(TGLDDIPort port, uint8_t clock) {
+    IOLog("[TGL-Connector] setDDIClockSelect: port=%u clock=%u\n", port, clock);
+    
+    uint32_t ddiReg = getDDIBufferControl(port);
+    uint32_t config = readReg(ddiReg);
+    
+    config &= ~0xF0000u;
+    config |= ((clock & 0xF) << 16);
+    
+    writeReg(ddiReg, config);
+    return true;
+}
+
+uint32_t FakeIrisXEConnectorManager::getDDIClockStatus(TGLDDIPort port) {
+    uint32_t ddiReg = getDDIBufferControl(port);
+    uint32_t status = readReg(ddiReg);
+    return status;
+}
+
+// Transcoder timing
+bool FakeIrisXEConnectorManager::setPipeTiming(uint8_t pipe, uint32_t htotal, uint32_t vtotal, uint32_t hblank, uint32_t vblank) {
+    IOLog("[TGL-Connector] setPipeTiming: pipe=%u htotal=%u vtotal=%u hblank=%u vblank=%u\n",
+          pipe, htotal, vtotal, hblank, vblank);
+    
+    uint32_t htotalReg = 0x60000 + (pipe * 0x1000);
+    uint32_t vtotalReg = 0x60004 + (pipe * 0x1000);
+    uint32_t hblankReg = 0x60008 + (pipe * 0x1000);
+    uint32_t vblankReg = 0x6000C + (pipe * 0x1000);
+    
+    writeReg(htotalReg, htotal & 0xFFFF);
+    writeReg(vtotalReg, vtotal & 0xFFFF);
+    writeReg(hblankReg, hblank & 0xFFFF);
+    writeReg(vblankReg, vblank & 0xFFFF);
+    
+    return true;
+}
+
+bool FakeIrisXEConnectorManager::getPipeTiming(uint8_t pipe, uint32_t* htotal, uint32_t* vtotal, uint32_t* hblank, uint32_t* vblank) {
+    if (!htotal || !vtotal || !hblank || !vblank) return false;
+    
+    uint32_t htotalReg = 0x60000 + (pipe * 0x1000);
+    uint32_t vtotalReg = 0x60004 + (pipe * 0x1000);
+    uint32_t hblankReg = 0x60008 + (pipe * 0x1000);
+    uint32_t vblankReg = 0x6000C + (pipe * 0x1000);
+    
+    *htotal = readReg(htotalReg) & 0xFFFF;
+    *vtotal = readReg(vtotalReg) & 0xFFFF;
+    *hblank = readReg(hblankReg) & 0xFFFF;
+    *vblank = readReg(vblankReg) & 0xFFFF;
+    
+    return true;
+}
+
+// Debug and diagnostics
+void FakeIrisXEConnectorManager::dumpConnectorState(uint8_t index) {
+    if (index >= m_connectorCount) return;
+    
+    TGLConnectorDesc& conn = m_connectors[index];
+    
+    IOLog("[TGL-Connector] Dump connector %u:\n", index);
+    IOLog("  type=%u ddiPort=%u auxChannel=%u hpdPin=%u\n",
+          static_cast<unsigned>(conn.type),
+          static_cast<unsigned>(conn.ddiPort),
+          static_cast<unsigned>(conn.auxChannel),
+          static_cast<unsigned>(conn.hpdPin));
+    IOLog("  maxLanes=%u maxBitRate=%u isInternal=%u present=%u\n",
+          conn.maxLanes, conn.maxBitRate, conn.isInternal ? 1u : 0u, conn.present ? 1u : 0u);
+    IOLog("  hasDpcd=%u hasEdid=%u edidLength=%u panelType=%u\n",
+          conn.hasDpcd ? 1u : 0u, conn.hasEdid ? 1u : 0u, conn.edidLength, conn.panelType);
+    
+    uint32_t ddiReg = getDDIBufferControl(conn.ddiPort);
+    uint32_t ddiStatus = readReg(ddiReg);
+    IOLog("  DDI buffer: 0x%08X\n", ddiStatus);
+}
+
+void FakeIrisXEConnectorManager::dumpAllConnectors() {
+    IOLog("[TGL-Connector] === Dumping all connectors (%u total) ===\n", m_connectorCount);
+    for (uint8_t i = 0; i < m_connectorCount; i++) {
+        dumpConnectorState(i);
+    }
+    IOLog("[TGL-Connector] === End dump ===\n");
+}
+
+void FakeIrisXEConnectorManager::logAUXTransaction(TGLAUXChannel aux, bool isWrite, uint32_t address, const uint8_t* data, uint32_t size) {
+    const char* typeStr = isWrite ? "WRITE" : "READ";
+    IOLog("[TGL-Connector] AUX%u %s: addr=0x%X size=%u",
+          static_cast<unsigned>(aux), typeStr, address, size);
+    
+    if (data && size <= 16) {
+        for (uint32_t i = 0; i < size; i++) {
+            IOLog(" %02X", data[i]);
+        }
+    }
+    IOLog("\n");
+}
+
+void FakeIrisXEConnectorManager::runDiagnostics() {
+    IOLog("[TGL-Connector] Running diagnostics...\n");
+    
+    for (uint8_t i = 0; i < m_connectorCount; i++) {
+        TGLConnectorDesc& conn = m_connectors[i];
+        
+        uint32_t ddiReg = getDDIBufferControl(conn.ddiPort);
+        uint32_t ddiStatus = readReg(ddiReg);
+        
+        bool ddiEnabled = (ddiStatus & (1u << 31)) != 0;
+        bool pipeEnabled = isPipeEnabled(i);
+        
+        IOLog("[TGL-Connector] Diag conn=%u: DDI=%s pipe=%s\n",
+              i, ddiEnabled ? "ON" : "OFF", pipeEnabled ? "ON" : "OFF");
+        
+        if (conn.type == TGLConnectorType::eDP) {
+            bool panelPowered = isEDPPanelPowered();
+            IOLog("[TGL-Connector] Diag eDP: panelPowered=%s\n", panelPowered ? "YES" : "NO");
+        }
+    }
+    
+    IOLog("[TGL-Connector] Diag: HPD status=0x%08X\n", getHPDStatusBits());
+}
+
+// Extended properties
+void FakeIrisXEConnectorManager::setConnectorProperty(uint8_t index, const char* key, uint64_t value) {
+    if (index >= m_connectorCount) return;
+    IOLog("[TGL-Connector] setProperty: conn=%u key=%s value=0x%llX\n",
+          index, key, static_cast<unsigned long long>(value));
+}
+
+uint64_t FakeIrisXEConnectorManager::getConnectorProperty(uint8_t index, const char* key) const {
+    if (index >= m_connectorCount) return 0;
+    IOLog("[TGL-Connector] getProperty: conn=%u key=%s\n", index, key);
+    return 0;
+}
+
+bool FakeIrisXEConnectorManager::hasConnectorProperty(uint8_t index, const char* key) const {
+    if (index >= m_connectorCount) return false;
+    return false;
+}

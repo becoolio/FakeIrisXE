@@ -136,3 +136,110 @@ void FakeIrisXEFenceManager::free() {
     if (fLock) { IOLockFree(fLock); fLock = nullptr; }
     OSObject::free();
 }
+
+// V295: Enhanced fence management from IntelFence
+OSDefineMetaClassAndStructors(FakeIrisXEFence, OSObject)
+
+FakeIrisXEFence* FakeIrisXEFence::create(uint32_t id) {
+    FakeIrisXEFence* fence = new FakeIrisXEFence;
+    if (!fence) return nullptr;
+    if (!fence->init()) { fence->release(); return nullptr; }
+    fence->fenceId = id;
+    fence->signaled = false;
+    fence->seqno = 0;
+    fence->engineId = 0;
+    fence->signalTime = 0;
+    fence->fenceLock = IOLockAlloc();
+    return fence;
+}
+
+bool FakeIrisXEFence::init() {
+    if (!OSObject::init()) return false;
+    fenceLock = IOLockAlloc();
+    return fenceLock != nullptr;
+}
+
+void FakeIrisXEFence::free() {
+    if (fenceLock) { IOLockFree(fenceLock); fenceLock = nullptr; }
+    OSObject::free();
+}
+
+bool FakeIrisXEFence::wait(uint32_t timeoutMs) {
+    IOLockLock(fenceLock);
+    if (signaled) { IOLockUnlock(fenceLock); return true; }
+    IOLockUnlock(fenceLock);
+    
+    uint64_t startTime = 0;
+    clock_get_uptime(&startTime);
+    uint64_t deadline = startTime + (uint64_t)timeoutMs * 1000000ULL;
+    
+    while (true) {
+        IOLockLock(fenceLock);
+        if (signaled) { IOLockUnlock(fenceLock); return true; }
+        IOLockUnlock(fenceLock);
+        
+        uint64_t now = 0;
+        clock_get_uptime(&now);
+        if (now >= deadline) {
+            IOLog("(FakeIrisXE) [FENCE] Timeout fence %u seqno=%u\n", fenceId, seqno);
+            return false;
+        }
+        IOSleep(1);
+    }
+}
+
+void FakeIrisXEFence::signal() {
+    IOLockLock(fenceLock);
+    if (!signaled) {
+        signaled = true;
+        clock_get_uptime(&signalTime);
+    }
+    IOLockUnlock(fenceLock);
+}
+
+bool FakeIrisXEFence::isSignaled() const {
+    return signaled;
+}
+
+void FakeIrisXEFence::reset() {
+    IOLockLock(fenceLock);
+    signaled = false;
+    signalTime = 0;
+    IOLockUnlock(fenceLock);
+}
+
+// Additional fence manager methods
+IOReturn FakeIrisXEFenceManager::signalFence(uint64_t fenceId) {
+    IOLockLock(fLock);
+    for (uint32_t i = 0; i < fFences->getCount(); i++) {
+        OSData* entryData = OSDynamicCast(OSData, fFences->getObject(i));
+        if (!entryData) continue;
+        FenceEntry* entry = (FenceEntry*)entryData->getBytesNoCopy();
+        if (entry->fenceId == fenceId) {
+            entry->signaled = true;
+            IOLockUnlock(fLock);
+            return kIOReturnSuccess;
+        }
+    }
+    IOLockUnlock(fLock);
+    return kIOReturnNotFound;
+}
+
+void FakeIrisXEFenceManager::cleanupFence(uint64_t fenceId) {
+    IOLockLock(fLock);
+    for (uint32_t i = 0; i < fFences->getCount(); i++) {
+        OSData* entryData = OSDynamicCast(OSData, fFences->getObject(i));
+        if (!entryData) continue;
+        FenceEntry* entry = (FenceEntry*)entryData->getBytesNoCopy();
+        if (entry->fenceId == fenceId) {
+            fFences->removeObject(i);
+            break;
+        }
+    }
+    IOLockUnlock(fLock);
+}
+
+void FakeIrisXEFenceManager::dumpFenceStatus() {
+    IOLog("(FakeIrisXE) [FENCE] Status: active=%u completed=%u\n",
+          fFences ? fFences->getCount() : 0, fCompletedSeqno);
+}

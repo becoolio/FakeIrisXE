@@ -5,19 +5,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V330 - RING_MODE execlist enable + backlight gamma/slider/fixed PWM</string>
+	<string>FakeIrisXe V340 - GuC+Gen12 RCS LRC Implementation</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.330</string>
+	<string>1.0.340</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.330</string>
+	<string>1.0.340</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>

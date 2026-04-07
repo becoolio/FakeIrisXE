@@ -37,12 +37,15 @@
 
 
 
-class FakeIrisXEFramebuffer : public IOFramebuffer
-
-{
+class FakeIrisXEFramebuffer : public IOFramebuffer {
+    friend class FakeIrisXEAccelerator;
+    friend class FakeIrisXEGuC;
+    friend class FakeIrisXELRC;
+    friend class FakeIrisXEExeclist;
+    friend class FakeIrisXEBacklight;
+    friend class FakeIrisXEAcceleratorUserClient;
     OSDeclareDefaultStructors(FakeIrisXEFramebuffer)
     
-
 private:
     
 
@@ -144,8 +147,28 @@ protected:
     
     
      public:
-    
-    
+     
+     // V310: Public accessor for fence sequence
+     uint32_t getCompletedFenceSeq() const { return readCompletedFenceSeq(); }
+     
+     // V310: Public wrappers for GGTT operations
+     uint64_t mapGEM(FakeIrisXEGEM* gem) { return ggttMap(gem); }
+     void unmapGEM(uint64_t gpuAddr, uint32_t pages) { ggttUnmap(gpuAddr, pages); }
+     void* getGEMCPUAddr(FakeIrisXEGEM* gem) { return ggttGetCPUAddr(gem); }
+     
+     // V310: Public wrappers for forcewake
+     bool acquireForcewake(uint32_t timeoutMs = 2000) { return forcewakeRenderHold(timeoutMs); }
+     void releaseForcewake() { forcewakeRenderRelease(); }
+     
+     // V310: Public wrapper for execution state update
+     void updateExeclistState(bool ready, const char* reason) { updateExecutionState(ready, reason); }
+     
+     // V310: Public wrapper for pending submission management
+     bool markSubmissionComplete(uint32_t seq) { return completePendingSubmission(seq); }
+     
+     // V310: Public wrapper for backlight
+     bool setDisplayBacklight(uint32_t percent, const char* src = "direct") { return setBacklightPercent(percent, src); }
+     
      // Safe MMIO access methods
         uint32_t safeMMIORead(uint32_t offset) {
            if (!mmioBase || !mmioMap || mmioMap->getLength() < sizeof(uint32_t) ||
@@ -320,6 +343,55 @@ protected:
     
     
     virtual IOReturn setPowerState(unsigned long powerStateOrdinal, IOService* whatDevice) override;
+    virtual unsigned long maxCapabilityForDomainState(IOPMPowerFlags domainState) override;
+    virtual unsigned long initialPowerStateForDomainState(IOPMPowerFlags domainState) override;
+    virtual IOReturn powerStateWillChangeTo(IOPMPowerFlags capabilities, unsigned long stateNumber, IOService* whatDevice) override;
+    virtual IOReturn powerStateDidChangeTo(IOPMPowerFlags capabilities, unsigned long stateNumber, IOService* whatDevice) override;
+
+    // V300: Enhanced power management from IntelPowerManagement
+    IOReturn setDPMSState(uint32_t state);
+    uint32_t getDPMSState() const { return fDPMSState; }
+    IOReturn enableDisplayPower();
+    IOReturn disableDisplayPower();
+    bool isDisplayPowered() const { return fDisplayPowered; }
+    IOReturn panelPowerOn();
+    IOReturn panelPowerOff();
+    bool isPanelPowered() const { return fPanelPowered; }
+    IOReturn configurePanelPowerTiming(uint32_t upDelay, uint32_t downDelay, uint32_t backlightOnDelay, uint32_t backlightOffDelay);
+
+    // V300: Performance monitoring
+    IOReturn getGPUUtilization(float* utilization);
+    IOReturn getMemoryBandwidth(float* bandwidth);
+    IOReturn getTemperature(uint32_t* tempCelsius);
+    IOReturn enablePerformanceCounters(bool enable);
+    IOReturn samplePerformanceCounters(uint64_t* counters, uint32_t count);
+
+    // V300: Power statistics
+    uint64_t getTotalOnTime() const { return fTotalOnTime; }
+    uint64_t getTotalOffTime() const { return fTotalOffTime; }
+    uint32_t getPowerTransitionCount() const { return fPowerTransitionCount; }
+    void resetPowerStatistics();
+
+    // V300: Display state
+    bool isDisplayActive() const { return fDisplayActive; }
+    void setDisplayActive(bool active);
+
+protected:
+    uint32_t fDPMSState;
+    bool fDisplayPowered;
+    bool fPanelPowered;
+    bool fDisplayActive;
+    uint64_t fTotalOnTime;
+    uint64_t fTotalOffTime;
+    uint32_t fPowerTransitionCount;
+    uint64_t fLastPowerStateChange;
+    uint32_t fPanelPowerUpDelay;
+    uint32_t fPanelPowerDownDelay;
+    uint32_t fBacklightOnDelay;
+    uint32_t fBacklightOffDelay;
+    float fGPUUtilization;
+    float fMemoryBandwidth;
+    bool fPerformanceCountersEnabled;
 
     
     virtual const char* getPixelFormats() override;
@@ -733,7 +805,6 @@ protected:
                                         size_t userBatchSizeBytes,
                                         bool trackPending);
     uint32_t readCompletedFenceSeq() const;
-   
     void handleInterrupt(IOInterruptEventSource* src, int count);
     bool addPendingSubmission(uint32_t seq, FakeIrisXEGEM* master, FakeIrisXEGEM* tail);
     bool completePendingSubmission(uint32_t seq);

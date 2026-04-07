@@ -13,7 +13,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>57</integer>
+      <key>line</key><integer>113</integer>
       <key>col</key><integer>9</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -21,180 +21,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>57</integer>
+         <key>line</key><integer>113</integer>
          <key>col</key><integer>5</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>60</integer>
-         <key>col</key><integer>5</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-       </array>
-     </array>
-     <key>depth</key><integer>0</integer>
-     <key>extended_message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-     <key>message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-    </dict>
-   </array>
-   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-   <key>category</key><string>Logic error</string>
-   <key>type</key><string>Suspicious number object conversion</string>
-   <key>check_name</key><string>osx.NumberObjectConversion</string>
-   <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>786bcf4a71eeff8a1b878e26887053c7</string>
-  <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>31</string>
-  <key>location</key>
-  <dict>
-   <key>line</key><integer>57</integer>
-   <key>col</key><integer>9</integer>
-   <key>file</key><integer>0</integer>
-  </dict>
-  <key>ExecutedLines</key>
-  <dict>
-   <key>0</key>
-   <array>
-    <integer>57</integer>
-   </array>
-  </dict>
-  </dict>
-  <dict>
-   <key>path</key>
-   <array>
-    <dict>
-     <key>kind</key><string>event</string>
-     <key>location</key>
-     <dict>
-      <key>line</key><integer>63</integer>
-      <key>col</key><integer>9</integer>
-      <key>file</key><integer>0</integer>
-     </dict>
-     <key>ranges</key>
-     <array>
-       <array>
-        <dict>
-         <key>line</key><integer>63</integer>
-         <key>col</key><integer>5</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-        <dict>
-         <key>line</key><integer>66</integer>
-         <key>col</key><integer>5</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-       </array>
-     </array>
-     <key>depth</key><integer>0</integer>
-     <key>extended_message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-     <key>message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-    </dict>
-   </array>
-   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-   <key>category</key><string>Logic error</string>
-   <key>type</key><string>Suspicious number object conversion</string>
-   <key>check_name</key><string>osx.NumberObjectConversion</string>
-   <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>aef909882b7f474789117e125886b1cb</string>
-  <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>37</string>
-  <key>location</key>
-  <dict>
-   <key>line</key><integer>63</integer>
-   <key>col</key><integer>9</integer>
-   <key>file</key><integer>0</integer>
-  </dict>
-  <key>ExecutedLines</key>
-  <dict>
-   <key>0</key>
-   <array>
-    <integer>63</integer>
-   </array>
-  </dict>
-  </dict>
-  <dict>
-   <key>path</key>
-   <array>
-    <dict>
-     <key>kind</key><string>event</string>
-     <key>location</key>
-     <dict>
-      <key>line</key><integer>70</integer>
-      <key>col</key><integer>9</integer>
-      <key>file</key><integer>0</integer>
-     </dict>
-     <key>ranges</key>
-     <array>
-       <array>
-        <dict>
-         <key>line</key><integer>70</integer>
-         <key>col</key><integer>5</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-        <dict>
-         <key>line</key><integer>70</integer>
-         <key>col</key><integer>75</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-       </array>
-     </array>
-     <key>depth</key><integer>0</integer>
-     <key>extended_message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-     <key>message</key>
-     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-    </dict>
-   </array>
-   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
-   <key>category</key><string>Logic error</string>
-   <key>type</key><string>Suspicious number object conversion</string>
-   <key>check_name</key><string>osx.NumberObjectConversion</string>
-   <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>0950ddfeb94c3d3e9a394d5ffe0263a0</string>
-  <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>44</string>
-  <key>location</key>
-  <dict>
-   <key>line</key><integer>70</integer>
-   <key>col</key><integer>9</integer>
-   <key>file</key><integer>0</integer>
-  </dict>
-  <key>ExecutedLines</key>
-  <dict>
-   <key>0</key>
-   <array>
-    <integer>70</integer>
-   </array>
-  </dict>
-  </dict>
-  <dict>
-   <key>path</key>
-   <array>
-    <dict>
-     <key>kind</key><string>event</string>
-     <key>location</key>
-     <dict>
-      <key>line</key><integer>81</integer>
-      <key>col</key><integer>9</integer>
-      <key>file</key><integer>0</integer>
-     </dict>
-     <key>ranges</key>
-     <array>
-       <array>
-        <dict>
-         <key>line</key><integer>81</integer>
-         <key>col</key><integer>5</integer>
-         <key>file</key><integer>0</integer>
-        </dict>
-        <dict>
-         <key>line</key><integer>81</integer>
+         <key>line</key><integer>113</integer>
          <key>col</key><integer>71</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -212,13 +44,13 @@
    <key>type</key><string>Suspicious number object conversion</string>
    <key>check_name</key><string>osx.NumberObjectConversion</string>
    <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>42058c7bd82cef37b7fee40b0e8b4918</string>
+   <key>issue_hash_content_of_line_in_context</key><string>3dac828ad2477974c3693c94e0e45dca</string>
   <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>55</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>2</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>81</integer>
+   <key>line</key><integer>113</integer>
    <key>col</key><integer>9</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -226,7 +58,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>81</integer>
+    <integer>113</integer>
    </array>
   </dict>
   </dict>
@@ -237,7 +69,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>82</integer>
+      <key>line</key><integer>116</integer>
       <key>col</key><integer>9</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -245,12 +77,180 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>82</integer>
+         <key>line</key><integer>116</integer>
          <key>col</key><integer>5</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>82</integer>
+         <key>line</key><integer>116</integer>
+         <key>col</key><integer>67</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>a965ced358ca564cd6929ca3e854376c</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>5</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>116</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>116</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>119</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>119</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>119</integer>
+         <key>col</key><integer>75</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>099873b95495a19cf9c130683f7ef56b</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>8</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>119</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>119</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>122</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>122</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>122</integer>
+         <key>col</key><integer>77</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>e1bccdfd32730102253cc25d61f8af24</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>11</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>122</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>122</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>125</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>125</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>125</integer>
          <key>col</key><integer>70</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -268,13 +268,13 @@
    <key>type</key><string>Suspicious number object conversion</string>
    <key>check_name</key><string>osx.NumberObjectConversion</string>
    <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>cd130e3d5e94ed9cb3136e0952234fd5</string>
+   <key>issue_hash_content_of_line_in_context</key><string>8b83722b463819c8852237cf5595a78a</string>
   <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>56</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>14</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>82</integer>
+   <key>line</key><integer>125</integer>
    <key>col</key><integer>9</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -282,7 +282,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>82</integer>
+    <integer>125</integer>
    </array>
   </dict>
   </dict>
@@ -293,7 +293,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>86</integer>
+      <key>line</key><integer>128</integer>
       <key>col</key><integer>9</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -301,13 +301,13 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>86</integer>
+         <key>line</key><integer>128</integer>
          <key>col</key><integer>5</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>89</integer>
-         <key>col</key><integer>5</integer>
+         <key>line</key><integer>128</integer>
+         <key>col</key><integer>71</integer>
          <key>file</key><integer>0</integer>
         </dict>
        </array>
@@ -324,13 +324,13 @@
    <key>type</key><string>Suspicious number object conversion</string>
    <key>check_name</key><string>osx.NumberObjectConversion</string>
    <!-- This hash is experimental and going to change! -->
-   <key>issue_hash_content_of_line_in_context</key><string>f9a2cf2b35a61120b553f2efcfc20515</string>
+   <key>issue_hash_content_of_line_in_context</key><string>dd95da6f1f867b2369a1ba39024e5da4</string>
   <key>issue_context_kind</key><string>C++ method</string>
-  <key>issue_context</key><string>start</string>
-  <key>issue_hash_function_offset</key><string>60</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>17</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>86</integer>
+   <key>line</key><integer>128</integer>
    <key>col</key><integer>9</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -338,7 +338,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>86</integer>
+    <integer>128</integer>
    </array>
   </dict>
   </dict>
@@ -349,7 +349,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>114</integer>
+      <key>line</key><integer>131</integer>
       <key>col</key><integer>9</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -357,12 +357,516 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>114</integer>
+         <key>line</key><integer>131</integer>
          <key>col</key><integer>5</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>117</integer>
+         <key>line</key><integer>131</integer>
+         <key>col</key><integer>75</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>86f48967bf2a8aac2d5d9c2ffddc2f4f</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>20</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>131</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>131</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>147</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>147</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>147</integer>
+         <key>col</key><integer>73</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>165d242fb8e614c5d816b1f1833b9863</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>36</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>147</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>147</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>150</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>150</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>150</integer>
+         <key>col</key><integer>79</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>89dd3887fd7216474cf5e597c8afe8ea</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>39</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>150</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>150</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>153</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>153</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>153</integer>
+         <key>col</key><integer>84</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>8a4f1f16bcac2d0cf88cb7f204283f73</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>42</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>153</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>153</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>159</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>159</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>159</integer>
+         <key>col</key><integer>85</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>fa9150586698ede9cf20647e914867cf</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>48</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>159</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>159</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>162</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>162</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>162</integer>
+         <key>col</key><integer>85</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>f1a9173bace38750023858476ff46871</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>publishBacklightProperties</string>
+  <key>issue_hash_function_offset</key><string>51</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>162</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>162</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>193</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>193</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>193</integer>
+         <key>col</key><integer>70</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>0f61569c7c429683d311eb94d422cc32</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>setPwmFrequency</string>
+  <key>issue_hash_function_offset</key><string>7</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>193</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>193</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>205</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>205</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>205</integer>
+         <key>col</key><integer>71</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>690c04482b95f92a139f3037fdf0a8ea</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>setMinBrightness</string>
+  <key>issue_hash_function_offset</key><string>7</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>205</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>205</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>249</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>249</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>249</integer>
+         <key>col</key><integer>75</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>6219e6b00489aa35e0401145500654b6</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>setPanelInfo</string>
+  <key>issue_hash_function_offset</key><string>6</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>249</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>249</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>381</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>381</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>384</integer>
          <key>col</key><integer>5</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -386,7 +890,7 @@
   <key>issue_hash_function_offset</key><string>6</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>114</integer>
+   <key>line</key><integer>381</integer>
    <key>col</key><integer>9</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -394,7 +898,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>114</integer>
+    <integer>381</integer>
    </array>
   </dict>
   </dict>
@@ -405,7 +909,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>154</integer>
+      <key>line</key><integer>421</integer>
       <key>col</key><integer>13</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -413,12 +917,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>154</integer>
+         <key>line</key><integer>421</integer>
          <key>col</key><integer>9</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>158</integer>
+         <key>line</key><integer>425</integer>
          <key>col</key><integer>9</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -442,7 +946,7 @@
   <key>issue_hash_function_offset</key><string>15</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>154</integer>
+   <key>line</key><integer>421</integer>
    <key>col</key><integer>13</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -450,7 +954,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>154</integer>
+    <integer>421</integer>
    </array>
   </dict>
   </dict>
@@ -461,7 +965,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>165</integer>
+      <key>line</key><integer>432</integer>
       <key>col</key><integer>13</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -469,12 +973,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>165</integer>
+         <key>line</key><integer>432</integer>
          <key>col</key><integer>9</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>169</integer>
+         <key>line</key><integer>436</integer>
          <key>col</key><integer>9</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -498,7 +1002,7 @@
   <key>issue_hash_function_offset</key><string>26</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>165</integer>
+   <key>line</key><integer>432</integer>
    <key>col</key><integer>13</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -506,7 +1010,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>165</integer>
+    <integer>432</integer>
    </array>
   </dict>
   </dict>
@@ -517,7 +1021,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>182</integer>
+      <key>line</key><integer>449</integer>
       <key>col</key><integer>21</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -525,12 +1029,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>182</integer>
+         <key>line</key><integer>449</integer>
          <key>col</key><integer>17</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>186</integer>
+         <key>line</key><integer>453</integer>
          <key>col</key><integer>17</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -554,7 +1058,7 @@
   <key>issue_hash_function_offset</key><string>43</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>182</integer>
+   <key>line</key><integer>449</integer>
    <key>col</key><integer>21</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -562,7 +1066,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>182</integer>
+    <integer>449</integer>
    </array>
   </dict>
   </dict>
@@ -573,7 +1077,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>190</integer>
+      <key>line</key><integer>457</integer>
       <key>col</key><integer>17</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -581,12 +1085,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>190</integer>
+         <key>line</key><integer>457</integer>
          <key>col</key><integer>13</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>194</integer>
+         <key>line</key><integer>461</integer>
          <key>col</key><integer>13</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -610,7 +1114,7 @@
   <key>issue_hash_function_offset</key><string>51</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>190</integer>
+   <key>line</key><integer>457</integer>
    <key>col</key><integer>17</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -618,7 +1122,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>190</integer>
+    <integer>457</integer>
    </array>
   </dict>
   </dict>
@@ -629,7 +1133,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>202</integer>
+      <key>line</key><integer>469</integer>
       <key>col</key><integer>21</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -637,12 +1141,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>202</integer>
+         <key>line</key><integer>469</integer>
          <key>col</key><integer>17</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>206</integer>
+         <key>line</key><integer>473</integer>
          <key>col</key><integer>17</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -666,7 +1170,7 @@
   <key>issue_hash_function_offset</key><string>63</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>202</integer>
+   <key>line</key><integer>469</integer>
    <key>col</key><integer>21</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -674,7 +1178,7 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>202</integer>
+    <integer>469</integer>
    </array>
   </dict>
   </dict>
@@ -685,7 +1189,7 @@
      <key>kind</key><string>event</string>
      <key>location</key>
      <dict>
-      <key>line</key><integer>209</integer>
+      <key>line</key><integer>476</integer>
       <key>col</key><integer>17</integer>
       <key>file</key><integer>0</integer>
      </dict>
@@ -693,12 +1197,12 @@
      <array>
        <array>
         <dict>
-         <key>line</key><integer>209</integer>
+         <key>line</key><integer>476</integer>
          <key>col</key><integer>13</integer>
          <key>file</key><integer>0</integer>
         </dict>
         <dict>
-         <key>line</key><integer>213</integer>
+         <key>line</key><integer>480</integer>
          <key>col</key><integer>13</integer>
          <key>file</key><integer>0</integer>
         </dict>
@@ -722,7 +1226,7 @@
   <key>issue_hash_function_offset</key><string>70</string>
   <key>location</key>
   <dict>
-   <key>line</key><integer>209</integer>
+   <key>line</key><integer>476</integer>
    <key>col</key><integer>17</integer>
    <key>file</key><integer>0</integer>
   </dict>
@@ -730,7 +1234,119 @@
   <dict>
    <key>0</key>
    <array>
-    <integer>209</integer>
+    <integer>476</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>494</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>494</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>494</integer>
+         <key>col</key><integer>75</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>4d3e470659e09c751db0009db06262a9</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>setBacklightNits</string>
+  <key>issue_hash_function_offset</key><string>4</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>494</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>494</integer>
+   </array>
+  </dict>
+  </dict>
+  <dict>
+   <key>path</key>
+   <array>
+    <dict>
+     <key>kind</key><string>event</string>
+     <key>location</key>
+     <dict>
+      <key>line</key><integer>502</integer>
+      <key>col</key><integer>9</integer>
+      <key>file</key><integer>0</integer>
+     </dict>
+     <key>ranges</key>
+     <array>
+       <array>
+        <dict>
+         <key>line</key><integer>502</integer>
+         <key>col</key><integer>5</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+        <dict>
+         <key>line</key><integer>502</integer>
+         <key>col</key><integer>72</integer>
+         <key>file</key><integer>0</integer>
+        </dict>
+       </array>
+     </array>
+     <key>depth</key><integer>0</integer>
+     <key>extended_message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+     <key>message</key>
+     <string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+    </dict>
+   </array>
+   <key>description</key><string>Converting a pointer value of type &apos;class OSNumber *&apos; to a scalar boolean value; instead, either compare the pointer to nullptr or call a method on &apos;class OSNumber *&apos; to get the scalar value</string>
+   <key>category</key><string>Logic error</string>
+   <key>type</key><string>Suspicious number object conversion</string>
+   <key>check_name</key><string>osx.NumberObjectConversion</string>
+   <!-- This hash is experimental and going to change! -->
+   <key>issue_hash_content_of_line_in_context</key><string>22f9a3c4c4976f552ca2520526a56483</string>
+  <key>issue_context_kind</key><string>C++ method</string>
+  <key>issue_context</key><string>setDisplayType</string>
+  <key>issue_hash_function_offset</key><string>3</string>
+  <key>location</key>
+  <dict>
+   <key>line</key><integer>502</integer>
+   <key>col</key><integer>9</integer>
+   <key>file</key><integer>0</integer>
+  </dict>
+  <key>ExecutedLines</key>
+  <dict>
+   <key>0</key>
+   <array>
+    <integer>502</integer>
    </array>
   </dict>
   </dict>

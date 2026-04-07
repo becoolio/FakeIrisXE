@@ -291,6 +291,59 @@ private:
     bool powerUpEDPPanel();
     bool powerDownEDPPanel();
     bool isEDPPanelPowered();
+    
+    // Link training and configuration
+    bool performLinkTraining(TGLConnectorDesc& conn, uint32_t maxRate, uint8_t maxLanes);
+    bool configureLinkRate(TGLConnectorDesc& conn, uint32_t rate);
+    bool configureLinkLanes(TGLConnectorDesc& conn, uint8_t lanes);
+    uint32_t getSupportedLinkRate(const TGLConnectorDesc& conn) const;
+    uint8_t getSupportedLinkLanes(const TGLConnectorDesc& conn) const;
+    
+    // DPCD extended reads
+    bool readDPCDLaneCount(uint8_t* laneCount) const;
+    bool readDPCDLinkRate(uint32_t* rate) const;
+    bool readDPCDDownstreamPortCount(uint8_t* count) const;
+    bool readDPCDReceivePort(uint8_t* count) const;
+    bool readDPCD_training(uint8_t* data, uint8_t size) const;
+    bool writeDPCD_training(const uint8_t* data, uint8_t size);
+    
+    // HPD event handling
+    void handleHPDEvent(TGLConnectorDesc& conn);
+    void clearHPDStatus(TGLConnectorDesc& conn);
+    uint32_t getHPDStatusBits();
+    void enableHPDInterrupts(TGLConnectorDesc& conn);
+    void disableHPDInterrupts(TGLConnectorDesc& conn);
+    
+    // Display port configuration
+    bool configureDPPort(TGLConnectorDesc& conn, uint32_t linkRate, uint8_t lanes);
+    bool configureEDP(TGLConnectorDesc& conn, uint32_t linkRate, uint8_t lanes);
+    bool setDPPowerState(TGLConnectorDesc& conn, bool powered);
+    
+    // HDMI configuration
+    bool configureHDMI(TGLConnectorDesc& conn, uint32_t pixelClock);
+    bool setHDMIVideoEnabled(bool enabled);
+    bool setHDMIAudioEnabled(bool enabled);
+    bool getHDMIAudioCaps(bool* hasAudio) const;
+    
+    // DDI buffer and clock management
+    bool setDDIBufferEnable(TGLDDIPort port, bool enable);
+    bool setDDIClockSelect(TGLDDIPort port, uint8_t clock);
+    uint32_t getDDIClockStatus(TGLDDIPort port);
+    
+    // Transcoder timing
+    bool setPipeTiming(uint8_t pipe, uint32_t htotal, uint32_t vtotal, uint32_t hblank, uint32_t vblank);
+    bool getPipeTiming(uint8_t pipe, uint32_t* htotal, uint32_t* vtotal, uint32_t* hblank, uint32_t* vblank);
+    
+    // Debug and diagnostics
+    void dumpConnectorState(uint8_t index);
+    void dumpAllConnectors();
+    void logAUXTransaction(TGLAUXChannel aux, bool isWrite, uint32_t address, const uint8_t* data, uint32_t size);
+    void runDiagnostics();
+    
+    // Extended properties
+    void setConnectorProperty(uint8_t index, const char* key, uint64_t value);
+    uint64_t getConnectorProperty(uint8_t index, const char* key) const;
+    bool hasConnectorProperty(uint8_t index, const char* key) const;
 };
 
 // Inline helpers

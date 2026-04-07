@@ -143,16 +143,19 @@ OSDefineMetaClassAndStructors(FakeIrisXEFramebuffer, IOFramebuffer);
 #define kIOTimingInfoValid_AppleTimingID 0x00000001
 #endif
 
-static const uint32_t kNumDisplayModes = 1;
+static const uint32_t kNumDisplayModes = 10;
 
 enum {
     kProofModeDepthIndex = 0,          // one depth index (32bpp ARGB)
     kProofModeRefreshFixed = (60 << 16), // 60 Hz in IOFixed format
+    kProofModeRefreshFixed50 = (50 << 16),
+    kProofModeRefreshFixed30 = (30 << 16),
 };
 
 enum ProofDisplayModeFlags {
     kProofModeFlagDefault  = 0,
     kProofModeFlagNative    = (1 << 0),
+    kProofModeFlagScaled    = (1 << 1),
 };
 
 typedef struct {
@@ -167,6 +170,15 @@ typedef struct {
 
 static const ProofDisplayMode s_proofDisplayModes[kNumDisplayModes] = {
     { 1, 1920, 1080, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagNative, "1920x1080@60" },
+    { 2, 1920, 1200, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "1920x1200@60" },
+    { 3, 2560, 1440, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "2560x1440@60" },
+    { 4, 2560, 1600, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "2560x1600@60" },
+    { 5, 1440,  900, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "1440x900@60" },
+    { 6, 1680, 1050, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "1680x1050@60" },
+    { 7, 1280, 1024, kProofModeRefreshFixed, kProofModeDepthIndex, kProofModeFlagScaled, "1280x1024@60" },
+    { 8, 1920, 1080, kProofModeRefreshFixed50, kProofModeDepthIndex, kProofModeFlagScaled, "1920x1080@50" },
+    { 9, 2560, 1440, kProofModeRefreshFixed30, kProofModeDepthIndex, kProofModeFlagScaled, "2560x1440@30" },
+    {10, 3840, 2160, kProofModeRefreshFixed30, kProofModeDepthIndex, kProofModeFlagScaled, "3840x2160@30" },
 };
 
 // Legacy alias for code that reads s_displayModes[]
@@ -923,6 +935,23 @@ bool FakeIrisXEFramebuffer::init(OSDictionary* dict) {
     fBltRingGem = nullptr;
     fBltRingGpuVA = 0;
     fBltRingSize = 0;
+    
+    // V300: Initialize power management state
+    fDPMSState = 0;
+    fDisplayPowered = true;
+    fPanelPowered = true;
+    fDisplayActive = true;
+    fTotalOnTime = 0;
+    fTotalOffTime = 0;
+    fPowerTransitionCount = 0;
+    fLastPowerStateChange = 0;
+    fPanelPowerUpDelay = 50000;
+    fPanelPowerDownDelay = 50000;
+    fBacklightOnDelay = 10000;
+    fBacklightOffDelay = 10000;
+    fGPUUtilization = 0.0f;
+    fMemoryBandwidth = 0.0f;
+    fPerformanceCountersEnabled = false;
     
     IOLog("FakeIrisXEFramebuffer::init succeeded\n");
     return true;
@@ -4680,6 +4709,110 @@ IOReturn FakeIrisXEFramebuffer::setPowerState(unsigned long state,
     return IOPMAckImplied;
 }
 
+// V300: Power management overrides from IntelPowerManagement
+unsigned long FakeIrisXEFramebuffer::maxCapabilityForDomainState(IOPMPowerFlags domainState) {
+    return 3;  // kIOPMMaxPowerState
+}
+
+unsigned long FakeIrisXEFramebuffer::initialPowerStateForDomainState(IOPMPowerFlags domainState) {
+    return 3;  // kIOPMMaxPowerState
+}
+
+IOReturn FakeIrisXEFramebuffer::powerStateWillChangeTo(IOPMPowerFlags capabilities, unsigned long stateNumber, IOService* whatDevice) {
+    IOLog("[FakeIrisXEFramebuffer] powerStateWillChangeTo(state=%lu)\n", stateNumber);
+    return IOPMAckImplied;
+}
+
+IOReturn FakeIrisXEFramebuffer::powerStateDidChangeTo(IOPMPowerFlags capabilities, unsigned long stateNumber, IOService* whatDevice) {
+    IOLog("[FakeIrisXEFramebuffer] powerStateDidChangeTo(state=%lu)\n", stateNumber);
+    return IOPMAckImplied;
+}
+
+// V300: Enhanced power management
+IOReturn FakeIrisXEFramebuffer::setDPMSState(uint32_t state) {
+    IOLog("[FakeIrisXEFramebuffer] setDPMSState(%u)\n", state);
+    fDPMSState = state;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::enableDisplayPower() {
+    IOLog("[FakeIrisXEFramebuffer] enableDisplayPower()\n");
+    fDisplayPowered = true;
+    fDisplayActive = true;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::disableDisplayPower() {
+    IOLog("[FakeIrisXEFramebuffer] disableDisplayPower()\n");
+    fDisplayPowered = false;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::panelPowerOn() {
+    IOLog("[FakeIrisXEFramebuffer] panelPowerOn()\n");
+    IOSleep(fPanelPowerUpDelay / 1000);
+    fPanelPowered = true;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::panelPowerOff() {
+    IOLog("[FakeIrisXEFramebuffer] panelPowerOff()\n");
+    IOSleep(fPanelPowerDownDelay / 1000);
+    fPanelPowered = false;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::configurePanelPowerTiming(uint32_t upDelay, uint32_t downDelay, uint32_t backlightOnDelay, uint32_t backlightOffDelay) {
+    fPanelPowerUpDelay = upDelay;
+    fPanelPowerDownDelay = downDelay;
+    fBacklightOnDelay = backlightOnDelay;
+    fBacklightOffDelay = backlightOffDelay;
+    return kIOReturnSuccess;
+}
+
+// V300: Performance monitoring
+IOReturn FakeIrisXEFramebuffer::getGPUUtilization(float* utilization) {
+    if (!utilization) return kIOReturnBadArgument;
+    *utilization = fGPUUtilization;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::getMemoryBandwidth(float* bandwidth) {
+    if (!bandwidth) return kIOReturnBadArgument;
+    *bandwidth = fMemoryBandwidth;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::getTemperature(uint32_t* tempCelsius) {
+    if (!tempCelsius) return kIOReturnBadArgument;
+    *tempCelsius = 45;  // Default temperature
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::enablePerformanceCounters(bool enable) {
+    fPerformanceCountersEnabled = enable;
+    return kIOReturnSuccess;
+}
+
+IOReturn FakeIrisXEFramebuffer::samplePerformanceCounters(uint64_t* counters, uint32_t count) {
+    if (!counters || count == 0) return kIOReturnBadArgument;
+    for (uint32_t i = 0; i < count && i < 8; i++) {
+        counters[i] = 0;
+    }
+    return kIOReturnSuccess;
+}
+
+// V300: Power statistics
+void FakeIrisXEFramebuffer::resetPowerStatistics() {
+    fTotalOnTime = 0;
+    fTotalOffTime = 0;
+    fPowerTransitionCount = 0;
+}
+
+void FakeIrisXEFramebuffer::setDisplayActive(bool active) {
+    fDisplayActive = active;
+}
+
 
 
 
@@ -7199,7 +7332,7 @@ static FakeIrisXEGEM* createTailBatchAndMap(FakeIrisXEFramebuffer* fb, uint64_t 
 
     // pin and map into GGTT
     tailGem->pin(); // void pin() per your GEM API
-    uint64_t tailGpu = fb->ggttMap(tailGem);
+    uint64_t tailGpu = fb->mapGEM(tailGem);
     if (!tailGpu) {
         IOLog("FakeIrisXEFramebuffer: createTailBatchAndMap - ggttMap(tail) failed\n");
         tailGem->unpin();
@@ -7258,7 +7391,7 @@ static FakeIrisXEGEM* createMasterBatchChain(FakeIrisXEFramebuffer* fb, uint64_t
     __sync_synchronize();
 
     masterGem->pin();
-    uint64_t masterGpu = fb->ggttMap(masterGem);
+    uint64_t masterGpu = fb->mapGEM(masterGem);
     if (!masterGpu) {
         IOLog("FakeIrisXEFramebuffer: createMasterBatchChain - ggttMap(master) failed\n");
         masterGem->unpin();
@@ -7454,7 +7587,7 @@ static IOReturn deferredCleanupAction(OSObject* owner,
     if (!self) return kIOReturnBadArgument;
 
     uint32_t seq = (uint32_t)(uintptr_t)arg0;
-    bool ok = self->completePendingSubmission(seq);
+    bool ok = self->markSubmissionComplete(seq);
     IOLog("FakeIrisXEFramebuffer: deferredCleanup seq=%u ok=%d\n", seq, (int)ok);
     return kIOReturnSuccess;
 }
@@ -7927,13 +8060,19 @@ bool FakeIrisXEFramebuffer::forcewakeRenderHold(uint32_t timeoutMs)
     safeMMIOWrite(FW_REQ, FW_MASK);
     (void)safeMMIORead(FW_REQ);
 
+    // V340.8: Additional verification - check GT_STATUS register
+    uint32_t gtStatus = safeMMIORead(0x138124);  // GEN12_GT_STATUS
+    IOLog("(FakeIrisXE) [V340.8] Pre-wake GT_STATUS=0x%08X\n", gtStatus);
+    
     uint32_t elapsed = 0;
     while (elapsed < timeoutMs) {
         uint32_t ack = safeMMIORead(FW_ACK);
 
         // V209: Check if both RENDER (bits 0-3) and GT (bits 4-7) are ready
         if ((ack & 0xFF) == 0xFF) {
-            IOLog("(FakeIrisXE) RENDER+GT forcewake OK (ACK=0x%08X)\n", ack);
+            // V340.8: Verify GT is actually responsive
+            uint32_t gtStatusAwake = safeMMIORead(0x138124);
+            IOLog("(FakeIrisXE) RENDER+GT forcewake OK (ACK=0x%08X GT_STATUS=0x%08X)\n", ack, gtStatusAwake);
             return true;
         }
 

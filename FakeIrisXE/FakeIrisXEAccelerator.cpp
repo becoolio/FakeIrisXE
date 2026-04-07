@@ -36,7 +36,7 @@ static uint32_t readFenceSeqnoFromFramebuffer(void* ctx)
     FakeIrisXEFramebuffer* fb = accel->framebuffer();
     if (!fb) return 0;
 
-    return fb->readCompletedFenceSeq();
+    return fb->getCompletedFenceSeq();
 }
 
 #pragma mark - Init / Probe

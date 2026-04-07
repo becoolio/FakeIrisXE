@@ -364,4 +364,77 @@ private:
     
     // V143: GUC params
     void writeGuCParams();
+    
+    // V250: Additional GuC methods
+    bool configureGucSubmission();
+    bool enableGucInterrupts();
+    bool disableGucInterrupts();
+    uint32_t readGucInterruptStatus();
+    void clearGucInterrupts();
+    
+    // Power management
+    bool setGucPowerState(bool enabled);
+    bool isGucPowered() const;
+    bool enableGucClockGating();
+    bool disableGucClockGating();
+    
+    // Error handling
+    bool handleGucError(uint32_t errorCode);
+    void logGucErrorDetails();
+    bool resetGucEngine();
+    bool recoverFromGucFailure();
+    
+    // State queries
+    uint32_t getGucFirmwareVersion() const { return fGuCVersion; }
+    uint32_t getHucFirmwareVersion() const { return fHuCVersion; }
+    uint32_t getDmcFirmwareVersion() const { return fDmcVersion; }
+    bool isGucLoaded() const;
+    bool isHucLoaded() const;
+    bool isDmcLoaded() const;
+    
+    // Submission control
+    bool pauseGucSubmission();
+    bool resumeGucSubmission();
+    bool isGucSubmissionPaused() const;
+    
+    // Doorbell management
+    bool registerDoorbell(uint32_t doorbellId, uint64_t gpuAddr);
+    bool unregisterDoorbell(uint32_t doorbellId);
+    uint32_t readDoorbell(uint32_t doorbellId) const;
+    void writeDoorbell(uint32_t doorbellId, uint32_t value);
+    
+    // CTB (Command Transport Buffer) management
+    bool submitCommandToGuc(const uint8_t* cmdData, uint32_t cmdSize);
+    bool readGucResponse(uint8_t* respData, uint32_t* respSize);
+    uint32_t getCtbStatus() const;
+    
+    // Logging
+    void setGucLogLevel(uint32_t level);
+    uint32_t getGucLogLevel() const;
+    bool dumpGucLog();
+    bool readGucLogBuffer(uint8_t* logData, uint32_t* logSize);
+    
+    // Firmware info
+    bool getFirmwareInfo(uint32_t* gucVer, uint32_t* hucVer, uint32_t* dmcVer) const;
+    const char* getFirmwareLoadStatus() const;
+    
+    // Scheduling
+    bool setGucSchedulerPolicy(uint32_t policy);
+    uint32_t getGucSchedulerPolicy() const;
+    bool setGucPriority(uint32_t contextId, uint32_t priority);
+    
+    // Context management
+    uint32_t allocateContextId();
+    bool freeContextId(uint32_t contextId);
+    bool setContextScheduling(uint32_t contextId, uint32_t weight, bool preemptible);
+    
+    // Performance counters
+    bool readGucPerformanceCounters(uint64_t* counters, uint32_t count);
+    void resetPerformanceCounters();
+    
+    // Debug
+    void dumpGucRegisters();
+    void dumpHucRegisters();
+    void dumpDmcRegisters();
+    void runGucDiagnostics();
 };
