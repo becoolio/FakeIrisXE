@@ -648,8 +648,10 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
         }
         if (node->getName()) {
             fb->setProperty("FakeIrisXEActiveDisplayNode", node->getName());
+            fb->setProperty("FakeIrisXEActiveBacklightOwnerNode", node->getName());
         }
         fb->setProperty("FakeIrisXEActiveDisplayName", mergedDisplayName);
+        setNumberProperty(fb, "FakeIrisXEActiveBacklightHandlerID", 436849163854938112ULL, 64);
         setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeVendorID", mergedDisplayVendorID, 32);
         setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeProductID", mergedDisplayProductID, 32);
         setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeWidthMm", nativeWidth, 32);
@@ -786,6 +788,10 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
     fb->removeProperty("IODisplayProductID");
     fb->removeProperty(kDisplayHorizontalImageSize);
     fb->removeProperty(kDisplayVerticalImageSize);
+    fb->removeProperty("IODisplayParameters");
+    fb->removeProperty("brightness-probe");
+    fb->removeProperty("linear-brightness-probe");
+    fb->removeProperty("usable-linear-brightness");
     
     // Check how many stale nodes remain
     uint32_t staleNodes = countStaleDisplayNodes(fb);
@@ -5671,6 +5677,7 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
     setNumberProperty(entry, "AppleBacklightAtBoot", raw, 32);
     setNumberProperty(entry, "IOBacklightHandlerID", 436849163854938112ULL, 64);
     entry->setProperty("AppleRestoreBacklight", kOSBooleanTrue);
+    entry->setProperty("FakeIrisXEBacklightParameterOwner", kOSBooleanTrue);
 
     OSDictionary* params = OSDictionary::withCapacity(12);
     if (!params) {
@@ -6492,13 +6499,49 @@ IOReturn FakeIrisXEFramebuffer::setProperties(OSObject* properties)
         }
 
         if (params->getObject("commit")) {
-            IOLog("[BLTX] setProperties.IODisplayParameters key=commit input=0x00000001 -> %u%%\n", getBacklightPercent());
+            const uint32_t percentNow = getBacklightPercent();
+            const uint32_t rawNow = static_cast<uint32_t>((static_cast<uint64_t>(percentNow) * kAppleBacklightRawMax) / 100u);
+            publishBrightnessProperties(this, percentNow, rawNow);
+            flushDisplay();
+            IOLog("[BLTX] setProperties.IODisplayParameters key=commit input=0x00000001 -> %u%%\n", percentNow);
+            return kIOReturnSuccess;
+        }
+        if (params->getObject("defaults")) {
+            publishBrightnessProperties(this, 75u, static_cast<uint32_t>((static_cast<uint64_t>(75u) * kAppleBacklightRawMax) / 100u));
+            flushDisplay();
+            IOLog("[BLTX] setProperties.IODisplayParameters key=defaults -> 75%%\n");
+            return setBacklightPercent(75u, "params-defaults") ? kIOReturnSuccess : kIOReturnError;
+        }
+        if (params->getObject("flush")) {
+            const uint32_t percentNow = getBacklightPercent();
+            const uint32_t rawNow = static_cast<uint32_t>((static_cast<uint64_t>(percentNow) * kAppleBacklightRawMax) / 100u);
+            publishBrightnessProperties(this, percentNow, rawNow);
+            flushDisplay();
+            IOLog("[BLTX] setProperties.IODisplayParameters key=flush -> %u%%\n", percentNow);
             return kIOReturnSuccess;
         }
     }
 
     if (dict->getObject("commit")) {
-        IOLog("[BLTX] setProperties key=commit input=0x00000001 -> %u%%\n", getBacklightPercent());
+        const uint32_t percentNow = getBacklightPercent();
+        const uint32_t rawNow = static_cast<uint32_t>((static_cast<uint64_t>(percentNow) * kAppleBacklightRawMax) / 100u);
+        publishBrightnessProperties(this, percentNow, rawNow);
+        flushDisplay();
+        IOLog("[BLTX] setProperties key=commit input=0x00000001 -> %u%%\n", percentNow);
+        return kIOReturnSuccess;
+    }
+    if (dict->getObject("defaults")) {
+        publishBrightnessProperties(this, 75u, static_cast<uint32_t>((static_cast<uint64_t>(75u) * kAppleBacklightRawMax) / 100u));
+        flushDisplay();
+        IOLog("[BLTX] setProperties key=defaults -> 75%%\n");
+        return setBacklightPercent(75u, "prop-defaults") ? kIOReturnSuccess : kIOReturnError;
+    }
+    if (dict->getObject("flush")) {
+        const uint32_t percentNow = getBacklightPercent();
+        const uint32_t rawNow = static_cast<uint32_t>((static_cast<uint64_t>(percentNow) * kAppleBacklightRawMax) / 100u);
+        publishBrightnessProperties(this, percentNow, rawNow);
+        flushDisplay();
+        IOLog("[BLTX] setProperties key=flush -> %u%%\n", percentNow);
         return kIOReturnSuccess;
     }
 
