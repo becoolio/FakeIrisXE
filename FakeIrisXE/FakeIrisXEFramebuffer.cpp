@@ -646,8 +646,16 @@ static void applyDisplayMergeOverrides(IOService *service, FakeIrisXEFramebuffer
                 node->setProperty("IODisplayEDID", edidData);
             }
         }
+        if (node->getName()) {
+            fb->setProperty("FakeIrisXEActiveDisplayNode", node->getName());
+        }
+        fb->setProperty("FakeIrisXEActiveDisplayName", mergedDisplayName);
+        setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeVendorID", mergedDisplayVendorID, 32);
+        setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeProductID", mergedDisplayProductID, 32);
+        setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeWidthMm", nativeWidth, 32);
+        setNumberProperty(fb, "FakeIrisXEActiveDisplayMergeHeightMm", nativeHeight, 32);
         
-        IOLog("[V410] Applied display identity to %s: %s, vendor=%u, product=%u, size=%ux%u\n",
+        IOLog("[V480] Applied display identity to %s: %s, vendor=%u, product=%u, size=%ux%u\n",
               node->getName() ? node->getName() : "unknown",
               mergedDisplayName, (uint32_t)mergedDisplayVendorID, (uint32_t)mergedDisplayProductID,
               nativeWidth, nativeHeight);
@@ -764,14 +772,26 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
     }
 
     // V440.4: Apply to ALL display services under framebuffer
-    IOLog("[V440] injectDisplayMergeOverridesIfAvailable: starting search\n");
+    IOLog("[V500] injectDisplayMergeOverridesIfAvailable: starting search\n");
     applyToAllDisplayServices(fb, fb);
+
+    // V500: once the Apple display branch exists, stop advertising a second user-visible
+    // identity on the framebuffer root. Keep EDID/proof properties on the framebuffer, but
+    // leave final display identity ownership to AppleDisplay/AppleBacklightDisplay.
+    fb->removeProperty("DisplayProductName");
+    fb->removeProperty("IODisplayName");
+    fb->removeProperty("DisplayVendorID");
+    fb->removeProperty("DisplayProductID");
+    fb->removeProperty("IODisplayVendorID");
+    fb->removeProperty("IODisplayProductID");
+    fb->removeProperty(kDisplayHorizontalImageSize);
+    fb->removeProperty(kDisplayVerticalImageSize);
     
     // Check how many stale nodes remain
     uint32_t staleNodes = countStaleDisplayNodes(fb);
     setNumberProperty(fb, "FakeIrisXEStaleDisplayNodeCount", staleNodes, 32);
     fb->setProperty("FakeIrisXEDisplayTreeReady", staleNodes == 0 ? kOSBooleanTrue : kOSBooleanFalse);
-    IOLog("[V440] Display identity injection complete, staleNodes=%u\n", staleNodes);
+    IOLog("[V500] Display identity injection complete, staleNodes=%u\n", staleNodes);
     return staleNodes == 0;
 }
 
@@ -3091,7 +3111,10 @@ bool FakeIrisXEFramebuffer::start(IOService* provider) {
     IOLog("║  DISPLAY CONFIGURATION                                       ║\n");
     IOLog("║  Current Mode:    %u (%ux%u)\n", currentMode, H_ACTIVE, V_ACTIVE);
     IOLog("║  Available Modes: %u\n", kNumDisplayModes);
-    IOLog("║  Display:         Apple Color LCD (MacBookPro16,2)\n");
+    const char* summaryDisplayName = OSDynamicCast(OSString, getProperty("FakeIrisXEActiveDisplayName")) ?
+        OSDynamicCast(OSString, getProperty("FakeIrisXEActiveDisplayName"))->getCStringNoCopy() :
+        (OSDynamicCast(OSString, getProperty("DisplayProductName")) ? OSDynamicCast(OSString, getProperty("DisplayProductName"))->getCStringNoCopy() : "Built-in Retina Display");
+    IOLog("║  Display:         %s\n", summaryDisplayName ? summaryDisplayName : "Built-in Retina Display");
     IOLog("╠══════════════════════════════════════════════════════════════╣\n");
     IOLog("║  WINDOWSERVER INTEGRATION                                    ║\n");
     IOLog("║  Aperture Range:  ✅ CONFIGURED\n");
@@ -5649,7 +5672,7 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
     setNumberProperty(entry, "IOBacklightHandlerID", 436849163854938112ULL, 64);
     entry->setProperty("AppleRestoreBacklight", kOSBooleanTrue);
 
-    OSDictionary* params = OSDictionary::withCapacity(9);
+    OSDictionary* params = OSDictionary::withCapacity(12);
     if (!params) {
         return;
     }
@@ -5663,6 +5686,8 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
     OSDictionary* linearProbe = makeBrightnessParameter(raw, 0, kAppleBacklightRawMax);
     OSDictionary* power = makeBrightnessParameter(2, 0, 2);
     OSDictionary* commit = OSDictionary::withCapacity(1);
+    OSDictionary* defaults = OSDictionary::withCapacity(1);
+    OSDictionary* flush = OSDictionary::withCapacity(1);
 
     if (brightness) {
         params->setObject("brightness", brightness);
@@ -5705,6 +5730,20 @@ static void publishBrightnessProperties(IORegistryEntry* entry, uint32_t percent
         params->setObject("commit", commit);
         commit->release();
     }
+    if (defaults) {
+        defaults->setObject("value", kOSBooleanTrue);
+        params->setObject("defaults", defaults);
+        defaults->release();
+    }
+    if (flush) {
+        flush->setObject("value", kOSBooleanTrue);
+        params->setObject("flush", flush);
+        flush->release();
+    }
+
+    setNumberProperty(entry, "brightness-probe", userBrightness, 32);
+    setNumberProperty(entry, "linear-brightness-probe", raw, 32);
+    setNumberProperty(entry, "usable-linear-brightness", raw, 32);
 
     entry->setProperty("IODisplayParameters", params);
     params->release();
@@ -6137,7 +6176,17 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         setProperty("FakeIrisXEStrictVBT", fConnectorManager->isRealVBTLoaded() ? kOSBooleanTrue : kOSBooleanFalse);
     }
 
-    if (fConnectorManager) {
+    OSData* overrideEdidData = OSDynamicCast(OSData, getProperty("AAPL00,override-no-connect"));
+    if (!overrideEdidData && pciDevice) {
+        overrideEdidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,override-no-connect"));
+    }
+    if (overrideEdidData) {
+        edidBytes = reinterpret_cast<const uint8_t*>(overrideEdidData->getBytesNoCopy());
+        edidLength = static_cast<uint16_t>(overrideEdidData->getLength());
+        edidSource = "override-no-connect";
+    }
+
+    if ((!edidBytes || edidLength < 128) && fConnectorManager) {
         edidBytes = fConnectorManager->getPrimaryDisplayEDID(&edidLength, &edidConnector);
         if (edidBytes && edidLength >= 128) {
             edidSource = "connector-aux";
@@ -6145,26 +6194,21 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     }
 
     if (!edidBytes || edidLength < 128) {
-        OSData* edidData = OSDynamicCast(OSData, getProperty("IODisplayEDID"));
-        if (!edidData) {
-            edidData = OSDynamicCast(OSData, getProperty("AAPL00,PanelEDID"));
+        OSData* registryEdidData = OSDynamicCast(OSData, getProperty("IODisplayEDID"));
+        if (!registryEdidData) {
+            registryEdidData = OSDynamicCast(OSData, getProperty("AAPL00,PanelEDID"));
         }
-        if (!edidData) {
-            edidData = OSDynamicCast(OSData, getProperty("AAPL00,override-no-connect"));
+        if (!registryEdidData && pciDevice) {
+            registryEdidData = OSDynamicCast(OSData, pciDevice->getProperty("IODisplayEDID"));
         }
-        if (!edidData && pciDevice) {
-            edidData = OSDynamicCast(OSData, pciDevice->getProperty("IODisplayEDID"));
-        }
-        if (!edidData && pciDevice) {
-            edidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,PanelEDID"));
-        }
-        if (!edidData && pciDevice) {
-            edidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,override-no-connect"));
+        if (!registryEdidData && pciDevice) {
+            registryEdidData = OSDynamicCast(OSData, pciDevice->getProperty("AAPL00,PanelEDID"));
         }
 
-        if (edidData) {
-            edidBytes = reinterpret_cast<const uint8_t*>(edidData->getBytesNoCopy());
-            edidLength = static_cast<uint16_t>(edidData->getLength());
+        if (registryEdidData) {
+            edidBytes = reinterpret_cast<const uint8_t*>(registryEdidData->getBytesNoCopy());
+            edidLength = static_cast<uint16_t>(registryEdidData->getLength());
+            edidSource = "registry";
         }
     }
 
@@ -6185,13 +6229,18 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     uint32_t heightMm = 0;
 
     if (!parseDisplayNameFromEdid(edidBytes, displayName, sizeof(displayName))) {
-        strlcpy(displayName, edidConnector && edidConnector->isInternal ? "Color LCD" : "Display", sizeof(displayName));
+        strlcpy(displayName, edidConnector && edidConnector->isInternal ? "Built-in Retina Display" : "Display", sizeof(displayName));
     }
     parseDisplayImageSizeFromEdid(edidBytes, widthMm, heightMm);
 
+    if (!strcmp(edidSource, "override-no-connect") || (edidConnector && edidConnector->isInternal)) {
+        strlcpy(displayName, "Built-in Retina Display", sizeof(displayName));
+        widthMm = 286u;
+        heightMm = 179u;
+    }
+
     setProperty("IODisplayEDID", edidData);
     setProperty("AAPL00,PanelEDID", edidData);
-    removeProperty("AAPL00,override-no-connect");
     setProperty("IOFBHasPreferredEDID", kOSBooleanTrue);
     edidData->release();
 
@@ -6217,11 +6266,19 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
     OSString* source = OSString::withCString(edidSource);
     if (source) {
         setProperty("FakeIrisXEEdidSource", source);
+        setProperty("FakeIrisXEActiveDisplayIdentitySource", source);
         source->release();
     }
+    setNumberProperty(this, "FakeIrisXEActiveDisplayVendorID", vendorID, 32);
+    setNumberProperty(this, "FakeIrisXEActiveDisplayProductID", productID, 32);
+    setNumberProperty(this, "FakeIrisXEActiveDisplayWidthMm", widthMm, 32);
+    setNumberProperty(this, "FakeIrisXEActiveDisplayHeightMm", heightMm, 32);
 
     if (edidConnector) {
         setProperty("built-in", edidConnector->isInternal ? kOSBooleanTrue : kOSBooleanFalse);
+        setNumberProperty(this, "FakeIrisXEActiveConnectorIndex", edidConnector->index, 32);
+        setNumberProperty(this, "FakeIrisXEActiveConnectorType", static_cast<uint32_t>(edidConnector->type), 32);
+        setNumberProperty(this, "FakeIrisXEActiveDDIPort", static_cast<uint32_t>(edidConnector->ddiPort), 32);
         if (edidConnector->isInternal) {
             setProperty("AAPL01-internal-panel", kOSBooleanTrue);
             OSString* slotName = OSString::withCString("Internal@0,2,0");
@@ -6243,7 +6300,7 @@ bool FakeIrisXEFramebuffer::publishDisplayIdentityFromEdid()
         fConnectorManager->setDisplayTreeReady(displayTreeReady);
     }
 
-    IOLog("[V313] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
+    IOLog("[V480] EDID identity applied from %s: vendor=0x%04X product=0x%04X serial=0x%08X name=%s size=%ux%u mm\n",
           edidSource,
           vendorID,
           productID,

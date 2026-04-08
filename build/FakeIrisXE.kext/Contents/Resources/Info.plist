@@ -7,19 +7,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V470 - Forced EDID Source And PWM Fallback</string>
+	<string>FakeIrisXe V500 - AppleBacklight Parameter Ownership</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.470</string>
+	<string>1.0.500</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.470</string>
+	<string>1.0.500</string>
 	<key>DTCompiler</key>
 	<string>com.apple.compilers.llvm.clang.1_0</string>
 	<key>DTPlatformBuild</key>
@@ -136,8 +136,8 @@
 			</dict>
 			<key>AAPL02-int-cmn-overrides</key>
 			<dict>
-				<key>CFG,LVDS</key>
-				<integer>2</integer>
+				<key>CFG,eDP</key>
+				<integer>1</integer>
 			</dict>
 			<key>AGXSelectedPowerProfile</key>
 			<string>MacBookAir9,1</string>
@@ -174,7 +174,7 @@
 					<key>index</key>
 					<integer>1</integer>
 					<key>type</key>
-					<integer>2</integer>
+					<integer>4</integer>
 				</dict>
 			</dict>
 			<key>device-id</key>
