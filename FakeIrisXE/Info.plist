@@ -2,24 +2,40 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BuildMachineOSBuild</key>
+	<string>23J423</string>
+	<key>CFBundleExecutable</key>
+	<string>FakeIrisXE</string>
+	<key>CFBundleGetInfoString</key>
+	<string>FakeIrisXe V470 - Forced EDID Source And PWM Fallback</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.470</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
-	<key>CFBundleIdentifier</key>
-	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
-	<key>CFBundleExecutable</key>
-	<string>FakeIrisXE</string>
-	<key>CFBundlePackageType</key>
-	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.342</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.342</string>
-	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V342 - Backlight PWM Fix</string>
-	<key>OSBundleRequired</key>
-	<string>Root</string>
+	<string>1.0.470</string>
+	<key>DTCompiler</key>
+	<string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key>
+	<string>24C94</string>
+	<key>DTPlatformName</key>
+	<string>macosx</string>
+	<key>DTPlatformVersion</key>
+	<string>15.2</string>
+	<key>DTSDKBuild</key>
+	<string>24C94</string>
+	<key>DTSDKName</key>
+	<string>macosx15.2</string>
+	<key>DTXcode</key>
+	<string>1620</string>
+	<key>DTXcodeBuild</key>
+	<string>16C5032a</string>
 	<key>IOKitPersonalities</key>
 	<dict>
 		<key>FakeIrisXEAccelerator</key>
@@ -28,12 +44,12 @@
 			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 			<key>IOClass</key>
 			<string>FakeIrisXEAccelerator</string>
-			<key>IOProbeScore</key>
-			<integer>65000</integer>
 			<key>IOMatchCategory</key>
 			<string>IOAccelerator</string>
 			<key>IONameMatch</key>
 			<string>FakeIrisXEFramebuffer</string>
+			<key>IOProbeScore</key>
+			<integer>65000</integer>
 			<key>IOProviderClass</key>
 			<string>FakeIrisXEFramebuffer</string>
 			<key>IOUserClientClass</key>
@@ -41,60 +57,14 @@
 		</dict>
 		<key>FakeIrisXEFramebuffer</key>
 		<dict>
-			<key>AAPL,HasPanel</key>
-			<true/>
-			<key>IOClass</key>
-			<string>FakeIrisXEFramebuffer</string>
-			<key>IOKitDebug</key>
-			<integer>65535</integer>
-			<key>IOPCIPrimaryMatch</key>
-			<string>0x9A498086 0x46A38086</string>
-			<key>IOProbeScore</key>
-			<integer>99999</integer>
-			<key>IOProviderClass</key>
-			<string>IOPCIDevice</string>
-			<key>built-in</key>
-			<true/>
-			<key>class-code</key>
-			<data>AAADAA==</data>
-			<key>device-id</key>
-			<data>SZoAAA==</data>
-			<key>vendor-id</key>
-			<data>hoAAAA==</data>
-			<key>subsystem-id</key>
-			<data>AaAAAA==</data>
-			<key>subsystem-vendor-id</key>
-			<data>hoAAAA==</data>
-			<key>revision-id</key>
-			<data>AAABAA==</data>
 			<key>AAPL,GfxYTile</key>
 			<data>AQAAAA==</data>
-			<key>model</key>
-			<string>Intel Iris Xe Graphics</string>
+			<key>AAPL,HasPanel</key>
+			<true/>
 			<key>AAPL,slot-name</key>
 			<string>Internal@0,2,0</string>
-			<key>device_type</key>
-			<string>VGA compatible controller</string>
-			<key>DisplayVendorID</key>
-			<integer>1552</integer>
-			<key>DisplayProductID</key>
-			<integer>41008</integer>
-			<key>DisplayProductName</key>
-			<string>Color LCD</string>
-			<key>DisplayHorizontalImageSize</key>
-			<integer>286</integer>
-			<key>DisplayVerticalImageSize</key>
-			<integer>179</integer>
 			<key>AAPL00,override-no-connect</key>
-			<data>AP///////wAJ5XQLAAAAAB4fAQSlHxF4Aw1VpCknmicSUFQAAAABAQEBAQEBAQEBAQEBAQEBW0EAoKBAHmAwIDYANa0QAAAYAAAA/QA8PE5OEQAKICAgICAgAAAA/gBDb2xvciBMQ0QKICAgAAAA/ABCT0UgQ1EKICAgICAgAM8=</data>
-			<key>complete-modeset</key>
-			<data>AQAAAA==</data>
-			<key>force-online</key>
-			<data>AQAAAA==</data>
-			<key>AGXSelectedPowerProfile</key>
-			<string>MacBookPro16,2</string>
-			<key>IOGPUTargetPerformanceLevel</key>
-			<integer>3</integer>
+			<data>AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5TEQAKICAgICAgAIY=</data>
 			<key>AAPL01-int-cmn-overrides</key>
 			<dict>
 				<key>CAIL,CAILGfxDisablePowerGating</key>
@@ -107,52 +77,60 @@
 				<key>CFG,LVDS</key>
 				<integer>2</integer>
 			</dict>
+			<key>AGXSelectedPowerProfile</key>
+			<string>MacBookAir9,1</string>
+			<key>IOClass</key>
+			<string>FakeIrisXEFramebuffer</string>
+			<key>IOGPUTargetPerformanceLevel</key>
+			<integer>3</integer>
+			<key>IOKitDebug</key>
+			<integer>65535</integer>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x9A498086 0x46A38086</string>
+			<key>IOProbeScore</key>
+			<integer>99999</integer>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>built-in</key>
+			<true/>
+			<key>class-code</key>
+			<data>AAADAA==</data>
+			<key>complete-modeset</key>
+			<data>AQAAAA==</data>
 			<key>connectors</key>
 			<dict>
 				<key>0x00000000</key>
 				<dict>
-					<key>type</key>
-					<integer>2</integer>
-					<key>index</key>
-					<integer>1</integer>
-					<key>flags</key>
-					<integer>131072</integer>
 					<key>capabilities</key>
 					<integer>0</integer>
+					<key>flags</key>
+					<integer>131072</integer>
+					<key>index</key>
+					<integer>1</integer>
+					<key>type</key>
+					<integer>2</integer>
 				</dict>
 			</dict>
+			<key>device-id</key>
+			<data>SZoAAA==</data>
+			<key>device_type</key>
+			<string>VGA compatible controller</string>
+			<key>display-type</key>
+			<string>built-in</string>
+			<key>force-online</key>
+			<data>AQAAAA==</data>
+			<key>model</key>
+			<string>Intel Iris Xe Graphics</string>
+			<key>revision-id</key>
+			<data>AAABAA==</data>
+			<key>subsystem-id</key>
+			<data>AaAAAA==</data>
+			<key>subsystem-vendor-id</key>
+			<data>hoAAAA==</data>
+			<key>vendor-id</key>
+			<data>hoAAAA==</data>
 		</dict>
-		<key>Monitor Apple ID Injection</key>
-		<dict>
-			<key>CFBundleIdentifier</key>
-			<string>com.apple.driver.AppleUSBMergeNub</string>
-			<key>DisplayProductID</key>
-			<integer>1815</integer>
-			<key>DisplayVendorID</key>
-			<integer>1970170734</integer>
-			<key>IOClass</key>
-			<string>AppleUSBMergeNub</string>
-			<key>IOProbeScore</key>
-			<integer>5000</integer>
-			<key>IOProviderClass</key>
-			<string>AppleBacklightDisplay</string>
-			<key>IOProviderMergeProperties</key>
-			<dict>
-				<key>DisplayProductID</key>
-				<integer>41008</integer>
-				<key>DisplayProductName</key>
-				<string>Color LCD</string>
-				<key>DisplayVendorID</key>
-				<integer>1552</integer>
-				<key>DisplayHorizontalImageSize</key>
-				<integer>286</integer>
-				<key>DisplayVerticalImageSize</key>
-				<integer>179</integer>
-				<key>IODisplayGUID</key>
-				<integer>436849163854938112</integer>
-			</dict>
-		</dict>
-		<key>Monitor Apple ID Injection Local</key>
+		<key>Display Apple ID Injection</key>
 		<dict>
 			<key>CFBundleIdentifier</key>
 			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
@@ -163,28 +141,46 @@
 			<key>IOClass</key>
 			<string>FakeIrisXEDisplayMergeNub</string>
 			<key>IOProbeScore</key>
-			<integer>5100</integer>
+			<integer>10000</integer>
 			<key>IOProviderClass</key>
 			<string>AppleDisplay</string>
 			<key>IOProviderMergeProperties</key>
 			<dict>
 				<key>DisplayProductID</key>
-				<integer>41008</integer>
+				<integer>40178</integer>
+				<key>DisplayProductName</key>
+				<string>Built-in Retina Display</string>
 				<key>DisplayVendorID</key>
 				<integer>1552</integer>
-				<key>DisplayProductName</key>
-				<string>Color LCD</string>
 				<key>DisplayHorizontalImageSize</key>
 				<integer>286</integer>
 				<key>DisplayVerticalImageSize</key>
 				<integer>179</integer>
-				<key>IODisplayGUID</key>
-				<integer>436849163854938112</integer>
 				<key>IOClass</key>
 				<string>AppleBacklightDisplay</string>
+				<key>IODisplayConnectFlags</key>
+				<data>AAgAAA==</data>
+				<key>IODisplayEDID</key>
+				<data>AP///////wAGEPKcAAAAABoVAQSVGg54Au8Fl1dUkiciUFQAAAABAQEBAQEBAQEBAQEBAQEBLjaAoHA4H0AwIDUAWMIQAAAaHySAoHA4H0AwIDUAWMIQAAAaAAAA/ABDb2xvciBMQ0QKICAgAAAA/QA4TB5TEQAKICAgICAgAIY=</data>
+				<key>IODisplayGUID</key>
+				<integer>436849163854938112</integer>
+				<key>IODisplayPrefsKey</key>
+				<string>IOService:/AppleACPIPlatformExpert/PC00@0/AppleACPIPCI/GFX0@2/display0/AppleBacklightDisplay-610-9cf2</string>
+				<key>built-in</key>
+				<true/>
+				<key>display-type</key>
+				<string>built-in</string>
+				<key>brightness-control</key>
+				<true/>
+				<key>IOBacklight</key>
+				<true/>
+				<key>IODisplayHasBacklight</key>
+				<true/>
 			</dict>
 		</dict>
 	</dict>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
 	<key>OSBundleCompatibleVersion</key>
 	<string>1.0.0</string>
 	<key>OSBundleLibraries</key>
@@ -204,5 +200,7 @@
 		<key>com.apple.kpi.unsupported</key>
 		<string>20.6.0</string>
 	</dict>
+	<key>OSBundleRequired</key>
+	<string>Root</string>
 </dict>
 </plist>
