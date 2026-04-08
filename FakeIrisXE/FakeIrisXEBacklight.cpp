@@ -50,10 +50,7 @@ bool FakeIrisXEBacklight::init(OSDictionary* dict) {
 bool FakeIrisXEBacklight::start(IOService* provider) {
     if (!super::start(provider)) return false;
 
-    // Initialize backlight hardware
-    initializeBacklightHW();
-    
-    // Find display0 under the framebuffer
+    // Find display0 under the framebuffer FIRST - needed for initializeBacklightHW
     OSIterator* it = provider->getChildIterator(gIOServicePlane);
     if (it) {
         IOService* child = nullptr;
@@ -68,6 +65,9 @@ bool FakeIrisXEBacklight::start(IOService* provider) {
 
     if (!fOwnerFB) fOwnerFB = provider;
 
+    // Initialize backlight hardware AFTER fOwnerFB is set
+    initializeBacklightHW();
+    
     // Publish standard properties
     setProperty("AppleBacklightDisplay", kOSBooleanTrue);
     setProperty("IOProviderClass", "IODisplayConnect");
@@ -304,7 +304,22 @@ IOReturn FakeIrisXEBacklight::verifyBacklightWrite() {
 }
 
 IOReturn FakeIrisXEBacklight::enableBacklightPwm() {
-    IOLog("[FakeIrisXEBacklight] enableBacklightPwm()\n");
+    IOLog("[FakeIrisXEBacklight] enableBacklightPwm() - enabling PWM hardware\n");
+    
+    // V342: Actually enable PWM by calling into framebuffer
+    if (fOwnerFB) {
+        FakeIrisXEFramebuffer* fb = OSDynamicCast(FakeIrisXEFramebuffer, fOwnerFB);
+        if (fb) {
+            fb->setBacklightPercent(fBrightness, "enablePwm");
+            IOLog("[FakeIrisXEBacklight] enableBacklightPwm() - called framebuffer setBacklightPercent(%u)\n", fBrightness);
+            setProperty("FakeIrisXEBacklightPwmEnabled", kOSBooleanTrue);
+            return kIOReturnSuccess;
+        }
+    }
+    
+    IOLog("[FakeIrisXEBacklight] enableBacklightPwm() - no framebuffer, marking enabled anyway\n");
+    setProperty("FakeIrisXEBacklightPwmEnabled", kOSBooleanTrue);
+    fBacklightEnabled = true;
     return kIOReturnSuccess;
 }
 
@@ -331,7 +346,9 @@ IOReturn FakeIrisXEBacklight::initializeBacklightHW() {
     IOLog("[FakeIrisXEBacklight] initializeBacklightHW()\n");
     fBacklightEnabled = true;
     fCurrentPwm = calculatePwmFromBrightness(fBrightness);
-    return kIOReturnSuccess;
+    
+    // V342: Actually enable PWM hardware
+    return enableBacklightPwm();
 }
 
 IOReturn FakeIrisXEBacklight::shutdownBacklightHW() {

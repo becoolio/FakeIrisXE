@@ -13,11 +13,11 @@
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.340</string>
+	<string>1.0.342</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.340</string>
+	<string>1.0.342</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V340 - GuC+Gen12 RCS LRC Implementation</string>
+	<string>FakeIrisXe V342 - Backlight PWM Fix</string>
 	<key>OSBundleRequired</key>
 	<string>Root</string>
 	<key>IOKitPersonalities</key>
