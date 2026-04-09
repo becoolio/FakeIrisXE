@@ -462,6 +462,108 @@ static void applyToAllDisplayServices(IOService *fb, FakeIrisXEFramebuffer *fake
     IOLog("[V440] Applied display identity to %u services\n", count);
 }
 
+static IOService *findAppleBacklightDisplayService(IOService *root)
+{
+    if (!root) {
+        return nullptr;
+    }
+
+    OSIterator *children = root->getChildIterator(gIOServicePlane);
+    if (!children) {
+        return nullptr;
+    }
+
+    IOService *result = nullptr;
+    IOService *child = nullptr;
+    while ((child = OSDynamicCast(IOService, children->getNextObject()))) {
+        const char *name = child->getName();
+        if (name && !strcmp(name, "AppleBacklightDisplay")) {
+            child->retain();
+            result = child;
+            break;
+        }
+        result = findAppleBacklightDisplayService(child);
+        if (result) {
+            break;
+        }
+    }
+    children->release();
+    return result;
+}
+
+static bool isLikelyInternalBacklightDisplay(IOService *service)
+{
+    if (!service) {
+        return false;
+    }
+
+    OSBoolean *builtIn = OSDynamicCast(OSBoolean, service->getProperty("built-in"));
+    if (builtIn != kOSBooleanTrue) {
+        return false;
+    }
+
+    OSBoolean *backlight = OSDynamicCast(OSBoolean, service->getProperty("IOBacklight"));
+    if (backlight != kOSBooleanTrue) {
+        return false;
+    }
+
+    OSString *name = OSDynamicCast(OSString, service->getProperty("DisplayProductName"));
+    return name && name->getCStringNoCopy() && !strcmp(name->getCStringNoCopy(), "Built-in Retina Display");
+}
+
+static IOService *findGlobalAppleBacklightDisplayService()
+{
+    OSDictionary *matching = IOService::serviceMatching("AppleBacklightDisplay");
+    if (!matching) {
+        return nullptr;
+    }
+
+    OSPtr<OSIterator> matches = IOService::getMatchingServices(matching);
+    if (!matches) {
+        return nullptr;
+    }
+
+    IOService *result = nullptr;
+    while (OSObject *obj = matches->getNextObject()) {
+        IOService *service = OSDynamicCast(IOService, obj);
+        if (service && isLikelyInternalBacklightDisplay(service)) {
+            service->retain();
+            result = service;
+            break;
+        }
+    }
+    return result;
+}
+
+static IOService *findServiceNamed(IOService *root, const char *targetName)
+{
+    if (!root || !targetName) {
+        return nullptr;
+    }
+
+    OSIterator *children = root->getChildIterator(gIOServicePlane);
+    if (!children) {
+        return nullptr;
+    }
+
+    IOService *result = nullptr;
+    IOService *child = nullptr;
+    while ((child = OSDynamicCast(IOService, children->getNextObject()))) {
+        const char *name = child->getName();
+        if (name && !strcmp(name, targetName)) {
+            child->retain();
+            result = child;
+            break;
+        }
+        result = findServiceNamed(child, targetName);
+        if (result) {
+            break;
+        }
+    }
+    children->release();
+    return result;
+}
+
 static uint8_t findPcieCapabilityOffset(IOPCIDevice *pci)
 {
     if (!pci) {
@@ -798,6 +900,9 @@ static bool injectDisplayMergeOverridesIfAvailable(FakeIrisXEFramebuffer *fb)
     setNumberProperty(fb, "FakeIrisXEStaleDisplayNodeCount", staleNodes, 32);
     fb->setProperty("FakeIrisXEDisplayTreeReady", staleNodes == 0 ? kOSBooleanTrue : kOSBooleanFalse);
     IOLog("[V500] Display identity injection complete, staleNodes=%u\n", staleNodes);
+    if (staleNodes == 0) {
+        fb->ensureBacklightParameterService();
+    }
     return staleNodes == 0;
 }
 
@@ -829,6 +934,126 @@ void FakeIrisXEFramebuffer::displayIdentityRetryFired(IOTimerEventSource* sender
         IOLog("[V430] Giving up after 60 attempts\n");
         displayInjectRetryCount = 0;
     }
+}
+
+void FakeIrisXEFramebuffer::ensureBacklightParameterService()
+{
+    if (fBacklight) {
+        return;
+    }
+
+    setNumberProperty(this, "FakeIrisXEBacklightAttachAttemptCount", backlightAttachRetryCount + 1u, 32);
+
+    IOService *display = findAppleBacklightDisplayService(this);
+    if (!display) {
+        display = findGlobalAppleBacklightDisplayService();
+    }
+    if (!display) {
+        IOLog("[V531] AppleBacklightDisplay not found for backlight parameter service (attempt %u)\n", backlightAttachRetryCount + 1u);
+        scheduleBacklightAttachRetry();
+        return;
+    }
+
+    FakeIrisXEBacklight *service = OSTypeAlloc(FakeIrisXEBacklight);
+    if (!service) {
+        IOLog("[V521] Failed to allocate FakeIrisXEBacklight\n");
+        display->release();
+        return;
+    }
+
+    bool started = false;
+    if (service->init(nullptr) && service->attach(display)) {
+        started = service->start(display);
+    }
+
+    if (!started) {
+        IOLog("[V531] Failed to attach/start FakeIrisXEBacklight on %s\n", display->getName() ? display->getName() : "unknown");
+        service->detach(display);
+        service->release();
+        display->release();
+        scheduleBacklightAttachRetry();
+        return;
+    }
+
+    fBacklight = service;
+    backlightAttachRetryCount = 0;
+    setProperty("FakeIrisXEBacklightServiceAttached", kOSBooleanTrue);
+    setProperty("FakeIrisXEActiveBacklightOwnerNode", display->getName() ? display->getName() : "AppleBacklightDisplay");
+    if (OSString *name = OSDynamicCast(OSString, display->getProperty("DisplayProductName"))) {
+        setProperty("FakeIrisXEActiveBacklightProviderChain", name->getCStringNoCopy());
+    }
+    if (IOService *mccs = findServiceNamed(display, "AppleMCCSParameterHandler")) {
+        setProperty("FakeIrisXEMCCSStillPresentAfterAttach", kOSBooleanTrue);
+        mccs->release();
+    } else {
+        setProperty("FakeIrisXEMCCSStillPresentAfterAttach", kOSBooleanFalse);
+    }
+
+    OSDictionary *commit = OSDictionary::withCapacity(1);
+    if (commit) {
+        commit->setObject("commit", kOSBooleanTrue);
+        service->setProperties(commit);
+        commit->release();
+    }
+
+    IOLog("[V531] Attached FakeIrisXEBacklight to %s\n", display->getName() ? display->getName() : "unknown");
+    display->release();
+}
+
+void FakeIrisXEFramebuffer::scheduleBacklightAttachRetry()
+{
+    if (!workLoop || isInactive() || fBacklight) {
+        return;
+    }
+
+    if (!backlightAttachTimer) {
+        backlightAttachTimer = IOTimerEventSource::timerEventSource(
+            this,
+            OSMemberFunctionCast(IOTimerEventSource::Action, this, &FakeIrisXEFramebuffer::backlightAttachRetryFired));
+        if (!backlightAttachTimer) {
+            return;
+        }
+        if (workLoop->addEventSource(backlightAttachTimer) != kIOReturnSuccess) {
+            backlightAttachTimer->release();
+            backlightAttachTimer = nullptr;
+            return;
+        }
+    }
+
+    uint32_t delays[] = {500, 1000, 2000, 3000, 5000};
+    uint32_t delayIdx = backlightAttachRetryCount < 5 ? backlightAttachRetryCount : 4;
+    uint32_t delay = delays[delayIdx];
+    if (backlightAttachRetryCount < 20u) {
+        ++backlightAttachRetryCount;
+        backlightAttachTimer->setTimeoutMS(delay);
+        IOLog("[V531] Scheduling backlight attach retry in %ums (attempt %u/20)\n", delay, backlightAttachRetryCount);
+    }
+}
+
+void FakeIrisXEFramebuffer::backlightAttachRetryFired(IOTimerEventSource* sender)
+{
+    if (!sender || sender != backlightAttachTimer || isInactive() || fBacklight) {
+        return;
+    }
+
+    IOLog("[V531] backlightAttachRetryFired attempt %u\n", backlightAttachRetryCount);
+    ensureBacklightParameterService();
+}
+
+void FakeIrisXEFramebuffer::teardownBacklightParameterService()
+{
+    if (!fBacklight) {
+        return;
+    }
+
+    IOService *provider = fBacklight->getProvider();
+    fBacklight->stop(provider);
+    if (provider) {
+        fBacklight->detach(provider);
+    }
+    fBacklight->release();
+    fBacklight = nullptr;
+    removeProperty("FakeIrisXEBacklightServiceAttached");
 }
 
 void FakeIrisXEFramebuffer::scheduleDisplayIdentityRetry()
@@ -3195,6 +3420,8 @@ void FakeIrisXEFramebuffer::stop(IOService* provider)
 {
     IOLog("FakeIrisXEFramebuffer::stop() called — scheduling gated cleanup\n");
 
+    teardownBacklightParameterService();
+
     // V281: DEFENSIVE STOP — guard against init() failing before allocations
 
     // V281: Release IOService objects with null-checks first
@@ -3373,6 +3600,12 @@ void FakeIrisXEFramebuffer::performSafeStop()
         displayInjectTimer = nullptr;
         tmp->release();
     }
+    if (backlightAttachTimer) {
+        backlightAttachTimer->cancelTimeout();
+        auto* tmp = backlightAttachTimer;
+        backlightAttachTimer = nullptr;
+        tmp->release();
+    }
 
     // V281: Stop power management
     PMstop();
@@ -3464,6 +3697,8 @@ void FakeIrisXEFramebuffer::startIOFB() {
  
 void FakeIrisXEFramebuffer::free() {
     IOLog("FakeIrisXEFramebuffer::free() called\n");
+
+    teardownBacklightParameterService();
     
     if (clutTable) {
         IOFree(clutTable, 256 * sizeof(IOColorEntry));

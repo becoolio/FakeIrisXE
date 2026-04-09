@@ -7,19 +7,19 @@
 	<key>CFBundleExecutable</key>
 	<string>FakeIrisXE</string>
 	<key>CFBundleGetInfoString</key>
-	<string>FakeIrisXe V501 - AppleBacklight Parameter Binding</string>
+	<string>FakeIrisXe V532 - Global AppleBacklightDisplay Attach</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
 	<key>CFBundlePackageType</key>
 	<string>KEXT</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.501</string>
+	<string>1.0.532</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1.0.501</string>
+	<string>1.0.532</string>
 	<key>DTCompiler</key>
 	<string>com.apple.compilers.llvm.clang.1_0</string>
 	<key>DTPlatformBuild</key>
@@ -177,6 +177,19 @@
 				<key>IODisplayHasBacklight</key>
 				<true/>
 			</dict>
+		</dict>
+		<key>FakeIrisXEBacklight</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.anomy.driver.FakeIrisXEFramebuffer</string>
+			<key>IOClass</key>
+			<string>FakeIrisXEBacklight</string>
+			<key>IOMatchCategory</key>
+			<string>IODisplayParameters</string>
+			<key>IOProbeScore</key>
+			<integer>65000</integer>
+			<key>IOProviderClass</key>
+			<string>AppleBacklightDisplay</string>
 		</dict>
 	</dict>
 	<key>LSMinimumSystemVersion</key>

@@ -104,6 +104,7 @@ public:
     IOReturn notifyBrightnessChange(uint32_t oldLevel, uint32_t newLevel);
 
 protected:
+    FakeIrisXEFramebuffer* getOwnerFramebuffer() const;
     IOReturn applyBrightnessWithRamp(uint32_t target);
     IOReturn applyBrightnessImmediate(uint32_t level);
     void publishBacklightProperties();

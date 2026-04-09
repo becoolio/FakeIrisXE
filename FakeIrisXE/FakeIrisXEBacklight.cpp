@@ -10,45 +10,14 @@
 #include <IOKit/IOTimerEventSource.h>
 #include <string.h>
 
-// V360: PWM register addresses for TigerLake/Belkn
-#define BXT_BLC_PWM_CTL1   0xC8250
-#define BXT_BLC_PWM_CTL2   0xC8254
-#define BXT_BLC_PWM_FREQ1  0xC8258
-#define BXT_BLC_PWM_DUTY1  0xC825C
-
-#define TGL_BLC_PWM_CTL1   0x184000
-#define TGL_BLC_PWM_CTL2   0x184004
-#define TGL_BLC_PWM_FREQ1  0x184008
-#define TGL_BLC_PWM_DUTY1 0x18400C
-
-// V360.11: MMIO base will be set by framebuffer
-static uint32_t gPwmMMIOBase = 0;
-
-// V360.11: Function to set PWM MMIO base from framebuffer
-extern "C" void FakeIrisXE_setPwmMMIOBase(uint32_t base) {
-    gPwmMMIOBase = base;
-    IOLog("[FakeIrisXEBacklight] V360: PWM MMIO base set to 0x%08X\n", base);
-}
-
-
 #define super IOService
 
 #include "FakeIrisXEFramebuffer.hpp"
 
 OSDefineMetaClassAndStructors(FakeIrisXEBacklight, IOService);
 
-// V350.1: Helper to read MMIO
-static inline uint32_t readMMIO(uint32_t offset) {
-    if (gPwmMMIOBase == 0) return 0;
-    volatile uint32_t* addr = reinterpret_cast<volatile uint32_t*>(gPwmMMIOBase + offset);
-    return *addr;
-}
-
-// V350.1: Helper to write MMIO
-static inline void writeMMIO(uint32_t offset, uint32_t value) {
-    if (gPwmMMIOBase == 0) return;
-    volatile uint32_t* addr = reinterpret_cast<volatile uint32_t*>(gPwmMMIOBase + offset);
-    *addr = value;
+FakeIrisXEFramebuffer* FakeIrisXEBacklight::getOwnerFramebuffer() const {
+    return OSDynamicCast(FakeIrisXEFramebuffer, fOwnerFB);
 }
 
 bool FakeIrisXEBacklight::init(OSDictionary* dict) {
@@ -138,7 +107,8 @@ bool FakeIrisXEBacklight::start(IOService* provider) {
           fOwnerFB ? fOwnerFB->getName() : "null", 
           (uint64_t)fOwnerFB);
 
-    // V350.7: Initialize PWM hardware
+    // The framebuffer owns actual PWM/MMIO backlight hardware control.
+    // This helper only publishes parameter dictionaries and forwards updates.
     initializeBacklightHW();
     
     // V350.8: Publish IODisplayConnect-style properties
@@ -146,9 +116,11 @@ bool FakeIrisXEBacklight::start(IOService* provider) {
     setProperty("IOProviderClass", "IODisplayConnect");
     setProperty("IONameMatch", "AppleBacklightDisplay");
     setProperty("AAPL,backlight-control", kOSBooleanTrue);
+    setProperty("IOMatchCategory", "IODisplayParameters");
     setProperty("IOBacklight", kOSBooleanTrue);
     setProperty("IODisplayHasBacklight", kOSBooleanTrue);
     setProperty("brightness-control", kOSBooleanTrue);
+    setProperty("FakeIrisXEBacklightParameterOwner", kOSBooleanTrue);
 
     // Set panel defaults
     fPanelType = 1;
@@ -164,7 +136,7 @@ bool FakeIrisXEBacklight::start(IOService* provider) {
     logBacklightState();
 
     registerService();
-    IOLog("[FakeIrisXEBacklight] V350 started (brightness=%u max=%u pwm=%uHz) fOwnerFB=%s\n", 
+    IOLog("[FakeIrisXEBacklight] V521 started (brightness=%u max=%u pwm=%uHz) fOwnerFB=%s\n", 
           fBrightness, fMaxBrightness, fPwmFrequency, fOwnerFB ? "yes" : "no");
     return true;
 }
@@ -218,6 +190,78 @@ void FakeIrisXEBacklight::publishBacklightProperties() {
     OSBoolean* bRamp = fRampingEnabled ? kOSBooleanTrue : kOSBooleanFalse;
     setProperty("smooth-brightness", bRamp);
 
+    const uint32_t raw = (fBrightness >= 100) ? 0xFFFEu : static_cast<uint32_t>((static_cast<uint64_t>(fBrightness) * 0xFFFEu) / 100u);
+    setProperty("IOBacklight", kOSBooleanTrue);
+    setProperty("IODisplayHasBacklight", kOSBooleanTrue);
+    setProperty("brightness-control", kOSBooleanTrue);
+    setProperty("FakeIrisXEBacklightParameterOwner", kOSBooleanTrue);
+
+    OSNumber* handler = OSNumber::withNumber(436849163854938112ULL, 64);
+    if (handler) { setProperty("IOBacklightHandlerID", handler); handler->release(); }
+    OSNumber* brightProbe = OSNumber::withNumber((uint64_t)((fBrightness * 255u) / 100u), 32);
+    if (brightProbe) { setProperty("brightness-probe", brightProbe); brightProbe->release(); }
+    OSNumber* linearProbe = OSNumber::withNumber((uint64_t)raw, 32);
+    if (linearProbe) { setProperty("linear-brightness-probe", linearProbe); linearProbe->release(); }
+    OSNumber* usableLinear = OSNumber::withNumber((uint64_t)raw, 32);
+    if (usableLinear) { setProperty("usable-linear-brightness", usableLinear); usableLinear->release(); }
+
+    auto makeRangeDict = [](uint32_t value, uint32_t min, uint32_t max) -> OSDictionary* {
+        OSDictionary* dict = OSDictionary::withCapacity(3);
+        if (!dict) return nullptr;
+        OSNumber* v = OSNumber::withNumber((uint64_t)value, 32);
+        OSNumber* mn = OSNumber::withNumber((uint64_t)min, 32);
+        OSNumber* mx = OSNumber::withNumber((uint64_t)max, 32);
+        if (!v || !mn || !mx) {
+            OSSafeReleaseNULL(v);
+            OSSafeReleaseNULL(mn);
+            OSSafeReleaseNULL(mx);
+            dict->release();
+            return nullptr;
+        }
+        dict->setObject("value", v);
+        dict->setObject("min", mn);
+        dict->setObject("max", mx);
+        v->release();
+        mn->release();
+        mx->release();
+        return dict;
+    };
+
+    OSDictionary* params = OSDictionary::withCapacity(8);
+    if (params) {
+        OSDictionary* bgsc = makeRangeDict(raw + 2u, 0, 65536u);
+        OSDictionary* rgsc = makeRangeDict(raw + 2u, 0, 65536u);
+        OSDictionary* ggsc = makeRangeDict(raw + 2u, 0, 65536u);
+        OSDictionary* vblm = makeRangeDict(static_cast<uint32_t>((static_cast<uint64_t>(fBrightness) * 196608u) / 100u), 0, 196608u);
+        OSNumber* ownr = OSNumber::withNumber(4294968762ULL, 64);
+        OSDictionary* commit = OSDictionary::withCapacity(1);
+        OSDictionary* defaults = OSDictionary::withCapacity(1);
+        OSDictionary* flush = OSDictionary::withCapacity(1);
+        if (bgsc) { params->setObject("bgsc", bgsc); bgsc->release(); }
+        if (rgsc) { params->setObject("rgsc", rgsc); rgsc->release(); }
+        if (ggsc) { params->setObject("ggsc", ggsc); ggsc->release(); }
+        if (vblm) { params->setObject("vblm", vblm); vblm->release(); }
+        if (ownr) { params->setObject("ownr", ownr); ownr->release(); }
+        if (commit) {
+            OSNumber* reg = OSNumber::withNumber((uint64_t)0, 32);
+            if (reg) { commit->setObject("reg", reg); reg->release(); }
+            params->setObject("commit", commit);
+            commit->release();
+        }
+        if (defaults) {
+            defaults->setObject("value", kOSBooleanTrue);
+            params->setObject("defaults", defaults);
+            defaults->release();
+        }
+        if (flush) {
+            flush->setObject("value", kOSBooleanTrue);
+            params->setObject("flush", flush);
+            flush->release();
+        }
+        setProperty("IODisplayParameters", params);
+        params->release();
+    }
+
     // V290: Additional properties from IntelBacklight
     OSNumber* nVer = OSNumber::withNumber((uint64_t)290, 32);
     if (nVer) { setProperty("software-version", nVer); nVer->release(); }
@@ -248,10 +292,9 @@ void FakeIrisXEBacklight::logBacklightState() {
 
 IOReturn FakeIrisXEBacklight::setBacklightEnabled(bool enabled) {
     fBacklightEnabled = enabled;
-    if (enabled) {
-        enableBacklightPwm();
-    } else {
-        disableBacklightPwm();
+    FakeIrisXEFramebuffer* fb = getOwnerFramebuffer();
+    if (enabled && fb) {
+        fb->setBacklightPercent(fBrightness, "helper-enable");
     }
     OSBoolean* bEnabled = enabled ? kOSBooleanTrue : kOSBooleanFalse;
     setProperty("backlight-enabled", bEnabled);
@@ -286,7 +329,7 @@ IOReturn FakeIrisXEBacklight::setMinBrightness(uint32_t min) {
 IOReturn FakeIrisXEBacklight::setRampingEnabled(bool enabled) {
     fRampingEnabled = enabled;
     OSBoolean* bRamp = enabled ? kOSBooleanTrue : kOSBooleanFalse;
-    setProperty("smooth-brightering", bRamp);
+    setProperty("smooth-brightness", bRamp);
     IOLog("[FakeIrisXEBacklight] setRampingEnabled(%s)\n", enabled ? "true" : "false");
     return kIOReturnSuccess;
 }
@@ -359,50 +402,32 @@ uint32_t FakeIrisXEBacklight::calculateBrightnessFromPwm(uint32_t pwm) {
 }
 
 IOReturn FakeIrisXEBacklight::readBacklightRegisters() {
-    IOLog("[FakeIrisXEBacklight] readBacklightRegisters() - placeholder\n");
+    IOLog("[FakeIrisXEBacklight] readBacklightRegisters() - forwarded service; framebuffer owns hardware\n");
     return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEBacklight::writeBacklightRegisters() {
-    IOLog("[FakeIrisXEBacklight] writeBacklightRegisters() pwm=0x%08X\n", fCurrentPwm);
-    if (fOwnerFB) {
-        FakeIrisXEFramebuffer* fb = OSDynamicCast(FakeIrisXEFramebuffer, fOwnerFB);
-        if (fb) {
-            fb->setBacklightPercent(fBrightness);
-        }
+    IOLog("[FakeIrisXEBacklight] writeBacklightRegisters() forwarding brightness=%u\n", fBrightness);
+    if (FakeIrisXEFramebuffer* fb = getOwnerFramebuffer()) {
+        fb->setBacklightPercent(fBrightness, "helper-write");
     }
     return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEBacklight::verifyBacklightWrite() {
-    IOLog("[FakeIrisXEBacklight] verifyBacklightWrite()\n");
+    IOLog("[FakeIrisXEBacklight] verifyBacklightWrite() - framebuffer owns verification\n");
     return kIOReturnSuccess;
 }
 
-// V360.11-13: Actually enable PWM hardware in register
 IOReturn FakeIrisXEBacklight::enableBacklightPwm() {
-    IOLog("[FakeIrisXEBacklight] V370 enableBacklightPwm() - enabling PWM hardware\n");
-    
-    // V370.8: Try to enable PWM via framebuffer first
-    if (fOwnerFB) {
-        FakeIrisXEFramebuffer* fb = OSDynamicCast(FakeIrisXEFramebuffer, fOwnerFB);
-        if (fb) {
-            fb->setBacklightPercent(fBrightness, "V370-enablePwm");
-            IOLog("[FakeIrisXEBacklight] V370: Called framebuffer setBacklightPercent(%u)\n", fBrightness);
-            setProperty("FakeIrisXEBacklightPwmEnabled", kOSBooleanTrue);
-            fBacklightEnabled = true;
-            return kIOReturnSuccess;
-        }
+    IOLog("[FakeIrisXEBacklight] enableBacklightPwm() forwarding to framebuffer\n");
+    if (FakeIrisXEFramebuffer* fb = getOwnerFramebuffer()) {
+        fb->setBacklightPercent(fBrightness, "helper-enablePwm");
+        setProperty("FakeIrisXEBacklightPwmEnabled", kOSBooleanTrue);
+        fBacklightEnabled = true;
+        return kIOReturnSuccess;
     }
-    
-    // V370.11: Direct PWM register enable if framebuffer not available
-    IOLog("[FakeIrisXEBacklight] V370: Direct PWM register enable (MMIO base=0x%08X)\n", gPwmMMIOBase);
-    
-    // V370.7: Mark as enabled so UI works regardless of MMIO
-    IOLog("[FakeIrisXEBacklight] V370: Marking PWM enabled for UI\n");
-    setProperty("FakeIrisXEBacklightPwmEnabled", kOSBooleanTrue);
-    fBacklightEnabled = true;
-    return kIOReturnSuccess;
+    return kIOReturnNotAttached;
 }
 
 IOReturn FakeIrisXEBacklight::disableBacklightPwm() {
@@ -425,12 +450,10 @@ IOReturn FakeIrisXEBacklight::getBacklightLevelDirect(uint32_t* level) {
 }
 
 IOReturn FakeIrisXEBacklight::initializeBacklightHW() {
-    IOLog("[FakeIrisXEBacklight] V350 initializeBacklightHW()\n");
+    IOLog("[FakeIrisXEBacklight] initializeBacklightHW() service-only\n");
     fBacklightEnabled = true;
     fCurrentPwm = calculatePwmFromBrightness(fBrightness);
-    
-    // V350.7: Enable PWM at initialization time
-    return enableBacklightPwm();
+    return kIOReturnSuccess;
 }
 
 IOReturn FakeIrisXEBacklight::shutdownBacklightHW() {
@@ -484,17 +507,11 @@ IOReturn FakeIrisXEBacklight::setBrightnessInternal(uint32_t level) {
 
 
     // Now call into the framebuffer to actually set PWM / registers.
-    if (fOwnerFB) {
-        FakeIrisXEFramebuffer* fb = OSDynamicCast(FakeIrisXEFramebuffer, fOwnerFB);
-        if (fb) {
-            // you must implement this method in FakeIrisXEFramebuffer:
-            fb->setBacklightPercent(level);
-            IOLog("[FakeIrisXEBacklight] forwarded brightness=%u to framebuffer\n", fBrightness);
-            return kIOReturnSuccess;
-        } else {
-            IOLog("[FakeIrisXEBacklight] provider is not FakeIrisXEFramebuffer\n");
-            return kIOReturnUnsupported;
-        }
+    if (FakeIrisXEFramebuffer* fb = getOwnerFramebuffer()) {
+        fb->setBacklightPercent(level, "helper-setBrightnessInternal");
+        publishBacklightProperties();
+        IOLog("[FakeIrisXEBacklight] forwarded brightness=%u to framebuffer\n", fBrightness);
+        return kIOReturnSuccess;
     }
 
     return kIOReturnNotAttached;
@@ -578,6 +595,21 @@ IOReturn FakeIrisXEBacklight::setProperties(OSObject *properties) {
                 return setBrightnessInternal(v);
             }
         }
+    }
+
+    if (dict->getObject("commit")) {
+        publishBacklightProperties();
+        IOLog("[FakeIrisXEBacklight] setProperties(): commit -> %u\n", fBrightness);
+        return kIOReturnSuccess;
+    }
+    if (dict->getObject("defaults")) {
+        IOLog("[FakeIrisXEBacklight] setProperties(): defaults -> 75\n");
+        return setBrightnessInternal(75);
+    }
+    if (dict->getObject("flush")) {
+        publishBacklightProperties();
+        IOLog("[FakeIrisXEBacklight] setProperties(): flush -> %u\n", fBrightness);
+        return kIOReturnSuccess;
     }
 
     // Not handled — pass to superclass

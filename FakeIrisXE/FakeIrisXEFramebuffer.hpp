@@ -55,6 +55,8 @@ private:
     IODisplayModeID supportedModes[1] = {0};
     IOTimerEventSource* displayInjectTimer = nullptr;
     uint32_t displayInjectRetryCount = 0;
+    IOTimerEventSource* backlightAttachTimer = nullptr;
+    uint32_t backlightAttachRetryCount = 0;
     IOWorkLoop* workLoop = nullptr;
 
     volatile bool driverActive;
@@ -315,6 +317,10 @@ protected:
     virtual void startIOFB();
     void scheduleDisplayIdentityRetry();
     void displayIdentityRetryFired(IOTimerEventSource* sender);
+    void ensureBacklightParameterService();
+    void scheduleBacklightAttachRetry();
+    void backlightAttachRetryFired(IOTimerEventSource* sender);
+    void teardownBacklightParameterService();
 
     
     
